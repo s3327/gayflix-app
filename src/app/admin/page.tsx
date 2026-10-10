@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
+import { getSession, isAdmin } from "@/lib/session";
 
-export default function AdminRootPage() {
-  // Once auth exists: check session here, redirect to /admin/dashboard if
-  // logged in, /admin/login if not. For now there's only a login screen.
-  redirect("/admin/login");
+export default async function AdminRootPage() {
+  redirect(isAdmin(await getSession()) ? "/admin/dashboard" : "/admin/login");
 }

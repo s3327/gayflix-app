@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import FormError from "@/components/FormError";
 import GoogleAuthButton from "@/components/GoogleAuthButton";
-import { useAuth } from "@/lib/auth-context";
+import { authClient, authErrorMessage, signInWithGoogle } from "@/lib/auth-client";
 import { safeNextPath } from "@/lib/safe-redirect";
 
 /**
@@ -16,16 +17,17 @@ import { safeNextPath } from "@/lib/safe-redirect";
  * but this is a separate page: admin auth and user auth are different
  * systems.
  *
- * No real auth yet — same "UI only" status as admin/login. Submitting
- * routes straight to /account (or the validated ?next= page); there's no email-verification step in the
- * login flow itself (that only happens once, at sign-up — see
- * /signup and /verify-email).
+ * Signs in with Better Auth and goes to /account (or the validated
+ * ?next= page). An account whose email was never confirmed gets a fresh
+ * code and is sent to /verify-email instead (Better Auth sends the code
+ * on that sign-in attempt).
  */
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Where to go after logging in: the ?next= page that sent the user
   // here (e.g. RequireLogin on /account/favorite), validated so it can
@@ -35,18 +37,28 @@ export default function LoginPage() {
     return safeNextPath(new URLSearchParams(window.location.search).get("next"));
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    login();
+    setError("");
+    setIsSubmitting(true);
+    const { error } = await authClient.signIn.email({ email, password });
+    setIsSubmitting(false);
+
+    if (error?.code === "EMAIL_NOT_VERIFIED") {
+      const params = new URLSearchParams({ email, next: destination() });
+      router.push(`/verify-email?${params}`);
+      return;
+    }
+    if (error) {
+      setError(authErrorMessage(error));
+      return;
+    }
     router.push(destination());
   }
 
-  function handleGoogleAuth() {
-    // Google handles its own verification, so this skips straight to
-    // /account — no /verify-email hop, unlike the email/password sign-up
-    // flow.
-    login();
-    router.push(destination());
+  async function handleGoogleAuth() {
+    // Google verifies the email itself, so this skips /verify-email.
+    setError(await signInWithGoogle(destination()));
   }
 
   return (
@@ -77,6 +89,7 @@ export default function LoginPage() {
               id="email"
               name="email"
               type="email"
+              autoComplete="email"
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
@@ -104,6 +117,7 @@ export default function LoginPage() {
               id="password"
               name="password"
               type="password"
+              autoComplete="current-password"
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
@@ -112,11 +126,14 @@ export default function LoginPage() {
             />
           </div>
 
+          <FormError message={error} />
+
           <button
             type="submit"
-            className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark"
+            disabled={isSubmitting}
+            className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-wait disabled:opacity-70"
           >
-            Log In
+            {isSubmitting ? "Logging In…" : "Log In"}
           </button>
         </form>
 

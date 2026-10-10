@@ -4,51 +4,65 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import FormError from "@/components/FormError";
 import OtpInput from "@/components/OtpInput";
-import { useAuth } from "@/lib/auth-context";
+import { authClient, authErrorMessage } from "@/lib/auth-client";
+import { safeNextPath } from "@/lib/safe-redirect";
 
+// Matches OTP_LENGTH in src/lib/auth.ts (not imported: that file is server-only).
 const CODE_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 30;
 
 /**
- * Second step of the sign-up flow only — /signup routes here after
- * submitting. /login does not go through this; an existing account
- * skips straight to /account. Reads the email from the ?email= query
- * param that /signup sets.
+ * Confirms an email address with the 6-digit code Better Auth emailed.
+ * /signup routes here after creating the account, and /login does too
+ * when an account's email was never confirmed. Reads ?email= and an
+ * optional ?next= (where to go once verified).
+ *
+ * A correct code confirms the email and signs the user in.
  */
 function VerifyEmailForm() {
   const router = useRouter();
-  const { login } = useAuth();
   const searchParams = useSearchParams();
-  const email = searchParams.get("email") || "your email";
+  const email = searchParams.get("email") ?? "";
 
   const [code, setCode] = useState("");
-  const [cooldown, setCooldown] = useState(0);
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // A code was just sent by /signup or /login, so resending starts on cooldown.
+  const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS);
   const isComplete = code.length === CODE_LENGTH;
 
-  // Countdown for the "Resend code" link — doesn't actually resend
-  // anything (no backend), just gates re-clicking the way a real one
-  // would.
+  // Countdown for the "Resend code" link.
   useEffect(() => {
     if (cooldown === 0) return;
     const timer = setTimeout(() => setCooldown((c) => c - 1), 1000);
     return () => clearTimeout(timer);
   }, [cooldown]);
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!isComplete) return;
-    // No real verification yet — any complete 6-digit code "succeeds"
-    // and hands off to the signed-in app. Swap for a real API call once
-    // auth exists. This is the actual completion point of sign-up, so
-    // login() happens here, not back on /signup.
-    login();
-    router.push("/account");
+    if (!isComplete || !email) return;
+    setError("");
+    setIsSubmitting(true);
+    const { error } = await authClient.emailOtp.verifyEmail({ email, otp: code });
+    setIsSubmitting(false);
+    if (error) {
+      setError(authErrorMessage(error));
+      return;
+    }
+    router.push(safeNextPath(searchParams.get("next")));
   }
 
-  function handleResend() {
-    if (cooldown > 0) return;
+  async function handleResend() {
+    if (cooldown > 0 || !email) return;
+    setError("");
     setCooldown(RESEND_COOLDOWN_SECONDS);
+    const { error } = await authClient.emailOtp.sendVerificationOtp({
+      email,
+      type: "email-verification",
+    });
+    if (error) setError(authErrorMessage(error));
   }
 
   return (
@@ -68,19 +82,23 @@ function VerifyEmailForm() {
           </h1>
           <p className="mt-2 text-sm text-ink-muted">
             Enter the 6-digit code we sent to{" "}
-            <span className="font-semibold text-ink-secondary">{email}</span>
+            <span className="font-semibold text-ink-secondary">{email || "your email"}</span>
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-6">
           <OtpInput onChange={setCode} />
 
+          <FormError
+            message={email ? error : "This link is missing the email address. Sign up or log in again."}
+          />
+
           <button
             type="submit"
-            disabled={!isComplete}
+            disabled={!isComplete || !email || isSubmitting}
             className="w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Verify
+            {isSubmitting ? "Verifying…" : "Verify"}
           </button>
         </form>
 

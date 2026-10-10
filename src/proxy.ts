@@ -34,6 +34,10 @@ function adminDenied(access: "unauthorized" | "disabled") {
  *    (src/lib/csp.ts). Next.js picks the nonce up from the request
  *    header and applies it to its scripts — which is why the root layout
  *    opts every page into dynamic rendering.
+ *
+ * It also passes the requested path on as `x-pathname`, so server
+ * layouts (which don't receive the URL) can send a guest to
+ * /login?next=<this page>.
  */
 export function proxy(request: NextRequest) {
   const admin = isAdminPath(request.nextUrl.pathname);
@@ -49,6 +53,7 @@ export function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", csp);
+  requestHeaders.set("x-pathname", request.nextUrl.pathname + request.nextUrl.search);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", csp);

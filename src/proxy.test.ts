@@ -19,6 +19,11 @@ describe("proxy: content security policy", () => {
     expect(response.headers.get("x-middleware-request-content-security-policy")).toBe(csp);
   });
 
+  it("passes the requested path on for server layouts", () => {
+    const response = proxy(request("http://gayflix.test/account/history?page=2"));
+    expect(response.headers.get("x-middleware-request-x-pathname")).toBe("/account/history?page=2");
+  });
+
   it("uses a different nonce for every request", () => {
     const a = proxy(request("http://gayflix.test/home")).headers.get("content-security-policy");
     const b = proxy(request("http://gayflix.test/home")).headers.get("content-security-policy");

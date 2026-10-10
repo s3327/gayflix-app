@@ -1,13 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import FormError from "@/components/FormError";
+import { authClient, authErrorMessage } from "@/lib/auth-client";
 
 /**
- * Admin sign-in UI. There are no admin accounts yet, so submitting only
- * explains that; access to the panel is currently controlled by the
- * password prompt the proxy shows (see src/lib/admin-auth.ts).
+ * Admin sign-in. Admins use the same accounts as the public site; what
+ * makes one an admin is the "admin" role (granted with
+ * `npm run make-admin -- <email>`). Every admin page checks the role on
+ * the server (requireAdmin in src/lib/session.ts), so this form is only
+ * the way in, not the lock.
  *
  * The form must never fall back to a native GET submit — that would put
  * the password in the URL (history, server logs, Referer headers). So it
@@ -15,11 +20,34 @@ import Link from "next/link";
  * where JavaScript hasn't loaded.
  */
 export default function AdminLoginPage() {
-  const [submitted, setSubmitted] = useState(false);
+  const router = useRouter();
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitted(true);
+    const form = new FormData(event.currentTarget);
+    setError("");
+    setIsSubmitting(true);
+    const { data, error } = await authClient.signIn.email({
+      email: String(form.get("email")),
+      password: String(form.get("password")),
+    });
+    setIsSubmitting(false);
+
+    if (error?.code === "EMAIL_NOT_VERIFIED") {
+      setError("Confirm this account's email first: log in on the main site to get a code.");
+      return;
+    }
+    if (error) {
+      setError(authErrorMessage(error));
+      return;
+    }
+    if ((data?.user as { role?: string | null } | undefined)?.role !== "admin") {
+      setError("This account doesn't have admin access.");
+      return;
+    }
+    router.push("/admin/dashboard");
   }
 
   return (
@@ -70,7 +98,7 @@ export default function AdminLoginPage() {
                 Password
               </label>
               <Link
-                href="/admin/forgot-password"
+                href="/forgot-password"
                 className="text-xs font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
               >
                 Forgot password?
@@ -87,19 +115,15 @@ export default function AdminLoginPage() {
             />
           </div>
 
+          <FormError message={error} />
+
           <button
             type="submit"
-            className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark"
+            disabled={isSubmitting}
+            className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-wait disabled:opacity-70"
           >
-            Log In
+            {isSubmitting ? "Logging In…" : "Log In"}
           </button>
-
-          {submitted && (
-            <p role="status" className="text-center text-sm text-ink-secondary">
-              Admin accounts aren&apos;t set up yet. Access is currently
-              protected by the site&apos;s admin password prompt.
-            </p>
-          )}
         </form>
       </div>
     </main>

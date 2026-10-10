@@ -20,9 +20,9 @@ work with clear exit criteria.
 | ID | Finding | Severity | Status |
 |---|---|---|---|
 | C1 | Next.js 14.2.5 with 30+ advisories (incl. middleware bypass, RCE) | Critical | ✅ |
-| H1 | Admin panel open to anyone on the admin subdomain | High | 🟡 |
+| H1 | Admin panel open to anyone on the admin subdomain | High | ✅ (admin role, Phase 2) |
 | H2 | Admin login form sends the password in the URL | High | ✅ |
-| H3 | Login is a client-side `localStorage` flag | High | 🟡 |
+| H3 | Login is a client-side `localStorage` flag | High | ✅ (real sessions, Phase 2) |
 | M1 | Episode history links 404 | Medium | ✅ |
 | M2 | Toast fired inside a state updater (double toast in dev) | Medium | ✅ |
 | M3 | Toasts that don't match what happened | Medium | ✅ |
@@ -274,6 +274,58 @@ there's no load-then-save effect cascade on mount.
 This is the permanent fix for H1 and H3. It should be done before any real
 user data or content management goes live.
 
+### Shipped: accounts, sessions and admin roles ✅
+- **Prisma 7.10.0** (pinned) with `prisma.config.ts`, the `prisma-client`
+  generator (output `src/generated/prisma`, not committed; `postinstall`
+  generates it) and the `@prisma/adapter-pg` driver adapter, which works
+  with Prisma Postgres's direct connection string and with any local
+  Postgres. One shared client in `src/lib/db.ts`. First migration:
+  `prisma/migrations/*_accounts`.
+- **Better Auth 1.7.7** (`src/lib/auth.ts`, served at `/api/auth/*`):
+  - email + password (scrypt hashes, 8+ characters);
+  - email confirmed by a 6-digit code before the first session (codes are
+    stored hashed, expire in 10 minutes, 5 attempts);
+  - password reset by emailed link (`/reset-password`), which signs out
+    every other session;
+  - Google sign-in once `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are set;
+  - sessions in the database behind an `httpOnly`, `SameSite=Lax` cookie
+    (`Secure` on https), 30-day expiry refreshed daily;
+  - rate limits stored in the database, so they hold across serverless
+    instances (sign-in: 3 tries per 10 seconds per IP);
+  - cross-origin auth requests are rejected (Better Auth's origin check).
+- **Email** (`src/lib/email.ts`): Resend over HTTP when `RESEND_API_KEY`
+  is set; printed to the console in development; an error in production
+  without a provider. Sent after the response, so timing can't reveal
+  whether an account exists.
+- **Server-side checks** (`src/lib/session.ts`):
+  - the account layout sends guests to `/login?next=…` before rendering;
+  - the admin panel layout requires the "admin" role (`requireAdmin()`);
+  - `useAuth()` now reads the real session; nothing about login is stored
+    in `localStorage`.
+- **Admins** are regular accounts with the "admin" role:
+  `npm run make-admin -- <email>` (or `--revoke`). The Basic Auth gate
+  stays in front of `/admin` as an outer lock for now.
+- **Verified:**
+  - e2e against a real Postgres (CI runs one as a service): sign-up with a
+    wrong and then a right code, logout, wrong password, unverified login,
+    password reset by link, identical answers for unknown emails, guests
+    and regular users kept out of admin, admin login and navigation;
+  - checked by hand: sign-in rate limit returns 429 after 3 tries, the
+    session cookie is `HttpOnly; SameSite=Lax`, a sign-in from another
+    origin gets 403, passwords and codes are stored hashed.
+
+### Still to do in Phase 2
+- **Admin 2FA** (Better Auth's `twoFactor` plugin) and a shorter admin
+  session, then retire the Basic Auth gate.
+- **Account page profile editing** (display name, change email, change
+  password) is still the old mock flow; wire it to `updateUser`,
+  `changeEmail` and `changePassword`.
+- **Step 7 below:** favorites, lists, history and report limits move from
+  `localStorage` to the database, and the catalog (`Media`, `Episode`)
+  moves to Prisma with a seed from the mock data.
+
+### Original plan
+
 **Decided (2026-10-10):** the database is **Prisma Postgres**, accessed
 through **Prisma ORM**.
 
@@ -314,7 +366,8 @@ through **Prisma ORM**.
      `Path=/admin` cookie or a role claim checked on every admin request);
    - no auth state in `localStorage`.
 4. **User auth:**
-   - real email/password with hashing (argon2id or bcrypt);
+   - real email/password with hashing (Better Auth uses scrypt, which is
+     also memory-hard);
    - real email verification codes: single use, expiring, with resend
      limited on the server;
    - Google OAuth;
