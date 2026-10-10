@@ -1,11 +1,13 @@
 import CatalogFilterPage from "@/components/CatalogFilterPage";
 import { publishedMediaItems } from "@/lib/mock-media";
+import { type SearchParams } from "@/lib/search-params";
 
-export default function LanguagePage({
-  searchParams,
+export default async function LanguagePage({
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: { [key: string]: string | undefined };
+  searchParams: Promise<SearchParams>;
 }) {
+  const searchParams = await searchParamsPromise;
   return (
     <CatalogFilterPage
       title="Language"

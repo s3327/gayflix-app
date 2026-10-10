@@ -19,14 +19,19 @@ const TAG_COLORS = [
   "bg-pride-purple-light",
 ];
 
-export default function MoviePage({ params }: { params: { id: string } }) {
-  const movie = movieDetails[params.id];
+export default async function MoviePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const movie = movieDetails[id];
 
   // Only 4 titles have full detail records. Everything else (e.g. any of
   // Trending's 100 mock items) falls back to a basic view instead of
   // 404ing, as long as it exists in *some* mock data pool.
   if (!movie) {
-    const basic = findBasicTitle(params.id);
+    const basic = findBasicTitle(id);
     if (!basic) notFound();
     return <BasicTitleFallback item={basic} typeLabel="Movie" />;
   }

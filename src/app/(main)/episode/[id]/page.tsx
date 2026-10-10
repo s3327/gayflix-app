@@ -30,8 +30,13 @@ const TAG_COLORS = [
  *      that's the one navigation action a movie's watch page has no
  *      equivalent for.
  */
-export default function EpisodePage({ params }: { params: { id: string } }) {
-  const found = findEpisode(params.id);
+export default async function EpisodePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const found = findEpisode(id);
   if (!found) notFound();
   const { episode, series } = found;
 
@@ -54,6 +59,7 @@ export default function EpisodePage({ params }: { params: { id: string } }) {
           year: series.year,
           duration: episode.duration,
           type: "series",
+          kind: "episode",
           genre: series.genre[0] ?? "Uncategorized",
           gradient: series.gradient,
         }}

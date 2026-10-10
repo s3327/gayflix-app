@@ -3,6 +3,7 @@ import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
 import { paginate } from "@/lib/paginate";
 import { publishedMediaItems } from "@/lib/mock-media";
+import { pageParam, type SearchParams } from "@/lib/search-params";
 
 /**
  * All published movies — fixed filter (type === "movie"), no chips,
@@ -21,18 +22,19 @@ import { publishedMediaItems } from "@/lib/mock-media";
  * excluded, same as every other public listing page (see
  * mock-media.ts's publishedMediaItems comment).
  */
-export default function MoviePage({
-  searchParams,
+export default async function MoviePage({
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: { page?: string };
+  searchParams: Promise<SearchParams>;
 }) {
+  const searchParams = await searchParamsPromise;
   const publishedMovies = publishedMediaItems.filter((item) => item.type === "movie");
 
   const sorted = [...publishedMovies].sort(
     (a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
   );
 
-  const requestedPage = Number(searchParams.page) || 1;
+  const requestedPage = pageParam(searchParams.page);
   const { page, totalPages, pageItems } = paginate(sorted, requestedPage);
 
   return (

@@ -1,7 +1,27 @@
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
+/**
+ * Admin sign-in UI. There are no admin accounts yet, so submitting only
+ * explains that; access to the panel is currently controlled by the
+ * password prompt the proxy shows (see src/lib/admin-auth.ts).
+ *
+ * The form must never fall back to a native GET submit — that would put
+ * the password in the URL (history, server logs, Referer headers). So it
+ * prevents the default submit, and declares method="post" for the case
+ * where JavaScript hasn't loaded.
+ */
 export default function AdminLoginPage() {
+  const [submitted, setSubmitted] = useState(false);
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitted(true);
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-bg-base px-4">
       <div className="w-full max-w-sm rounded-card border border-border-subtle bg-bg-surface p-8">
@@ -22,8 +42,7 @@ export default function AdminLoginPage() {
           </p>
         </div>
 
-        {/* No onSubmit / action yet — UI only, wired up once auth exists */}
-        <form className="mt-8 flex flex-col gap-5">
+        <form method="post" onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="email"
@@ -35,6 +54,7 @@ export default function AdminLoginPage() {
               id="email"
               name="email"
               type="email"
+              autoComplete="username"
               required
               placeholder="you@gayflix.com"
               className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none"
@@ -60,6 +80,7 @@ export default function AdminLoginPage() {
               id="password"
               name="password"
               type="password"
+              autoComplete="current-password"
               required
               placeholder="••••••••"
               className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none"
@@ -72,6 +93,13 @@ export default function AdminLoginPage() {
           >
             Log In
           </button>
+
+          {submitted && (
+            <p role="status" className="text-center text-sm text-ink-secondary">
+              Admin accounts aren&apos;t set up yet. Access is currently
+              protected by the site&apos;s admin password prompt.
+            </p>
+          )}
         </form>
       </div>
     </main>

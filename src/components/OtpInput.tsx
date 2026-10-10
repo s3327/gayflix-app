@@ -30,14 +30,35 @@ export default function OtpInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [digits]);
 
-  function setDigitAt(index: number, value: string) {
-    if (!/^[0-9]?$/.test(value)) return; // one numeric character at a time
+  // Writes `incoming` digits starting at box `start`, then focuses the
+  // box after the last one filled. Shared by paste and by multi-character
+  // input events — SMS/password-manager autofill (autoComplete=
+  // "one-time-code") drops the whole code into one box at once.
+  function fillFrom(start: number, incoming: string) {
+    const chars = incoming.slice(0, length - start).split("");
     setDigits((prev) => {
       const next = [...prev];
-      next[index] = value;
+      chars.forEach((char, offset) => {
+        next[start + offset] = char;
+      });
       return next;
     });
-    if (value && index < length - 1) {
+    inputRefs.current[Math.min(start + chars.length, length - 1)]?.focus();
+  }
+
+  function handleChange(index: number, value: string) {
+    const numeric = value.replace(/\D/g, "");
+    if (value && !numeric) return; // ignore non-numeric keystrokes
+    if (numeric.length > 1) {
+      fillFrom(index, numeric);
+      return;
+    }
+    setDigits((prev) => {
+      const next = [...prev];
+      next[index] = numeric;
+      return next;
+    });
+    if (numeric && index < length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   }
@@ -48,16 +69,13 @@ export default function OtpInput({
     }
   }
 
-  function handlePaste(event: React.ClipboardEvent<HTMLInputElement>) {
-    const pasted = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, length);
+  function handlePaste(index: number, event: React.ClipboardEvent<HTMLInputElement>) {
+    const pasted = event.clipboardData.getData("text").replace(/\D/g, "");
     if (!pasted) return;
     event.preventDefault();
-    setDigits((prev) => {
-      const next = [...prev];
-      for (let i = 0; i < length; i++) next[i] = pasted[i] ?? "";
-      return next;
-    });
-    inputRefs.current[Math.min(pasted.length, length - 1)]?.focus();
+    // A full-length code always means "the whole code", wherever it's
+    // pasted; anything shorter fills from the box it was pasted into.
+    fillFrom(pasted.length >= length ? 0 : index, pasted);
   }
 
   return (
@@ -71,11 +89,14 @@ export default function OtpInput({
           type="text"
           inputMode="numeric"
           autoComplete={index === 0 ? "one-time-code" : "off"}
-          maxLength={1}
+          maxLength={length}
           value={digit}
-          onChange={(event) => setDigitAt(index, event.target.value)}
+          // Select on focus so typing replaces the digit instead of
+          // appending to it.
+          onFocus={(event) => event.target.select()}
+          onChange={(event) => handleChange(index, event.target.value)}
           onKeyDown={(event) => handleKeyDown(index, event)}
-          onPaste={handlePaste}
+          onPaste={(event) => handlePaste(index, event)}
           aria-label={`Digit ${index + 1} of ${length}`}
           className="h-12 w-11 rounded-md border border-border-subtle bg-bg-elevated text-center text-lg font-semibold text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-none"
         />

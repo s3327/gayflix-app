@@ -5,38 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Search, X } from "lucide-react";
-import { publishedMediaItems } from "@/lib/mock-media";
-import type { Media } from "@/lib/media";
+import type { SearchSuggestion } from "@/lib/search";
+import { titleHref } from "@/lib/title-href";
 
-const MAX_SUGGESTIONS = 6;
+const DEBOUNCE_MS = 150;
 
-/**
- * Titles starting with the query rank above titles that merely contain
- * it elsewhere ("Loud" beats "The Loud House" for query "loud"), each
- * group then alphabetized for stable ordering as the user keeps typing.
- *
- * Searches publishedMediaItems, not mediaItems — a draft shouldn't be
- * findable by search any more than it should show up on a listing page.
- */
-function getSuggestions(query: string): Media[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-
-  const startsWith: Media[] = [];
-  const contains: Media[] = [];
-
-  for (const item of publishedMediaItems) {
-    const title = item.title.toLowerCase();
-    if (title.startsWith(q)) startsWith.push(item);
-    else if (title.includes(q)) contains.push(item);
-  }
-
-  const byTitle = (a: Media, b: Media) => a.title.localeCompare(b.title);
-  return [...startsWith.sort(byTitle), ...contains.sort(byTitle)].slice(
-    0,
-    MAX_SUGGESTIONS
-  );
-}
+type SuggestionResult = { query: string; items: SearchSuggestion[] };
 
 /**
  * Search icon in the header that expands into a live suggestion
@@ -52,7 +26,37 @@ export default function SearchBox() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const suggestions = getSuggestions(query);
+  const [result, setResult] = useState<SuggestionResult | null>(null);
+  const trimmedQuery = query.trim();
+
+  // Suggestions come from /api/search (the catalog stays on the server).
+  // A result is only shown while it still matches what's typed, so a slow
+  // response for an older query can never overwrite a newer one.
+  const suggestions = result?.query === trimmedQuery ? result.items : null;
+
+  useEffect(() => {
+    if (!trimmedQuery) return;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `/api/search?q=${encodeURIComponent(trimmedQuery)}`,
+          { signal: controller.signal }
+        );
+        if (!response.ok) throw new Error(`Search failed: ${response.status}`);
+        const data: { results: SearchSuggestion[] } = await response.json();
+        setResult({ query: trimmedQuery, items: data.results });
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error(error);
+        setResult({ query: trimmedQuery, items: [] });
+      }
+    }, DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [trimmedQuery]);
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -66,11 +70,15 @@ export default function SearchBox() {
   // Header is rendered once at the (main) layout level and never
   // unmounts between pages, so clicking a suggestion doesn't naturally
   // close this — closing explicitly whenever the route changes is what
-  // makes that work.
-  useEffect(() => {
+  // makes that work. Done during render (React's "adjusting state when a
+  // prop changes" pattern) rather than in an effect, so there's no extra
+  // render with the dropdown still open.
+  const [lastPathname, setLastPathname] = useState(pathname);
+  if (pathname !== lastPathname) {
+    setLastPathname(pathname);
     setIsOpen(false);
     setQuery("");
-  }, [pathname]);
+  }
 
   useEffect(() => {
     if (!isOpen) return;
@@ -131,17 +139,17 @@ export default function SearchBox() {
             />
           </form>
 
-          {query.trim() && (
-            <ul className="max-h-80 overflow-y-auto py-1">
-              {suggestions.length > 0 ? (
+          {trimmedQuery && (
+            <ul className="max-h-80 overflow-y-auto py-1" aria-live="polite">
+              {suggestions === null ? (
+                <li className="px-3 py-4 text-center text-sm text-ink-muted">
+                  Searching…
+                </li>
+              ) : suggestions.length > 0 ? (
                 suggestions.map((item) => (
                   <li key={item.id}>
                     <Link
-                      href={
-                        item.type === "movie"
-                          ? `/movie/${item.id}`
-                          : `/series/${item.id}`
-                      }
+                      href={titleHref(item)}
                       className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-bg-elevated"
                     >
                       <div className="relative h-14 w-10 shrink-0 overflow-hidden rounded-sm bg-bg-elevated">

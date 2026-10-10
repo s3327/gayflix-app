@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import GoogleAuthButton from "@/components/GoogleAuthButton";
 import { useAuth } from "@/lib/auth-context";
+import { safeNextPath } from "@/lib/safe-redirect";
 
 /**
  * Public user login.
@@ -16,7 +17,7 @@ import { useAuth } from "@/lib/auth-context";
  * systems.
  *
  * No real auth yet — same "UI only" status as admin/login. Submitting
- * routes straight to /account; there's no email-verification step in the
+ * routes straight to /account (or the validated ?next= page); there's no email-verification step in the
  * login flow itself (that only happens once, at sign-up — see
  * /signup and /verify-email).
  */
@@ -26,10 +27,18 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  // Where to go after logging in: the ?next= page that sent the user
+  // here (e.g. RequireLogin on /account/favorite), validated so it can
+  // only ever be a path on this site. Read at submit time rather than via
+  // useSearchParams, which would force a Suspense boundary on this page.
+  function destination() {
+    return safeNextPath(new URLSearchParams(window.location.search).get("next"));
+  }
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     login();
-    router.push("/account");
+    router.push(destination());
   }
 
   function handleGoogleAuth() {
@@ -37,7 +46,7 @@ export default function LoginPage() {
     // /account — no /verify-email hop, unlike the email/password sign-up
     // flow.
     login();
-    router.push("/account");
+    router.push(destination());
   }
 
   return (

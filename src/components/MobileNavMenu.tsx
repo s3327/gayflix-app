@@ -35,9 +35,14 @@ export default function MobileNavMenu() {
   const pathname = usePathname();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  // Close whenever the route changes. Done during render (React's
+  // "adjusting state when a prop changes" pattern) rather than in an
+  // effect, so there's no extra render with the menu still open.
+  const [lastPathname, setLastPathname] = useState(pathname);
+  if (pathname !== lastPathname) {
+    setLastPathname(pathname);
     setIsOpen(false);
-  }, [pathname]);
+  }
 
   useEffect(() => {
     if (!isOpen) return;

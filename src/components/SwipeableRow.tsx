@@ -53,7 +53,6 @@ export default function SwipeableRow({
       el.removeEventListener("scroll", updateEdges);
       window.removeEventListener("resize", updateEdges);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [children]);
 
   const scrollByPage = (direction: 1 | -1) => {

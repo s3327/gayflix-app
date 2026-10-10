@@ -6,12 +6,10 @@ import TrendingNowSection from "@/components/TrendingNowSection";
 import TitleGridSection from "@/components/TitleGridSection";
 import { featuredTitle, trendingNow, newReleases, movies, series } from "@/lib/mock-titles";
 import { continueWatching } from "@/lib/mock-continue-watching";
+import { titleHref } from "@/lib/title-href";
 
 export default function HomePage() {
-  const moreInfoHref =
-    featuredTitle.type === "movie"
-      ? `/movie/${featuredTitle.id}`
-      : `/series/${featuredTitle.id}`;
+  const moreInfoHref = titleHref(featuredTitle);
 
   return (
     <main>

@@ -4,6 +4,7 @@ import Pagination from "@/components/Pagination";
 import { FilterChipLink } from "@/components/FilterChip";
 import { paginate } from "@/lib/paginate";
 import type { Media } from "@/lib/media";
+import { firstParam, pageParam, type SearchParams } from "@/lib/search-params";
 
 type CatalogFilterPageProps = {
   /** Page heading — "Genre", "Country", "Year", "Language". */
@@ -21,7 +22,7 @@ type CatalogFilterPageProps = {
    *  (newest release year first, rather than alphabetical). */
   chipSort?: "alpha" | "numeric-desc";
   emptyMessage: string;
-  searchParams: { [key: string]: string | undefined };
+  searchParams: SearchParams;
 };
 
 /**
@@ -54,7 +55,7 @@ export default function CatalogFilterPage({
       ? values.sort((a, b) => Number(b) - Number(a))
       : values.sort();
 
-  const rawSelected = searchParams[paramName];
+  const rawSelected = firstParam(searchParams[paramName]);
   const selected =
     rawSelected && sortedValues.includes(rawSelected) ? rawSelected : null;
 
@@ -66,7 +67,7 @@ export default function CatalogFilterPage({
     (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
   );
 
-  const requestedPage = Number(searchParams.page) || 1;
+  const requestedPage = pageParam(searchParams.page);
   const { page, totalPages, pageItems } = paginate(sorted, requestedPage);
 
   function buildHref(value: string | null, targetPage: number) {

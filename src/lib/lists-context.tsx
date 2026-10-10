@@ -76,15 +76,17 @@ export function ListsProvider({ children }: { children: React.ReactNode }) {
 
   const deleteList = useCallback(
     (id: string) => {
+      // Toast from outside the updater — updaters must stay pure (React
+      // may run them twice in development).
+      const name = lists[id]?.name;
       setLists((prev) => {
-        const name = prev[id]?.name;
         const next = { ...prev };
         delete next[id];
-        if (name) showToast(`Deleted "${name}"`);
         return next;
       });
+      if (name) showToast(`Deleted "${name}"`);
     },
-    [setLists, showToast]
+    [lists, setLists, showToast]
   );
 
   const renameList = useCallback(
@@ -103,6 +105,12 @@ export function ListsProvider({ children }: { children: React.ReactNode }) {
 
   const addToList = useCallback(
     (listId: string, entry: FavoriteEntry) => {
+      const list = lists[listId];
+      if (!list) return;
+      if (list.items.some((item) => item.id === entry.id)) {
+        showToast(`Already in "${list.name}"`);
+        return;
+      }
       setLists((prev) => {
         const existing = prev[listId];
         if (!existing) return prev;
@@ -112,8 +120,7 @@ export function ListsProvider({ children }: { children: React.ReactNode }) {
           [listId]: { ...existing, items: [...existing.items, entry] },
         };
       });
-      const listName = lists[listId]?.name ?? "list";
-      showToast(`Added to "${listName}"`);
+      showToast(`Added to "${list.name}"`);
     },
     [lists, setLists, showToast]
   );

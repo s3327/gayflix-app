@@ -33,15 +33,20 @@ const TAG_COLORS = [
  *      page's own note below for why, and what I'd suggest instead of
  *      just leaving it empty forever.
  */
-export default function SeriesPage({ params }: { params: { id: string } }) {
-  const show = seriesDetails[params.id];
+export default async function SeriesPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const show = seriesDetails[id];
 
   // Only 2 series have full detail records so far (mirroring
   // mock-movie-details.ts's handful-of-many approach for movies).
   // Everything else falls back to a basic view instead of 404ing, as
   // long as it exists in *some* mock data pool.
   if (!show) {
-    const basic = findBasicTitle(params.id);
+    const basic = findBasicTitle(id);
     if (!basic) notFound();
     return <BasicTitleFallback item={basic} typeLabel="Series" />;
   }

@@ -5,12 +5,14 @@ import Badge from "@/components/Badge";
 import { paginate } from "@/lib/paginate";
 import { publishedMediaItems } from "@/lib/mock-media";
 import { isRecentlyAdded } from "@/lib/is-new";
+import { pageParam, type SearchParams } from "@/lib/search-params";
 
-export default function NewReleasesPage({
-  searchParams,
+export default async function NewReleasesPage({
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: { page?: string };
+  searchParams: Promise<SearchParams>;
 }) {
+  const searchParams = await searchParamsPromise;
   // Explicit sort rather than relying on the mock data's construction
   // order — this is what "query all media, newest first" actually means
   // once it's a real DB query (`ORDER BY created_at DESC`), so the mock
@@ -20,7 +22,7 @@ export default function NewReleasesPage({
     (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
   );
 
-  const requestedPage = Number(searchParams.page) || 1;
+  const requestedPage = pageParam(searchParams.page);
   const { page, totalPages, pageItems } = paginate(sorted, requestedPage);
 
   return (

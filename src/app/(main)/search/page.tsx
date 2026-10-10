@@ -5,6 +5,7 @@ import MediaGrid from "@/components/MediaGrid";
 import { publishedMediaItems } from "@/lib/mock-media";
 import { movies, series, newReleases, trendingNow } from "@/lib/mock-titles";
 import type { Media } from "@/lib/media";
+import { firstParam, type SearchParams } from "@/lib/search-params";
 
 const QUICK_SEARCHES = ["Drama", "Romance", "Comedy", "2026", "Documentary", "Coming of Age"];
 
@@ -22,12 +23,13 @@ function getAllSearchableItems(): Media[] {
   return all;
 }
 
-export default function SearchPage({
-  searchParams,
+export default async function SearchPage({
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: { q?: string };
+  searchParams: Promise<SearchParams>;
 }) {
-  const query = (searchParams.q || "").trim();
+  const searchParams = await searchParamsPromise;
+  const query = (firstParam(searchParams.q) ?? "").trim();
   const qLower = query.toLowerCase();
 
   const allItems = getAllSearchableItems();

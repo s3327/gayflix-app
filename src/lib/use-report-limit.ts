@@ -10,6 +10,8 @@ export const LOGGED_IN_REPORT_LIMIT = 5;
 
 type ReportRecord = { date: string; count: number };
 
+const NO_REPORTS: ReportRecord = { date: "", count: 0 };
+
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD, resets at UTC midnight
 }
@@ -34,10 +36,7 @@ function todayKey(): string {
  */
 export function useReportLimit() {
   const { isLoggedIn } = useAuth();
-  const [record, setRecord] = usePersistedState<ReportRecord>(STORAGE_KEY, {
-    date: "",
-    count: 0,
-  });
+  const [record, setRecord] = usePersistedState<ReportRecord>(STORAGE_KEY, NO_REPORTS);
 
   const limit = isLoggedIn ? LOGGED_IN_REPORT_LIMIT : GUEST_REPORT_LIMIT;
   const countToday = record.date === todayKey() ? record.count : 0;

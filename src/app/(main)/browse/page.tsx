@@ -6,6 +6,7 @@ import Pagination from "@/components/Pagination";
 import { FilterChipLink } from "@/components/FilterChip";
 import { paginate } from "@/lib/paginate";
 import { publishedMediaItems } from "@/lib/mock-media";
+import { pageParam, type SearchParams } from "@/lib/search-params";
 
 type TypeFilter = "all" | "movie" | "series";
 
@@ -18,11 +19,12 @@ function buildHref(params: { type: TypeFilter; sortAsc: boolean; page: number })
   return query ? `/browse?${query}` : "/browse";
 }
 
-export default function BrowsePage({
-  searchParams,
+export default async function BrowsePage({
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: { page?: string; type?: string; sort?: string };
+  searchParams: Promise<SearchParams>;
 }) {
+  const searchParams = await searchParamsPromise;
   // "Query all media title from database" — the whole catalog, not
   // scoped to any one genre/country/year/language the way those pages
   // are (though it is scoped to published — see publishedMediaItems).
@@ -41,7 +43,7 @@ export default function BrowsePage({
     sortAsc ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title)
   );
 
-  const requestedPage = Number(searchParams.page) || 1;
+  const requestedPage = pageParam(searchParams.page);
   const { page, totalPages, pageItems } = paginate(sorted, requestedPage);
 
   return (

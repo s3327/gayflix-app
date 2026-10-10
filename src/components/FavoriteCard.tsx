@@ -7,6 +7,7 @@ import { useFavorites, type FavoriteEntry } from "@/lib/favorites-context";
 import AddToListModal from "@/components/AddToListModal";
 import MediaCoverThumb from "@/components/MediaCoverThumb";
 import CardIconButton from "@/components/CardIconButton";
+import { titleHref } from "@/lib/title-href";
 
 /**
  * Also carries its own remove (heart) affordance, since this is the one
@@ -18,7 +19,7 @@ import CardIconButton from "@/components/CardIconButton";
 export default function FavoriteCard({ entry }: { entry: FavoriteEntry }) {
   const { toggleFavorite } = useFavorites();
   const [isAddToListOpen, setIsAddToListOpen] = useState(false);
-  const href = entry.type === "movie" ? `/movie/${entry.id}` : `/series/${entry.id}`;
+  const href = titleHref(entry);
 
   return (
     <div className="group relative">

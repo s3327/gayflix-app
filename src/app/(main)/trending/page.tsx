@@ -6,6 +6,7 @@ import Pagination from "@/components/Pagination";
 import { FilterChipLink } from "@/components/FilterChip";
 import { paginate } from "@/lib/paginate";
 import { publishedTrendingItems } from "@/lib/mock-trending";
+import { pageParam, type SearchParams } from "@/lib/search-params";
 
 type TypeFilter = "all" | "movie" | "series";
 
@@ -18,11 +19,12 @@ function buildHref(params: { type: TypeFilter; sortDesc: boolean; page: number }
   return query ? `/trending?${query}` : "/trending";
 }
 
-export default function TrendingPage({
-  searchParams,
+export default async function TrendingPage({
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: { page?: string; type?: string; sort?: string };
+  searchParams: Promise<SearchParams>;
 }) {
+  const searchParams = await searchParamsPromise;
   const typeFilter: TypeFilter =
     searchParams.type === "movie" || searchParams.type === "series"
       ? searchParams.type
@@ -39,7 +41,7 @@ export default function TrendingPage({
   // renumbered to #1).
   const sorted = sortDesc ? filtered : [...filtered].reverse();
 
-  const requestedPage = Number(searchParams.page) || 1;
+  const requestedPage = pageParam(searchParams.page);
   const { page, totalPages, pageItems } = paginate(sorted, requestedPage);
 
   return (

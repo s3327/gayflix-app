@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { useHistory, type HistoryEntry } from "@/lib/history-context";
 import MediaCoverThumb from "@/components/MediaCoverThumb";
 import CardIconButton from "@/components/CardIconButton";
+import { titleHref } from "@/lib/title-href";
 
 function formatWatchedAt(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -23,7 +24,7 @@ function formatWatchedAt(iso: string): string {
 
 export default function HistoryCard({ entry }: { entry: HistoryEntry }) {
   const { removeFromHistory } = useHistory();
-  const href = entry.type === "movie" ? `/movie/${entry.id}` : `/series/${entry.id}`;
+  const href = titleHref(entry);
 
   return (
     <div className="group relative">

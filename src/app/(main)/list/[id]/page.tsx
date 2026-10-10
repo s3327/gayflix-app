@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { Layers, Share2, X } from "lucide-react";
 import { useLists } from "@/lib/lists-context";
 import { useToast } from "@/lib/toast-context";
 import MediaCoverThumb from "@/components/MediaCoverThumb";
 import CardIconButton from "@/components/CardIconButton";
+import { useHydrated } from "@/lib/use-hydrated";
+import { titleHref } from "@/lib/title-href";
 
 /**
  * The shareable view a list's "Share" button copies a link to. Reads
@@ -18,21 +20,19 @@ import CardIconButton from "@/components/CardIconButton";
  * share link needs the list to live somewhere everyone can read it from,
  * not localStorage.
  */
-export default function ListDetailPage({ params }: { params: { id: string } }) {
+export default function ListDetailPage() {
+  const { id } = useParams<{ id: string }>();
   const { getList, removeFromList } = useLists();
   const { showToast } = useToast();
-  const [hasLoaded, setHasLoaded] = useState(false);
-  const list = getList(params.id);
+  const list = getList(id);
 
-  // First render (before the ListsProvider's localStorage load effect
-  // has run) always looks like "not found" — wait one tick so a real
-  // list doesn't flash a false empty state.
-  useEffect(() => {
-    setHasLoaded(true);
-  }, []);
+  // The server render and hydration pass can't see localStorage, so they
+  // always look like "not found" — show "Loading…" until hydration is
+  // done so a real list doesn't flash a false empty state.
+  const hasLoaded = useHydrated();
 
   function handleShare() {
-    const url = `${window.location.origin}/list/${params.id}`;
+    const url = `${window.location.origin}/list/${id}`;
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(url);
     }
@@ -77,7 +77,7 @@ export default function ListDetailPage({ params }: { params: { id: string } }) {
       {list.items.length > 0 ? (
         <div className="mt-8 grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-6">
           {list.items.map((item) => {
-            const href = item.type === "movie" ? `/movie/${item.id}` : `/series/${item.id}`;
+            const href = titleHref(item);
             return (
               <div key={item.id} className="group relative">
                 <Link href={href} className="block">

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Media } from "@/lib/media";
+import { titleHref } from "@/lib/title-href";
 
 /**
  * Shared poster card for any "browse a list of titles" page (Trending,
@@ -19,7 +20,7 @@ export default function MediaCard({
   item: Media;
   badge?: React.ReactNode;
 }) {
-  const href = item.type === "movie" ? `/movie/${item.id}` : `/series/${item.id}`;
+  const href = titleHref(item);
 
   return (
     <Link href={href} className="group block">

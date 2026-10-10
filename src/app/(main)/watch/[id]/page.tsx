@@ -16,9 +16,14 @@ const TAG_COLORS = [
   "bg-pride-purple-light",
 ];
 
-export default function WatchPage({ params }: { params: { id: string } }) {
-  const movie = movieDetails[params.id];
-  const basic = !movie ? findBasicTitle(params.id) : null;
+export default async function WatchPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const movie = movieDetails[id];
+  const basic = !movie ? findBasicTitle(id) : null;
   if (!movie && !basic) notFound();
 
   const title = movie?.title ?? basic!.title;
@@ -45,7 +50,7 @@ export default function WatchPage({ params }: { params: { id: string } }) {
       {/* Player — records watch history on play click */}
       <WatchPlayer
         media={{
-          id: params.id,
+          id,
           title,
           year,
           duration,

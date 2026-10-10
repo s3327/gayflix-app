@@ -1,11 +1,13 @@
 import CatalogFilterPage from "@/components/CatalogFilterPage";
 import { publishedMediaItems } from "@/lib/mock-media";
+import { type SearchParams } from "@/lib/search-params";
 
-export default function GenrePage({
-  searchParams,
+export default async function GenrePage({
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: { [key: string]: string | undefined };
+  searchParams: Promise<SearchParams>;
 }) {
+  const searchParams = await searchParamsPromise;
   return (
     <CatalogFilterPage
       title="Genre"

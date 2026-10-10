@@ -1,9 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Media } from "@/lib/media";
+import { titleHref } from "@/lib/title-href";
 
 export default function PosterCard({ media }: { media: Media }) {
-  const href = media.type === "movie" ? `/movie/${media.id}` : `/series/${media.id}`;
+  const href = titleHref(media);
 
   return (
     <Link href={href} className="group block w-full text-left">

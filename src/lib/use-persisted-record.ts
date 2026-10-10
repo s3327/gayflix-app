@@ -14,8 +14,12 @@ import { usePersistedState } from "@/lib/use-persisted-state";
  * current caller passes a hardcoded "gayflix:..." string literal, never
  * a variable, so there's no case where it should change mid-session.
  */
+// One shared empty record, so usePersistedState gets a stable
+// initialValue instead of a fresh {} every render.
+const EMPTY_RECORD: Record<string, never> = Object.freeze({});
+
 export function usePersistedRecord<T extends Record<string, unknown>>(
   key: string
 ): [Record<string, T>, React.Dispatch<React.SetStateAction<Record<string, T>>>] {
-  return usePersistedState<Record<string, T>>(key, {});
+  return usePersistedState<Record<string, T>>(key, EMPTY_RECORD);
 }

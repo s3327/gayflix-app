@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * Bare-bones modal shared by every list-management dialog (add-to-list,
- * create/rename list, delete confirmation). Closes on Escape or backdrop
- * click; doesn't trap focus or lock body scroll — fine for this
- * scaffold's needs, worth hardening if this becomes a real product.
+ * create/rename list, delete confirmation) and the Report dialog.
+ * Closes on Escape or backdrop click. While open it keeps keyboard
+ * focus inside the panel (Tab/Shift+Tab wrap around), locks page
+ * scroll, and hands focus back to whatever opened it on close.
  */
 export default function Modal({
   title,
@@ -19,14 +23,64 @@ export default function Modal({
   children: React.ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  // Kept in a ref so a parent re-rendering with a new onClose closure
+  // doesn't re-run the mount effect below (which would steal focus back
+  // to the first field on every keystroke).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  // Captured during the first render — before a child's autoFocus moves
+  // focus into the dialog — so it's really the element that opened it.
+  const [opener] = useState(() =>
+    typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+  );
 
   useEffect(() => {
+    const panel = panelRef.current;
+
+    // Focus the first field (or the panel itself) unless something
+    // inside — e.g. an autoFocus input — already has focus.
+    if (panel && !panel.contains(document.activeElement)) {
+      const first = panel.querySelector<HTMLElement>(FOCUSABLE);
+      (first ?? panel).focus();
+    }
+
+    const { overflow } = document.body.style;
+    document.body.style.overflow = "hidden";
+
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !panel) return;
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !panel.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = overflow;
+      opener?.focus();
+    };
+  }, [opener]);
 
   function handleBackdropClick(event: React.MouseEvent<HTMLDivElement>) {
     if (event.target === event.currentTarget) onClose();
@@ -39,10 +93,11 @@ export default function Modal({
     >
       <div
         ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-sm rounded-card border border-border-subtle bg-bg-surface p-6"
+        className="w-full max-w-sm rounded-card border border-border-subtle bg-bg-surface p-6 focus-visible:outline-none"
       >
         <div className="flex items-center justify-between gap-4">
           <h2 className="font-display text-lg font-bold">{title}</h2>

@@ -24,6 +24,12 @@ export type FavoriteEntry = {
   genre: string;
   posterUrl?: string;
   gradient?: string;
+  /**
+   * "episode" when the entry is a single episode (History records these
+   * from /episode/[id]) — its id is the episode's, so it links to
+   * /episode/[id] rather than /series/[id]. See title-href.ts.
+   */
+  kind?: "episode";
 };
 
 type FavoritesContextValue = {
@@ -53,16 +59,19 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
 
   const toggleFavorite = useCallback(
     (entry: FavoriteEntry) => {
+      // Decide add vs. remove once, up front, so the stored result and
+      // the toast can never disagree (and the updater stays pure).
+      const wasFavorite = Boolean(favorites[entry.id]);
       setFavorites((prev) => {
         const next = { ...prev };
-        if (next[entry.id]) {
+        if (wasFavorite) {
           delete next[entry.id];
         } else {
           next[entry.id] = entry;
         }
         return next;
       });
-      showToast(favorites[entry.id] ? "Removed from Favorites" : "Added to Favorites");
+      showToast(wasFavorite ? "Removed from Favorites" : "Added to Favorites");
     },
     [favorites, setFavorites, showToast]
   );

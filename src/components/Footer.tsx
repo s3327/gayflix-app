@@ -57,13 +57,12 @@ export default function Footer() {
                             {link}
                           </Link>
                         ) : (
-                          // No route built yet — visual only
-                          <button
-                            type="button"
-                            className="text-sm text-ink-secondary transition-colors hover:text-brand-pink"
-                          >
-                            {link}
-                          </button>
+                          // No page yet — plain text rather than a
+                          // button that does nothing when clicked.
+                          <span className="text-sm text-ink-muted">
+                            {link}{" "}
+                            <span className="text-xs">(coming soon)</span>
+                          </span>
                         )}
                       </li>
                     );

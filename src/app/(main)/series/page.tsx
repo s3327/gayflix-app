@@ -3,6 +3,7 @@ import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
 import { paginate } from "@/lib/paginate";
 import { publishedMediaItems } from "@/lib/mock-media";
+import { pageParam, type SearchParams } from "@/lib/search-params";
 
 /**
  * All published series — same shape as /movie, just type === "series"
@@ -10,18 +11,19 @@ import { publishedMediaItems } from "@/lib/mock-media";
  * fixed-filter page (no chips) sorted by updatedAt rather than
  * createdAt, and for why it reads from publishedMediaItems.
  */
-export default function SeriesPage({
-  searchParams,
+export default async function SeriesPage({
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: { page?: string };
+  searchParams: Promise<SearchParams>;
 }) {
+  const searchParams = await searchParamsPromise;
   const publishedSeries = publishedMediaItems.filter((item) => item.type === "series");
 
   const sorted = [...publishedSeries].sort(
     (a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
   );
 
-  const requestedPage = Number(searchParams.page) || 1;
+  const requestedPage = pageParam(searchParams.page);
   const { page, totalPages, pageItems } = paginate(sorted, requestedPage);
 
   return (
