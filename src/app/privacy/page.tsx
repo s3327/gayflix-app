@@ -112,7 +112,7 @@ export default function PrivacyPage() {
         See also our{" "}
         <Link
           href="/terms"
-          className="font-medium text-brand-pink transition-colors hover:text-brand-pink-light"
+          className="font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
         >
           Terms of Service
         </Link>

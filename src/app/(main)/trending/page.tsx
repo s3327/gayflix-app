@@ -93,7 +93,7 @@ export default async function TrendingPage({
               key={item.id}
               item={item}
               badge={
-                <span className="flex h-8 min-w-8 items-center justify-center rounded-md bg-bg-base/85 px-2 font-display text-sm font-bold text-brand-pink backdrop-blur">
+                <span className="flex h-8 min-w-8 items-center justify-center rounded-md bg-bg-base/85 px-2 font-display text-sm font-bold text-ink-brand backdrop-blur">
                   #{item.rank}
                 </span>
               }

@@ -46,10 +46,11 @@ export default function WatchPlayer({ media }: { media: FavoriteEntry }) {
           <button
             type="button"
             onClick={handlePlay}
+            aria-label={`Play ${media.title}`}
             className="group absolute inset-0 flex items-center justify-center"
           >
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-pink text-ink-onBrand transition-transform group-hover:scale-110">
-              <Play className="ml-1 h-7 w-7 fill-current" />
+              <Play className="ml-1 h-7 w-7 fill-current" aria-hidden />
             </span>
           </button>
         )}

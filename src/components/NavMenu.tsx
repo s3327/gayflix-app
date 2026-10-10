@@ -10,7 +10,7 @@ function NavLink({ item, isActive }: { item: NavMenuItem; isActive: boolean }) {
       href={item.href}
       aria-current={isActive ? "page" : undefined}
       className={`shrink-0 text-xs font-semibold transition-colors lg:text-sm ${
-        isActive ? "text-brand-pink" : "text-ink-secondary hover:text-ink-primary"
+        isActive ? "text-ink-brand" : "text-ink-secondary hover:text-ink-primary"
       }`}
     >
       {item.label}

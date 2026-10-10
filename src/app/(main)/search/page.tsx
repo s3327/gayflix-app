@@ -79,7 +79,7 @@ export default async function SearchPage({
             <Link
               key={term}
               href={`/search?q=${encodeURIComponent(term)}`}
-              className="rounded-pill border border-border-subtle bg-bg-surface px-3 py-1 font-medium text-ink-secondary transition-colors hover:border-brand-pink hover:text-brand-pink"
+              className="rounded-pill border border-border-subtle bg-bg-surface px-3 py-1 font-medium text-ink-secondary transition-colors hover:border-brand-pink hover:text-ink-brand"
             >
               {term}
             </Link>

@@ -1,31 +1,6 @@
-const isDev = process.env.NODE_ENV !== "production";
-
-// Content Security Policy. 'unsafe-inline' for scripts is required by
-// Next.js's inline bootstrap scripts unless every page moves to
-// nonce-based rendering; everything else is locked to this origin.
-// Dev additionally needs eval (React Refresh) and websockets (HMR).
-//
-// When a real video player arrives, add its embed origin to frame-src
-// (e.g. "frame-src https://player.example.com"), or the embed won't load.
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline'",
-  // Posters go through next/image (/_next/image on this origin), so no
-  // third-party image host needs to be listed here.
-  "img-src 'self' data: blob:",
-  "font-src 'self'",
-  `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
-  "media-src 'self' blob:",
-  "frame-src 'none'",
-  "frame-ancestors 'none'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join("; ");
-
+// The Content-Security-Policy is set per request (it carries a nonce) by
+// src/proxy.ts — see src/lib/csp.ts. These are the static headers.
 const securityHeaders = [
-  { key: "Content-Security-Policy", value: contentSecurityPolicy },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

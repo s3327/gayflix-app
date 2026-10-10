@@ -14,7 +14,9 @@ const config: Config = {
         // Brand primary — Flame Pink. Buttons, links, primary actions.
         brand: {
           pink: {
-            DEFAULT: "#EC008C",
+            // #EC008C in the v1 token sheet; deepened a touch so white
+            // button text clears WCAG AA (4.5:1).
+            DEFAULT: "#E40087",
             light: "#FF5FB0", // hover
             soft: "#C25693", // muted / subtle fills
             dark: "#9E0068", // active / pressed
@@ -56,9 +58,15 @@ const config: Config = {
         ink: {
           primary: "#FFFFFF",
           secondary: "#B7B7C3",
-          muted: "#7A7A87",
+          // #7A7A87 in the v1 token sheet; lightened so muted text clears
+          // WCAG AA (4.5:1) on every background layer.
+          muted: "#878794",
           disabled: "#4C4C56",
           onBrand: "#FFFFFF",
+          // Pink text on dark backgrounds (links, active nav items). The
+          // brand pink fill is too dark to read as text at 4.5:1, so text
+          // gets its own lighter shade; brand.pink.light stays its hover.
+          brand: "#F13DA8",
         },
 
         status: {

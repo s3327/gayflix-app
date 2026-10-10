@@ -95,7 +95,7 @@ export default function LoginPage() {
               </label>
               <Link
                 href="/forgot-password"
-                className="text-xs font-medium text-brand-pink transition-colors hover:text-brand-pink-light"
+                className="text-xs font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
               >
                 Forgot password?
               </Link>
@@ -136,7 +136,7 @@ export default function LoginPage() {
           New to Gayflix?{" "}
           <Link
             href="/signup"
-            className="font-medium text-brand-pink transition-colors hover:text-brand-pink-light"
+            className="font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
           >
             Sign up
           </Link>

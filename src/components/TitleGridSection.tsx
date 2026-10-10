@@ -36,7 +36,7 @@ export default function TitleGridSection({
         {seeMoreHref ? (
           <Link
             href={seeMoreHref}
-            className="flex items-center gap-1 text-sm font-semibold text-brand-pink transition-colors hover:text-brand-pink-light"
+            className="flex items-center gap-1 text-sm font-semibold text-ink-brand transition-colors hover:text-brand-pink-light"
           >
             See More
             <ChevronRight className="h-4 w-4" />
@@ -45,7 +45,7 @@ export default function TitleGridSection({
           // No route yet — visual only
           <button
             type="button"
-            className="flex items-center gap-1 text-sm font-semibold text-brand-pink transition-colors hover:text-brand-pink-light"
+            className="flex items-center gap-1 text-sm font-semibold text-ink-brand transition-colors hover:text-brand-pink-light"
           >
             See More
             <ChevronRight className="h-4 w-4" />

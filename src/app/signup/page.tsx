@@ -132,7 +132,7 @@ export default function SignupPage() {
             type="checkbox"
             checked={agreedToTerms}
             onChange={(event) => setAgreedToTerms(event.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 rounded border-border-strong bg-bg-elevated text-brand-pink accent-brand-pink focus-visible:outline-none"
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-border-strong bg-bg-elevated text-ink-brand accent-brand-pink focus-visible:outline-none"
           />
           <span>
             I agree to the{" "}
@@ -140,7 +140,7 @@ export default function SignupPage() {
               href="/terms"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-brand-pink transition-colors hover:text-brand-pink-light"
+              className="font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
             >
               Terms of Service
             </Link>{" "}
@@ -149,7 +149,7 @@ export default function SignupPage() {
               href="/privacy"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-brand-pink transition-colors hover:text-brand-pink-light"
+              className="font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
             >
               Privacy Policy
             </Link>
@@ -177,7 +177,7 @@ export default function SignupPage() {
           Already have an account?{" "}
           <Link
             href="/login"
-            className="font-medium text-brand-pink transition-colors hover:text-brand-pink-light"
+            className="font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
           >
             Log in
           </Link>

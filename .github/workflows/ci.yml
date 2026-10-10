@@ -15,7 +15,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,6 +27,15 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # End-to-end + accessibility (axe) tests against the production build.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
       # Production dependencies only: dev tooling (Tailwind 3's file
       # watcher, ESLint) has advisories that never reach the deployed app.
       - run: npm audit --omit=dev --audit-level=high

@@ -94,7 +94,7 @@ function VerifyEmailForm() {
             <button
               type="button"
               onClick={handleResend}
-              className="font-medium text-brand-pink transition-colors hover:text-brand-pink-light"
+              className="font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
             >
               Resend code
             </button>
@@ -104,7 +104,7 @@ function VerifyEmailForm() {
         <p className="mt-2 text-center text-sm text-ink-secondary">
           <Link
             href="/login"
-            className="font-medium text-brand-pink transition-colors hover:text-brand-pink-light"
+            className="font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
           >
             Back to login
           </Link>

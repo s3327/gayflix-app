@@ -52,8 +52,8 @@ export default function FavoriteButton({
         showLabel ? "px-5" : "w-12"
       } ${
         active
-          ? "border-brand-pink bg-brand-pink/10 text-brand-pink hover:bg-brand-pink/20"
-          : "border-brand-pink/40 text-brand-pink hover:border-brand-pink hover:bg-brand-pink/10"
+          ? "border-brand-pink bg-brand-pink/10 text-ink-brand hover:bg-brand-pink/20"
+          : "border-brand-pink/40 text-ink-brand hover:border-brand-pink hover:bg-brand-pink/10"
       }`}
     >
       <Heart className={`h-5 w-5 ${active ? "fill-current" : ""}`} strokeWidth={2} />

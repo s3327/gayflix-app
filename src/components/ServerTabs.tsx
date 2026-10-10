@@ -19,7 +19,7 @@ export default function ServerTabs() {
           aria-pressed={i === active}
           className={`rounded-md border px-4 py-2 text-sm font-semibold transition-colors ${
             i === active
-              ? "border-brand-pink bg-brand-pink/10 text-brand-pink"
+              ? "border-brand-pink bg-brand-pink/10 text-ink-brand"
               : "border-border-subtle text-ink-secondary hover:bg-bg-elevated hover:text-ink-primary"
           }`}
         >

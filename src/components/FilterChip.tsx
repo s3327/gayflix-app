@@ -29,7 +29,13 @@ export function FilterChipLink({
   children: React.ReactNode;
 }) {
   return (
-    <Link href={href} aria-pressed={isActive} className={chipClassName(isActive)}>
+    // aria-pressed isn't allowed on links; aria-current marks the
+    // selected option in a set of navigation links.
+    <Link
+      href={href}
+      aria-current={isActive ? "true" : undefined}
+      className={chipClassName(isActive)}
+    >
       {children}
     </Link>
   );

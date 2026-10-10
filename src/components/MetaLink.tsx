@@ -5,7 +5,7 @@ export function MetaLink({ children }: { children: React.ReactNode }) {
   return (
     <button
       type="button"
-      className="text-ink-primary transition-colors hover:text-brand-pink hover:underline"
+      className="text-ink-primary transition-colors hover:text-ink-brand hover:underline"
     >
       {children}
     </button>

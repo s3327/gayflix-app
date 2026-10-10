@@ -87,7 +87,7 @@ function NavItem({
           collapsed ? "justify-center" : ""
         } ${
           isActive
-            ? "bg-brand-pink/10 font-semibold text-brand-pink"
+            ? "bg-brand-pink/10 font-semibold text-ink-brand"
             : "text-ink-secondary hover:bg-bg-elevated hover:text-ink-primary"
         }`}
       >
@@ -144,7 +144,7 @@ function NavItem({
                 aria-current={isActive ? "page" : undefined}
                 className={`rounded-md px-3 py-2 text-sm transition-colors ${
                   isActive
-                    ? "bg-brand-pink/10 font-semibold text-brand-pink"
+                    ? "bg-brand-pink/10 font-semibold text-ink-brand"
                     : "text-ink-secondary hover:bg-bg-elevated hover:text-ink-primary"
                 }`}
               >

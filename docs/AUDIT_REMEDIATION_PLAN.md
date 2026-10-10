@@ -39,6 +39,7 @@ work with clear exit criteria.
 | L9 | Footer items that look clickable but do nothing | Low | ✅ |
 | N1 | *(found while fixing)* `/search?q=a&q=b` and other repeated params | Low | ✅ |
 | N2 | *(found while fixing)* No cross-tab or cross-component sync of stored state | Low | ✅ |
+| N3 | *(found by axe)* Text below WCAG AA contrast; invalid ARIA on filter links; unlabeled Play button | Medium | ✅ |
 
 ---
 
@@ -141,12 +142,18 @@ on an `admin.` subdomain.
   result always agree.
 
 ### M4. Security headers ✅
-`next.config.mjs` now sends these on every response:
-- CSP:
+- **CSP with a per-request nonce** (`src/lib/csp.ts`, set by `src/proxy.ts`):
+  - `script-src 'self' 'nonce-…' 'strict-dynamic'`: no `'unsafe-inline'`
+    for scripts, so an injected `<script>` can't run;
   - `default-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`
   - `base-uri 'self'`, `form-action 'self'`, `frame-src 'none'`
   - images, fonts and connections limited to this origin
-  - dev adds eval and websockets for hot reload
+  - `style-src` keeps `'unsafe-inline'`, because React and `next/image`
+    write inline `style` attributes;
+  - dev adds eval and websockets for hot reload.
+  - The root layout calls `connection()`, so every page renders per
+    request and Next.js stamps the nonce onto its scripts.
+- `next.config.mjs` sends the rest on every response:
 - `X-Frame-Options: DENY`
 - `X-Content-Type-Options: nosniff`
 - `Referrer-Policy: strict-origin-when-cross-origin`
@@ -155,11 +162,14 @@ on an `admin.` subdomain.
 
 `X-Powered-By` is removed.
 
-**Verified:** no CSP violations on any page in the production or dev build.
-**Planned:** nonce-based CSP, to drop `'unsafe-inline'` for scripts (Phase 3).
+**Verified:**
+- The e2e suite checks that every script on the page carries the nonce
+  from that response's CSP, and that `script-src` has no `'unsafe-inline'`.
+- Every page loads with no CSP violations in the console, and client-side
+  navigation works.
 
 ### M5. Tests and CI ✅
-- **Vitest** with 26 tests across 8 files, covering:
+- **Vitest** with 39 tests across 11 files, covering:
   - pagination
   - query-param parsing
   - redirect validation
@@ -168,9 +178,24 @@ on an `admin.` subdomain.
   - link building
   - search ranking (including "drafts are never suggested")
   - NEW-badge timing
+  - the CSP builder
+  - the sitemap (no drafts, no private pages)
+- **Playwright** (`e2e/`, `npm run test:e2e`) against the production build:
+  - every public page returns 200 with no console errors;
+  - the CSP nonce, the 404 page and client-side navigation;
+  - header search, the guest login redirect and open-redirect blocking,
+    episode history links, modal focus handling and OTP autofill;
+  - the admin gate (401 without credentials, noindex, sidebar navigation,
+    no password in the URL);
+  - **axe** accessibility checks (WCAG 2.1 A/AA) on 10 public pages and
+    3 admin pages, failing on any serious or critical violation.
 - **`.github/workflows/ci.yml`** runs on every push to `main` and every PR:
-  `npm ci` → lint → typecheck → test → build → `npm audit --omit=dev --audit-level=high`.
-- **`npm run check`** runs the same sequence locally.
+  `npm ci` → lint → typecheck → unit tests → build → e2e + axe →
+  `npm audit --omit=dev --audit-level=high`. Playwright traces are uploaded
+  when e2e fails.
+- **`npm run check`** runs lint, typecheck, unit tests and build locally.
+- **Dependabot** (`.github/dependabot.yml`) opens weekly update PRs for npm
+  (minor and patch grouped, majors one by one) and GitHub Actions.
 
 ### L1. README ✅
 The README was rewritten to cover setup, scripts, environment variables,
@@ -225,6 +250,20 @@ A key repeated in the URL arrives as an array, which broke `.trim()` on
 `usePersistedState` now uses `useSyncExternalStore`. Every component
 reading a key sees the same value, other tabs' changes arrive live, and
 there's no load-then-save effect cascade on mount.
+
+### N3. Accessibility ✅ *(found by the axe checks)*
+- **Contrast.** Three tokens moved slightly so text clears WCAG AA (4.5:1);
+  approved on 2026-10-10:
+  - `ink.muted` #7A7A87 → **#878794** (was 4.2:1 on cards);
+  - `brand.pink` #EC008C → **#E40087** (white button text was 4.25:1);
+  - new `ink.brand` **#F13DA8** for pink text on dark backgrounds (pink
+    links were 4.2:1). `brand.pink.light` stays the hover shade.
+- **ARIA.** Filter chips that are links now use `aria-current` instead of
+  `aria-pressed`, which isn't allowed on links.
+- **Play button** on the watch page now has an accessible name.
+- **Known gap:** white text on the pink *hover* fill (`brand.pink.light`)
+  is 2.8:1 while hovered. axe doesn't test hover states; worth revisiting
+  with the design tokens.
 
 ---
 
@@ -282,7 +321,8 @@ through **Prisma ORM**.
 5. **Admin auth:**
    - admin accounts with roles (e.g. `editor` and `admin`) and 2FA;
    - remove the Basic Auth gate only once this is live;
-   - keep the proxy's host split.
+   - keep the proxy's `/admin` check as the first lock, in front of the
+     role check.
 6. **Authorization in a data access layer:**
    - every server read or write checks the session, including pages,
      server actions and `/api` routes;
@@ -302,19 +342,16 @@ through **Prisma ORM**.
 
 ## Phase 3: hardening and tooling
 
-- **Nonce-based CSP.** Drop `'unsafe-inline'` from `script-src`: the proxy
-  generates a nonce per request, and the root layout reads it from headers.
+- ✅ **Nonce-based CSP.** Shipped; see M4.
+- ✅ **E2E tests in CI** with Playwright. Shipped; see M5.
+- ✅ **Dependency hygiene.** Dependabot shipped; see M5. CI fails on high
+  or critical production advisories.
 - **Video embeds.** When a player provider is chosen, add its origin to
   `frame-src` (and `media-src` if streaming directly), and use `sandbox`
   on the iframe.
 - **Tailwind 4 migration.** Move the tokens to CSS `@theme` (or use
   `@config` for a smaller first step). This clears the remaining dev-only
   audit findings.
-- **E2E tests in CI** with Playwright, covering the flows this change
-  checked by hand: search, the login redirect, episode history, modal
-  focus and the admin gate.
-- **Dependency hygiene.** Dependabot or Renovate for weekly updates. CI
-  already fails on high or critical production advisories.
 - **Monitoring.** Error reporting such as Sentry, wired into `error.tsx`
   and route handlers.
 
@@ -326,15 +363,20 @@ through **Prisma ORM**.
   tab suggests they will be.
 - **L5. Mock data.** Replacing the mock catalog with Prisma queries
   removes the build-time date drift. No interim change is worth making.
-- **Sitemap** (`app/sitemap.ts`) generated from the real catalog.
-- **Accessibility pass** with axe in CI, plus a keyboard-only walkthrough
-  of the drawer, carousels and the player.
+- ✅ **Sitemap.** `src/app/sitemap.ts` lists the public pages and every
+  published title, and `robots.txt` points to it. It reads the mock catalog
+  today and follows the real one once Phase 2 swaps in Prisma queries. Set
+  `SITE_URL` to the production domain (on Vercel it defaults to the
+  project's production domain).
+- 🟡 **Accessibility pass.** axe runs in CI (see M5 and N3). Still to do:
+  a keyboard-only walkthrough of the drawer, carousels and the player.
 
 ## How to verify locally
 
 ```bash
 npm ci
-npm run check            # lint, typecheck, test, build
+npm run check            # lint, typecheck, unit tests, build
+npm run test:e2e         # Playwright + axe against the build
 npm audit --omit=dev     # expect: found 0 vulnerabilities
 ```
 

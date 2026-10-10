@@ -31,14 +31,16 @@ once real page designs come in.
 ## Design tokens
 
 Every color/font token lives in **`tailwind.config.ts`**, matching
-`gayflix-design-tokens.html` (the approved v1 reference sheet) exactly.
-Never hardcode a hex value in a component — pull from the token classes:
+`gayflix-design-tokens.html` (the approved v1 reference sheet), except
+for three shades adjusted for WCAG AA contrast on 2026-10-10: `ink.muted`
+(#878794), `brand.pink` (#E40087) and the new `ink.brand` (#F13DA8) for
+pink text. See N3 in `AUDIT_REMEDIATION_PLAN.md`. Never hardcode a hex value in a component — pull from the token classes:
 
 | Purpose | Class example |
 |---|---|
 | Primary button | `bg-brand-pink hover:bg-brand-pink-light active:bg-brand-pink-dark` |
 | Secondary button | `border border-border-strong hover:bg-bg-elevated` |
-| Link | `text-brand-pink hover:text-brand-pink-light` |
+| Link | `text-ink-brand hover:text-brand-pink-light` |
 | Page background | `bg-bg-base` |
 | Card / row background | `bg-bg-surface` |
 | Modal / hovered card | `bg-bg-elevated` |

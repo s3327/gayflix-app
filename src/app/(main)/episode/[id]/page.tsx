@@ -135,7 +135,7 @@ export default async function EpisodePage({
         <div className="min-w-0">
           <Link
             href={`/series/${series.id}`}
-            className="text-xs font-semibold uppercase tracking-wide text-brand-pink transition-colors hover:text-brand-pink-light"
+            className="text-xs font-semibold uppercase tracking-wide text-ink-brand transition-colors hover:text-brand-pink-light"
           >
             {series.title}
           </Link>

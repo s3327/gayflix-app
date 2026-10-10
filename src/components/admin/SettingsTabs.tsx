@@ -70,7 +70,7 @@ export default function SettingsTabs() {
             aria-current={active === tab.key ? "page" : undefined}
             className={`shrink-0 border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
               active === tab.key
-                ? "border-brand-pink text-brand-pink"
+                ? "border-brand-pink text-ink-brand"
                 : "border-transparent text-ink-secondary hover:text-ink-primary"
             }`}
           >

@@ -11,7 +11,7 @@ export default function TrendingNowSection({ media }: { media: Media[] }) {
         <h2 className="font-display text-xl font-semibold">Trending Now</h2>
         <Link
           href="/trending"
-          className="flex items-center gap-1 text-sm font-semibold text-brand-pink transition-colors hover:text-brand-pink-light"
+          className="flex items-center gap-1 text-sm font-semibold text-ink-brand transition-colors hover:text-brand-pink-light"
         >
           See More
           <ChevronRight className="h-4 w-4" />

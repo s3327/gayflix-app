@@ -58,7 +58,7 @@ export default function LibraryTable({
                 {/* Clickable — will route to the edit page later */}
                 <button
                   type="button"
-                  className="block w-full truncate text-left font-medium text-ink-primary transition-colors hover:text-brand-pink"
+                  className="block w-full truncate text-left font-medium text-ink-primary transition-colors hover:text-ink-brand"
                 >
                   {item.title}
                 </button>

@@ -71,7 +71,7 @@ export default function AdminLoginPage() {
               </label>
               <Link
                 href="/admin/forgot-password"
-                className="text-xs font-medium text-brand-pink transition-colors hover:text-brand-pink-light"
+                className="text-xs font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
               >
                 Forgot password?
               </Link>

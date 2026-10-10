@@ -8,6 +8,30 @@ function request(url: string, headers: Record<string, string> = {}) {
 
 const ADMIN = "http://gayflix.test/admin/dashboard";
 
+describe("proxy: content security policy", () => {
+  it("sets a nonce-based CSP on the response and the request", () => {
+    const response = proxy(request("http://gayflix.test/home"));
+    const csp = response.headers.get("content-security-policy") ?? "";
+    const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
+    expect(nonce).toBeTruthy();
+    // Next.js reads the nonce from the forwarded request headers.
+    expect(response.headers.get("x-middleware-request-x-nonce")).toBe(nonce);
+    expect(response.headers.get("x-middleware-request-content-security-policy")).toBe(csp);
+  });
+
+  it("uses a different nonce for every request", () => {
+    const a = proxy(request("http://gayflix.test/home")).headers.get("content-security-policy");
+    const b = proxy(request("http://gayflix.test/home")).headers.get("content-security-policy");
+    expect(a).not.toBe(b);
+  });
+
+  it("doesn't touch public pages' caching or indexing", () => {
+    const response = proxy(request("http://gayflix.test/administrators"));
+    expect(response.headers.get("x-robots-tag")).toBeNull();
+    expect(response.headers.get("cache-control")).toBeNull();
+  });
+});
+
 describe("proxy (admin gate at /admin)", () => {
   afterEach(() => vi.unstubAllEnvs());
 

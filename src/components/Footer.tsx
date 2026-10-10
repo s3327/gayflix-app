@@ -52,7 +52,7 @@ export default function Footer() {
                         {href ? (
                           <Link
                             href={href}
-                            className="text-sm text-ink-secondary transition-colors hover:text-brand-pink"
+                            className="text-sm text-ink-secondary transition-colors hover:text-ink-brand"
                           >
                             {link}
                           </Link>

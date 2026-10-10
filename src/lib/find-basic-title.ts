@@ -37,6 +37,20 @@ const POOLS: Media[][] = [
 ];
 
 /**
+ * Every title a visitor can open at /movie/[id] or /series/[id], once
+ * each (an id in several pools resolves to the first, as in
+ * findBasicTitle). Used by the sitemap.
+ */
+export function listPublicTitles(): Media[] {
+  const seen = new Set<string>();
+  return POOLS.flat().filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
+/**
  * Looks for basic (not full-detail) info for an id across every mock
  * source that has it — used as a fallback by /movie/[id] and /series/[id]
  * when the id isn't in the rich mock-movie-details dataset (which only

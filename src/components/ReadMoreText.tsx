@@ -33,7 +33,7 @@ export default function ReadMoreText({ text }: { text: string }) {
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="mt-2 text-sm font-semibold text-brand-pink transition-colors hover:text-brand-pink-light"
+          className="mt-2 text-sm font-semibold text-ink-brand transition-colors hover:text-brand-pink-light"
         >
           {expanded ? "Read less" : "Read more"}
         </button>

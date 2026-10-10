@@ -12,7 +12,7 @@ function DrawerLink({ item, isActive }: { item: NavMenuItem; isActive: boolean }
       href={item.href}
       aria-current={isActive ? "page" : undefined}
       className={`border-b border-border-subtle py-3 text-sm font-semibold transition-colors last:border-b-0 ${
-        isActive ? "text-brand-pink" : "text-ink-primary"
+        isActive ? "text-ink-brand" : "text-ink-primary"
       }`}
     >
       {item.label}

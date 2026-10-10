@@ -42,15 +42,18 @@ npm run dev
 | `npm run typecheck` | Generates Next's route types, then runs `tsc --noEmit` |
 | `npm test` | Unit tests (Vitest) |
 | `npm run check` | All of the above, in the order CI runs them |
+| `npm run test:e2e` | End-to-end and accessibility (axe) tests with Playwright, against the production build (run `npm run build` first) |
 
-CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests, build and
-`npm audit --omit=dev` on every push to `main` and on every pull request.
+CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests, build,
+the e2e + axe suite and `npm audit --omit=dev` on every push to `main` and
+on every pull request. Dependabot opens weekly dependency update PRs.
 
 ## Environment variables
 
 | Variable | Purpose |
 |---|---|
 | `ADMIN_BASIC_AUTH_USER`, `ADMIN_BASIC_AUTH_PASSWORD` | Password gate for `/admin`. **Required in production**: without them the admin panel answers 503. In development, leaving them unset keeps the panel open. |
+| `SITE_URL` | Public origin for `sitemap.xml`, `robots.txt` and metadata URLs, read at build time. Optional on Vercel, which defaults to the production domain. |
 
 On Vercel, set these under Project → Settings → Environment Variables
 (for both Production and Preview).
@@ -59,10 +62,11 @@ On Vercel, set these under Project → Settings → Environment Variables
 
 ```
 src/
-  proxy.ts               → admin password gate on /admin and /admin/* (noindex,
-                           no-store); nothing else runs through it
+  proxy.ts               → per-request CSP nonce on every page, plus the admin
+                           password gate on /admin and /admin/* (noindex, no-store)
   app/
-    layout.tsx           → fonts, <html>/<body>, AuthProvider
+    layout.tsx           → fonts, <html>/<body>, AuthProvider; renders per
+                           request so scripts get the CSP nonce
     page.tsx             → landing page (no header)
     (main)/              → the browsing app: Header, NavMenu, Footer, and the
                            Toast/Favorites/Lists/History providers
@@ -70,10 +74,11 @@ src/
     admin/               → admin panel (noindex; access re-checked in layout.tsx)
       (panel)/           → pages with the sidebar
     api/search/          → header search suggestions (catalog stays server-side)
-    robots.ts, icon.png, not-found.tsx, error.tsx
+    robots.ts, sitemap.ts, icon.png, not-found.tsx, error.tsx
   components/            → UI components (admin/ for the panel)
   lib/                   → contexts, hooks, helpers and mock data
-next.config.mjs          → image hosts and security headers (CSP, HSTS, ...)
+e2e/                     → Playwright end-to-end and axe accessibility tests
+next.config.mjs          → image hosts and security headers (HSTS, framing, ...)
 docs/                    → design notes (build log) and the audit plan
 ```
 
@@ -95,7 +100,10 @@ docs/                    → design notes (build log) and the audit plan
   actions) must call `checkAdminAccess()` itself, because the proxy only
   covers `/admin` paths, not `/api`.
 - **Third-party origins** (CDNs, video embeds) need adding both to
-  `images.remotePatterns` and to the CSP in `next.config.mjs`.
+  `images.remotePatterns` and to the CSP in `src/lib/csp.ts`.
+- **Contrast.** Muted text uses `text-ink-muted` and pink text uses
+  `text-ink-brand`; both clear WCAG AA on every background. The e2e axe
+  checks fail the build on contrast regressions.
 
 ## Brand assets
 

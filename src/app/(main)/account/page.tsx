@@ -186,7 +186,7 @@ export default function AccountPage() {
                 <button
                   type="button"
                   onClick={() => setEmailStep("confirm-current")}
-                  className="text-xs font-semibold text-brand-pink transition-colors hover:text-brand-pink-light"
+                  className="text-xs font-semibold text-ink-brand transition-colors hover:text-brand-pink-light"
                 >
                   Change Email
                 </button>
@@ -295,7 +295,7 @@ export default function AccountPage() {
                 <button
                   type="button"
                   onClick={() => setPasswordStep("new-password")}
-                  className="text-xs font-semibold text-brand-pink transition-colors hover:text-brand-pink-light"
+                  className="text-xs font-semibold text-ink-brand transition-colors hover:text-brand-pink-light"
                 >
                   Change Password
                 </button>

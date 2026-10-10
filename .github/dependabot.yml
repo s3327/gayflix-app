@@ -1,0 +1,23 @@
+# Weekly dependency update PRs. Every version in package.json is pinned
+# exactly, so these PRs are the way upgrades arrive; CI (lint, types,
+# unit, build, e2e + axe) has to pass before one is merged.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Minor and patch bumps land together in one PR; a major version
+      # (Tailwind 4, a new Next major) gets its own PR so it can be
+      # reviewed on its own.
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
