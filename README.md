@@ -87,6 +87,10 @@ on every pull request. Dependabot opens weekly dependency update PRs.
 
 ## Deploying to Vercel
 
+The full walkthrough, with your own domain, email, Google sign-in,
+day-to-day operations and troubleshooting, is in
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). In short:
+
 1. Import the repository at [vercel.com/new](https://vercel.com/new).
 2. In the project's **Storage** tab, add a Prisma Postgres database. That
    sets `DATABASE_URL` for you. (Or create one at console.prisma.io and
