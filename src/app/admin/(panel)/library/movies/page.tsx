@@ -1,18 +1,12 @@
-import LibrarySearchBar from "@/components/admin/LibrarySearchBar";
-import LibraryTable from "@/components/admin/LibraryTable";
-import { libraryItems } from "@/lib/mock-library";
+import LibraryPage from "@/components/admin/LibraryPage";
+import type { SearchParams } from "@/lib/search-params";
+import { requireAdmin } from "@/lib/session";
 
-export default function LibraryMoviesPage() {
-  const movies = libraryItems.filter((item) => item.type === "movie");
-
-  return (
-    <div className="pb-10">
-      <div className="px-6 pt-10 sm:px-10">
-        <h1 className="font-display text-2xl font-bold">Library — Movies</h1>
-      </div>
-
-      <LibrarySearchBar />
-      <LibraryTable items={movies} />
-    </div>
-  );
+export default async function LibraryMoviesPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  await requireAdmin();
+  return <LibraryPage type="movie" searchParams={await searchParams} />;
 }

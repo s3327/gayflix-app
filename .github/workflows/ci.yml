@@ -16,7 +16,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # A throwaway Postgres for the e2e suite (accounts, sessions, roles).
+    # A throwaway Postgres for the e2e suite (the catalog, accounts, roles).
     services:
       postgres:
         image: postgres:16

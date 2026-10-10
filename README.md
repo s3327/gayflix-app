@@ -6,7 +6,9 @@ the public site and the admin panel, deployed as one Next.js app.
 **Status:** accounts are real (Better Auth on Prisma Postgres: sign-up
 with an emailed code, login, password reset, Google sign-in, admin
 roles), and favorites, lists, watch history and reports are stored in
-the database. The catalog is still mock data (`src/lib/mock-*.ts`). See
+the database. So is the catalog, which starts out as a sample catalog of
+placeholder titles; the admin library lists it, drafts included, but
+can't edit titles yet. See
 [docs/AUDIT_REMEDIATION_PLAN.md](docs/AUDIT_REMEDIATION_PLAN.md) for what
 has to change before launch.
 
@@ -137,7 +139,9 @@ src/
     login/, signup/, verify-email/, forgot-password/, reset-password/
     robots.ts, sitemap.ts, icon.png, not-found.tsx, error.tsx
   components/            → UI components (admin/ for the panel)
-  lib/                   → contexts, hooks, helpers and mock data
+  lib/                   → contexts, hooks and helpers
+    catalog.ts           → every read of titles and episodes (server only;
+                           the public site only ever gets published titles)
     auth.ts              → Better Auth config (server only)
     auth-client.ts       → browser auth calls
     session.ts           → getSession / requireUser / requireAdmin (server only)
@@ -147,7 +151,8 @@ src/
                            server functions (library-actions.ts), input checks
     report*.ts           → reports and their daily limits
   generated/prisma/      → Prisma client (generated on npm install; not committed)
-prisma/                  → schema.prisma and migrations
+prisma/                  → schema.prisma and migrations (one of them loads
+                           the sample catalog)
 scripts/make-admin.mjs   → grant or revoke the admin role
 scripts/vercel-build.sh  → Vercel's build command: migrations, then the build
 vercel.json              → points Vercel at that build command
@@ -165,8 +170,13 @@ docs/                    → design notes (build log) and the audit plan
   so episodes, movies and series always link to the right page.
 - **Query params** are read through `src/lib/search-params.ts` (`pageParam`,
   `firstParam`), because a repeated key arrives as an array.
-- **Drafts are never public.** Listings, search and detail lookups use the
-  `published*` collections.
+- **Drafts are never public.** Pages and routes read titles through
+  `src/lib/catalog.ts`, which only returns published titles to the public
+  site; drafts appear in the admin library alone. Each catalog read waits
+  for a request (`connection()`), so a build never queries the database.
+- **Title gradients** are stored in the database, where Tailwind can't
+  see them, so `src/app/globals.css` generates every gradient stop in the
+  brand and pride colors. A gradient in a new color needs adding there.
 - **A user's data lives in the database.** Favorites, lists and history
   change through the server functions in `src/lib/library-actions.ts`; the
   providers update the screen first and undo it with a toast if the save

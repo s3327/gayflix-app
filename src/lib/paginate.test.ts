@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PAGE_SIZE, paginate } from "@/lib/paginate";
+import { PAGE_SIZE, pageWindow, paginate } from "@/lib/paginate";
 
 const items = Array.from({ length: 50 }, (_, i) => i);
 
@@ -20,5 +20,17 @@ describe("paginate", () => {
 
   it("always reports at least one page", () => {
     expect(paginate([], 1)).toEqual({ page: 1, totalPages: 1, pageItems: [] });
+  });
+});
+
+describe("pageWindow", () => {
+  it("says which rows a database page starts at", () => {
+    expect(pageWindow(50, 2)).toEqual({ page: 2, totalPages: 3, skip: PAGE_SIZE });
+    expect(pageWindow(120, 3, 50)).toEqual({ page: 3, totalPages: 3, skip: 100 });
+  });
+
+  it("clamps out-of-range pages to the last one", () => {
+    expect(pageWindow(50, 999)).toEqual({ page: 3, totalPages: 3, skip: PAGE_SIZE * 2 });
+    expect(pageWindow(0, 4)).toEqual({ page: 1, totalPages: 1, skip: 0 });
   });
 });

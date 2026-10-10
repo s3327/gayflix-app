@@ -1,25 +1,21 @@
 import { Pencil, Eye, EyeOff, Trash2 } from "lucide-react";
-import type { LibraryItem } from "@/lib/mock-library";
+import type { LibraryRow } from "@/lib/catalog";
 import Badge from "@/components/Badge";
 
 /**
  * Reusable list table for library pages (Movies, Series — same
- * component). UI only — checkboxes, title, and action buttons aren't
- * wired to any real select/edit/publish/trash logic or routing yet.
+ * component), in the order given (newest first). The rows are real; the
+ * checkboxes and the edit/publish/trash buttons aren't wired to anything
+ * yet.
  */
 export default function LibraryTable({
   items,
   showEpisodes = false,
 }: {
-  items: LibraryItem[];
+  items: LibraryRow[];
   /** Series only — adds the Episodes column before Year. */
   showEpisodes?: boolean;
 }) {
-  // Newest imported/uploaded media on top.
-  const sorted = [...items].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-
   return (
     <div className="mx-6 overflow-hidden rounded-card border border-border-subtle sm:mx-10">
       {/* table-fixed makes the browser actually respect the widths below
@@ -45,7 +41,7 @@ export default function LibraryTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-border-subtle bg-bg-surface">
-          {sorted.map((item) => (
+          {items.map((item) => (
             <tr key={item.id} className="transition-colors hover:bg-bg-elevated">
               <td className="px-4 py-3">
                 <input
@@ -101,7 +97,7 @@ export default function LibraryTable({
   );
 }
 
-function StatusBadge({ status }: { status: LibraryItem["status"] }) {
+function StatusBadge({ status }: { status: LibraryRow["status"] }) {
   const isPublished = status === "published";
   return (
     <Badge tone={isPublished ? "success" : "neutral"}>

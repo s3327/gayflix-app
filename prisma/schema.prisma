@@ -102,10 +102,89 @@ model RateLimit {
   @@map("rateLimit")
 }
 
+// --- Catalog ------------------------------------------------------------
+// Read through src/lib/catalog.ts. The public site only ever shows
+// published titles; drafts are for the admin library.
+
+enum MediaType {
+  movie
+  series
+
+  @@map("media_type")
+}
+
+enum MediaStatus {
+  draft
+  published
+
+  @@map("media_status")
+}
+
+/// A movie or a series. `id` is the slug in /movie/[id] and /series/[id].
+model Media {
+  id             String      @id
+  type           MediaType
+  status         MediaStatus @default(draft)
+  title          String
+  year           Int
+  /// As cards show it: "1h 52m" for a movie, "3 Seasons" for a series.
+  duration       String
+  /// The first one is the main genre, the one cards show.
+  genres         String[]
+  country        String
+  language       String
+  synopsis       String      @default("")
+  tagline        String?
+  /// 0 to 5.
+  rating         Float?
+  /// Movies only.
+  director       String?
+  /// Series only.
+  creator        String?
+  cast           String[]
+  tags           String[]
+  releaseDate    DateTime?   @db.Date
+  /// Movies only.
+  runtimeMinutes Int?
+  posterUrl      String
+  /// 16:9, for the home page hero.
+  backdropUrl    String?
+  /// Tailwind gradient stops shown behind the poster.
+  gradient       String?
+  /// The home page hero shows the most recently updated featured title.
+  featured       Boolean     @default(false)
+  /// Ranks Trending.
+  viewCount      Int         @default(0)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  episodes       Episode[]
+
+  @@index([status, type, updatedAt])
+  @@index([status, createdAt])
+  @@index([status, viewCount])
+  @@map("media")
+}
+
+/// One episode of a series. `id` is the slug in /episode/[id].
+model Episode {
+  id            String    @id
+  mediaId       String
+  seasonNumber  Int
+  episodeNumber Int
+  title         String
+  /// As shown: "42 min".
+  duration      String
+  airDate       DateTime? @db.Date
+  media         Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([mediaId, seasonNumber, episodeNumber])
+  @@map("episode")
+}
+
 // --- Library (favorites, history, lists) and reports --------------------
 // Titles are stored as a snapshot (`entry`, the FavoriteEntry shape in
-// src/lib/library-types.ts) because the catalog is still mock data. When
-// the catalog moves into the database, `mediaId` becomes a relation.
+// src/lib/library-types.ts), so saved titles keep showing even if one is
+// later unpublished or removed. `mediaId` can also be an episode's id.
 
 model Favorite {
   userId    String

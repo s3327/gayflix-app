@@ -70,7 +70,8 @@ export async function createVerifiedAccount(request: APIRequestContext, account:
   if (!verify.ok()) throw new Error(`verify failed: ${verify.status()} ${await verify.text()}`);
 }
 
-async function sql(query: string, params: unknown[]) {
+/** Runs one statement against the test database. */
+export async function sql(query: string, params: unknown[]) {
   const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   try {

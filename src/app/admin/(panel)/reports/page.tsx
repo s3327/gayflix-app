@@ -1,8 +1,8 @@
 import Link from "next/link";
 import Pagination from "@/components/Pagination";
 import { reopenReport, resolveReport } from "@/lib/admin-report-actions";
+import { findEpisodeIds } from "@/lib/catalog";
 import { db } from "@/lib/db";
-import { findEpisode } from "@/lib/mock-series-details";
 import { firstParam, pageParam, type SearchParams } from "@/lib/search-params";
 import { requireAdmin } from "@/lib/session";
 
@@ -16,11 +16,6 @@ const dateTime = new Intl.DateTimeFormat("en-US", {
 
 function when(date: Date) {
   return `${dateTime.format(date)} UTC`;
-}
-
-// Reports come from the player on /watch/[id] and /episode/[id].
-function playerHref(mediaId: string) {
-  return findEpisode(mediaId) ? `/episode/${mediaId}` : `/watch/${mediaId}`;
 }
 
 /**
@@ -51,6 +46,10 @@ export default async function ReportsPage({
     take: PER_PAGE,
     include: { user: { select: { email: true } } },
   });
+  // Reports come from the player on /watch/[id] and /episode/[id].
+  const episodeIds = await findEpisodeIds(reports.map((report) => report.mediaId));
+  const playerHref = (mediaId: string) =>
+    episodeIds.has(mediaId) ? `/episode/${mediaId}` : `/watch/${mediaId}`;
 
   const tabHref = (resolved: boolean) => (resolved ? "/admin/reports?status=resolved" : "/admin/reports");
 

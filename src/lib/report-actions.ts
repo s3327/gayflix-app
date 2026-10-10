@@ -2,10 +2,8 @@
 
 import { createHmac } from "node:crypto";
 import { headers } from "next/headers";
+import { findReportTitle } from "@/lib/catalog";
 import { db } from "@/lib/db";
-import { findBasicTitle } from "@/lib/find-basic-title";
-import { movieDetails } from "@/lib/mock-movie-details";
-import { findEpisode } from "@/lib/mock-series-details";
 import {
   GUEST_REPORT_LIMIT,
   LOGGED_IN_REPORT_LIMIT,
@@ -60,14 +58,6 @@ function allowance(reporter: Reporter, used: number): ReportAllowance {
   };
 }
 
-// The title is looked up here rather than trusted from the browser.
-function findTitle(mediaId: string): string | undefined {
-  const movie = movieDetails[mediaId] ?? findBasicTitle(mediaId);
-  if (movie) return movie.title;
-  const found = findEpisode(mediaId);
-  return found && `${found.series.title}: ${found.episode.title}`;
-}
-
 export async function reportAllowance(): Promise<ReportAllowance> {
   const reporter = await currentReporter();
   return allowance(reporter, await db.report.count({ where: reportsToday(reporter) }));
@@ -80,7 +70,8 @@ export type ReportResult =
 export async function submitReport(value: unknown): Promise<ReportResult> {
   const input = parseReport(value);
   if (!input) return { ok: false, error: "Pick a reason and keep the details under 1,000 characters." };
-  const mediaTitle = findTitle(input.mediaId);
+  // The title is looked up here rather than trusted from the browser.
+  const mediaTitle = await findReportTitle(input.mediaId);
   if (!mediaTitle) return { ok: false, error: "We couldn't find that title." };
 
   const reporter = await currentReporter();

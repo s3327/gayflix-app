@@ -1,20 +1,12 @@
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { findEpisode } from "@/lib/mock-series-details";
+import { getEpisode } from "@/lib/catalog";
 import ServerTabs from "@/components/ServerTabs";
 import WatchPlayer from "@/components/WatchPlayer";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
-
-// Same rotation as /watch/[id] and /series/[id] — kept in sync
-// intentionally.
-const TAG_COLORS = [
-  "bg-pride-red-light",
-  "bg-pride-yellow",
-  "bg-pride-green-light",
-  "bg-pride-blue-light",
-  "bg-pride-purple-light",
-];
+import TagList from "@/components/TagList";
 
 /**
  * Deliberately the same structure as /watch/[id]: player up top, then
@@ -25,7 +17,8 @@ const TAG_COLORS = [
  *      series as a whole has one) — the header shows a "SX · EY" badge
  *      instead of a star rating, and the synopsis/meta list below shows
  *      the series' own info (genre/creator/cast/country/language),
- *      since that's genuinely shared across every episode.
+ *      since that's genuinely shared across every episode. Details the
+ *      series doesn't have are left out.
  *   2. Previous/Next episode buttons directly below the player, since
  *      that's the one navigation action a movie's watch page has no
  *      equivalent for.
@@ -36,17 +29,15 @@ export default async function EpisodePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const found = findEpisode(id);
+  const found = await getEpisode(id);
   if (!found) notFound();
   const { episode, series } = found;
 
-  const sortedEpisodes = [...series.episodes].sort(
-    (a, b) => a.seasonNumber - b.seasonNumber || a.episodeNumber - b.episodeNumber
-  );
-  const currentIndex = sortedEpisodes.findIndex((ep) => ep.id === episode.id);
-  const previous = currentIndex > 0 ? sortedEpisodes[currentIndex - 1] : undefined;
-  const next =
-    currentIndex < sortedEpisodes.length - 1 ? sortedEpisodes[currentIndex + 1] : undefined;
+  // Already in season and episode order.
+  const episodes = series.episodes;
+  const currentIndex = episodes.findIndex((ep) => ep.id === episode.id);
+  const previous = currentIndex > 0 ? episodes[currentIndex - 1] : undefined;
+  const next = currentIndex < episodes.length - 1 ? episodes[currentIndex + 1] : undefined;
 
   return (
     <main className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
@@ -60,8 +51,9 @@ export default async function EpisodePage({
           duration: episode.duration,
           type: "series",
           kind: "episode",
-          genre: series.genre[0] ?? "Uncategorized",
+          genre: series.genre,
           gradient: series.gradient,
+          posterUrl: series.posterUrl,
         }}
       />
 
@@ -130,8 +122,16 @@ export default async function EpisodePage({
       {/* Mini poster + title/season-episode badge/tags */}
       <div className="mt-8 flex gap-4 sm:gap-6">
         <div
-          className={`aspect-2/3 w-24 shrink-0 overflow-hidden rounded-card bg-bg-surface bg-linear-to-br sm:w-32 ${series.gradient}`}
-        />
+          className={`relative aspect-2/3 w-24 shrink-0 overflow-hidden rounded-card bg-bg-surface bg-linear-to-br sm:w-32 ${series.gradient ?? ""}`}
+        >
+          <Image
+            src={series.posterUrl}
+            alt={series.title}
+            fill
+            sizes="128px"
+            className="object-cover"
+          />
+        </div>
         <div className="min-w-0">
           <Link
             href={`/series/${series.id}`}
@@ -152,17 +152,7 @@ export default async function EpisodePage({
             {episode.airDate ? ` · ${episode.airDate}` : ""}
           </p>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {series.tags.map((tag, i) => (
-              <button
-                key={tag}
-                type="button"
-                className={`rounded-pill px-3 py-1 text-xs font-semibold text-bg-base transition hover:brightness-110 ${TAG_COLORS[i % TAG_COLORS.length]}`}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
+          <TagList tags={series.tags} className="mt-3" />
         </div>
       </div>
 
@@ -170,25 +160,39 @@ export default async function EpisodePage({
 
       {/* Series synopsis — shared across every episode, since there's
           no per-episode synopsis in the data model */}
-      <p className="max-w-3xl text-sm leading-relaxed text-ink-secondary">
-        {series.synopsis}
-      </p>
+      {series.synopsis && (
+        <p className="max-w-3xl text-sm leading-relaxed text-ink-secondary">
+          {series.synopsis}
+        </p>
+      )}
 
       <dl className="mt-8 grid max-w-2xl grid-cols-[110px_1fr] gap-x-4 gap-y-3 text-sm sm:grid-cols-[140px_1fr]">
-        <dt className="text-ink-muted">Genre</dt>
-        <dd className="text-ink-primary">
-          <MetaLinkList items={series.genre} />
-        </dd>
+        {series.genres.length > 0 && (
+          <>
+            <dt className="text-ink-muted">Genre</dt>
+            <dd className="text-ink-primary">
+              <MetaLinkList items={series.genres} />
+            </dd>
+          </>
+        )}
 
-        <dt className="text-ink-muted">Creator</dt>
-        <dd className="text-ink-primary">
-          <MetaLink>{series.creator}</MetaLink>
-        </dd>
+        {series.creator && (
+          <>
+            <dt className="text-ink-muted">Creator</dt>
+            <dd className="text-ink-primary">
+              <MetaLink>{series.creator}</MetaLink>
+            </dd>
+          </>
+        )}
 
-        <dt className="text-ink-muted">Cast</dt>
-        <dd className="text-ink-primary">
-          <MetaLinkList items={series.cast} />
-        </dd>
+        {series.cast.length > 0 && (
+          <>
+            <dt className="text-ink-muted">Cast</dt>
+            <dd className="text-ink-primary">
+              <MetaLinkList items={series.cast} />
+            </dd>
+          </>
+        )}
 
         <dt className="text-ink-muted">Country</dt>
         <dd className="text-ink-primary">

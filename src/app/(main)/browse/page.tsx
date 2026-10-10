@@ -4,8 +4,7 @@ import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
 import { FilterChipLink } from "@/components/FilterChip";
-import { paginate } from "@/lib/paginate";
-import { publishedMediaItems } from "@/lib/mock-media";
+import { listTitles } from "@/lib/catalog";
 import { pageParam, type SearchParams } from "@/lib/search-params";
 
 type TypeFilter = "all" | "movie" | "series";
@@ -25,26 +24,19 @@ export default async function BrowsePage({
   searchParams: Promise<SearchParams>;
 }) {
   const searchParams = await searchParamsPromise;
-  // "Query all media title from database" — the whole catalog, not
-  // scoped to any one genre/country/year/language the way those pages
-  // are (though it is scoped to published — see publishedMediaItems).
+  // The whole published catalog, not scoped to any one genre/country/
+  // year/language the way those pages are.
   const typeFilter: TypeFilter =
     searchParams.type === "movie" || searchParams.type === "series"
       ? searchParams.type
       : "all";
   const sortAsc = searchParams.sort !== "desc";
 
-  const filtered =
-    typeFilter === "all"
-      ? publishedMediaItems
-      : publishedMediaItems.filter((item) => item.type === typeFilter);
-
-  const sorted = [...filtered].sort((a, b) =>
-    sortAsc ? a.title.localeCompare(b.title) : b.title.localeCompare(a.title)
-  );
-
-  const requestedPage = pageParam(searchParams.page);
-  const { page, totalPages, pageItems } = paginate(sorted, requestedPage);
+  const { items: pageItems, page, totalPages } = await listTitles({
+    type: typeFilter === "all" ? undefined : typeFilter,
+    sort: sortAsc ? "title" : "title-desc",
+    page: pageParam(searchParams.page),
+  });
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 sm:py-14">

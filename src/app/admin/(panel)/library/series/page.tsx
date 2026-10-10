@@ -1,18 +1,12 @@
-import LibrarySearchBar from "@/components/admin/LibrarySearchBar";
-import LibraryTable from "@/components/admin/LibraryTable";
-import { libraryItems } from "@/lib/mock-library";
+import LibraryPage from "@/components/admin/LibraryPage";
+import type { SearchParams } from "@/lib/search-params";
+import { requireAdmin } from "@/lib/session";
 
-export default function LibrarySeriesPage() {
-  const seriesItems = libraryItems.filter((item) => item.type === "series");
-
-  return (
-    <div className="pb-10">
-      <div className="px-6 pt-10 sm:px-10">
-        <h1 className="font-display text-2xl font-bold">Library — Series</h1>
-      </div>
-
-      <LibrarySearchBar />
-      <LibraryTable items={seriesItems} showEpisodes />
-    </div>
-  );
+export default async function LibrarySeriesPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  await requireAdmin();
+  return <LibraryPage type="series" searchParams={await searchParams} />;
 }

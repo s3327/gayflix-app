@@ -1,5 +1,4 @@
 import CatalogFilterPage from "@/components/CatalogFilterPage";
-import { publishedMediaItems } from "@/lib/mock-media";
 import { type SearchParams } from "@/lib/search-params";
 
 export default async function CountryPage({
@@ -11,10 +10,8 @@ export default async function CountryPage({
   return (
     <CatalogFilterPage
       title="Country"
-      paramName="country"
+      field="country"
       basePath="/country"
-      items={publishedMediaItems}
-      getFieldValue={(item) => item.country ?? "Unknown"}
       emptyMessage="No titles found for this country yet."
       searchParams={searchParams}
     />
