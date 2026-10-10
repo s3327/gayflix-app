@@ -302,14 +302,19 @@ user data or content management goes live.
   - the admin panel layout requires the "admin" role (`requireAdmin()`);
   - `useAuth()` now reads the real session; nothing about login is stored
     in `localStorage`.
+- **Profile editing** on `/account` is real: display name, email change
+  (a code goes to the new address; nothing changes until it's entered)
+  and password change (needs the current password; signs out other
+  devices).
 - **Admins** are regular accounts with the "admin" role:
   `npm run make-admin -- <email>` (or `--revoke`). The Basic Auth gate
   stays in front of `/admin` as an outer lock for now.
 - **Verified:**
   - e2e against a real Postgres (CI runs one as a service): sign-up with a
     wrong and then a right code, logout, wrong password, unverified login,
-    password reset by link, identical answers for unknown emails, guests
-    and regular users kept out of admin, admin login and navigation;
+    password reset by link, identical answers for unknown emails, profile
+    edits (name, email by code, password), guests and regular users kept
+    out of admin, admin login and navigation;
   - checked by hand: sign-in rate limit returns 429 after 3 tries, the
     session cookie is `HttpOnly; SameSite=Lax`, a sign-in from another
     origin gets 403, passwords and codes are stored hashed.
@@ -317,9 +322,6 @@ user data or content management goes live.
 ### Still to do in Phase 2
 - **Admin 2FA** (Better Auth's `twoFactor` plugin) and a shorter admin
   session, then retire the Basic Auth gate.
-- **Account page profile editing** (display name, change email, change
-  password) is still the old mock flow; wire it to `updateUser`,
-  `changeEmail` and `changePassword`.
 - **Step 7 below:** favorites, lists, history and report limits move from
   `localStorage` to the database, and the catalog (`Media`, `Episode`)
   moves to Prisma with a seed from the mock data.

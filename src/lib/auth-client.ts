@@ -20,6 +20,8 @@ const MESSAGES: Record<string, string> = {
   PASSWORD_TOO_LONG: "Use at most 128 characters for your password.",
   INVALID_TOKEN: "This reset link is invalid or has expired. Request a new one.",
   INVALID_EMAIL: "Enter a valid email address.",
+  INVALID_PASSWORD: "That password isn't right.",
+  CREDENTIAL_ACCOUNT_NOT_FOUND: "This account signs in with Google, so it has no password to change.",
 };
 
 type AuthError = { code?: string; message?: string; status?: number };

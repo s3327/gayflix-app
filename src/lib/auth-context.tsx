@@ -3,7 +3,13 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 
-type AuthUser = { id: string; name: string; email: string; role?: string | null };
+type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: Date | string;
+  role?: string | null;
+};
 
 type AuthContextValue = {
   isLoggedIn: boolean;
@@ -13,6 +19,8 @@ type AuthContextValue = {
   /** True from logout() until the next sign-in, so pages can tell "logged out on purpose" from "session ended". */
   isLoggingOut: boolean;
   logout: () => Promise<void>;
+  /** Re-reads the session, after changing the user's name or email. */
+  refresh: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -28,7 +36,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
  * src/lib/session.ts instead.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { data, isPending } = authClient.useSession();
+  const { data, isPending, refetch } = authClient.useSession();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Signing in again (a new user appearing) ends the "logged out on
@@ -46,6 +54,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await authClient.signOut();
   }, []);
 
+  const refresh = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       isLoggedIn: Boolean(data?.user),
@@ -53,8 +65,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user: data?.user ?? null,
       isLoggingOut,
       logout,
+      refresh,
     }),
-    [data, isPending, isLoggingOut, logout]
+    [data, isPending, isLoggingOut, logout, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

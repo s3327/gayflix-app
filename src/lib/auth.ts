@@ -41,7 +41,8 @@ const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
  *   the first session. Passwords are hashed with scrypt.
  * - Google sign-in when GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are set.
  * - Password reset by emailed link (/reset-password); resetting signs out
- *   every other session.
+ *   every other session. Signed-in users change their password with the
+ *   current one, and their email with a code sent to the new address.
  * - Sessions live in the database behind an httpOnly cookie (Secure in
  *   production, SameSite=Lax).
  * - Roles come from the admin plugin: "user" by default, "admin" for
@@ -92,6 +93,9 @@ export const auth = betterAuth({
       storeOTP: "hashed",
       sendVerificationOnSignUp: true,
       overrideDefaultEmailVerification: true,
+      // /account's "Change Email": a code goes to the new address, and
+      // the change only happens once that code is entered.
+      changeEmail: { enabled: true },
       async sendVerificationOTP({ email, otp, type }) {
         deliver({
           to: email,
