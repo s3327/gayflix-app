@@ -15,6 +15,8 @@ what has to change before launch.
 - **Tailwind CSS 3** with the approved design tokens in `tailwind.config.ts`
 - Fonts self-hosted with `next/font`: **Baloo 2** (display) and **Inter** (body)
 - **Vitest** for unit tests, **ESLint 9** (flat config) with `eslint-config-next`
+- **Database (planned):** Prisma Postgres via Prisma ORM. It isn't wired in
+  yet; see Phase 2 of the audit plan.
 
 ## Getting started
 

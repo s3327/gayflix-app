@@ -7,3 +7,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+# Project conventions
+
+- **Commits:** don't add `Co-Authored-By` trailers to commit messages.
+- **Database:** Prisma Postgres with Prisma ORM 7.x (decided 2026-10-10).
+  The rollout plan is Phase 2 of `docs/AUDIT_REMEDIATION_PLAN.md`.
+- **Before pushing,** run `npm run check` (lint, typecheck, tests, build);
+  CI runs the same on every push to `main`.

@@ -220,38 +220,69 @@ there's no load-then-save effect cascade on mount.
 
 ---
 
-## Phase 2: real accounts (needs a backend decision)
+## Phase 2: real accounts on Prisma Postgres
 
 This is the permanent fix for H1 and H3. It should be done before any real
 user data or content management goes live.
 
-1. **Decide the stack:** a database (e.g. Postgres on Neon or Supabase) and
-   an auth library (e.g. Better Auth or Auth.js). The design notes already
-   mention Neon + Better Auth.
-2. **Sessions:**
+**Decided (2026-10-10):** the database is **Prisma Postgres**, accessed
+through **Prisma ORM**.
+
+1. **Set up Prisma:**
+   - **Pin Prisma ORM 7.x** (`prisma` and `@prisma/client` 7.10.0). npm's
+     `latest` tag currently points at an 8.0 release candidate, so a bare
+     `npm install prisma` would pull a pre-release.
+   - **Raise `engines.node`** in `package.json` to Prisma 7's requirement:
+     `^20.19 || ^22.12 || >=24`.
+   - **Connect with a driver adapter:** `@prisma/adapter-ppg` (Prisma
+     Postgres's serverless driver over HTTP/WebSocket, a good fit for
+     Vercel functions) or `@prisma/adapter-pg` over direct TCP.
+   - **Keep configuration in `prisma.config.ts`** and the connection string
+     in env vars. Add the env vars to `.env.example`, Vercel, and CI if a
+     test database is used.
+   - **Create one shared client** in `src/lib/db.ts`, reused across hot
+     reloads in dev, and import it only from server code. Next already
+     treats `prisma` / `@prisma/client` as server-external packages.
+   - **Add `prisma generate` to `postinstall` or to the build**, and run
+     `prisma migrate deploy` as a deploy step. Never run `migrate dev`
+     against production.
+   - **First schema:**
+     - `User`, `Session`, `Account` and `Verification`. Generate these from
+       the auth library rather than writing them by hand.
+     - `Media` (movie/series, with `status` draft/published, `createdAt`
+       and `updatedAt`) and `Episode`, modelled on `src/lib/media.ts`.
+     - `Favorite`, `List`, `ListItem`, `WatchHistory` and `Report`.
+     - `AdminRole` on `User`, or a role enum.
+   - **Seed** from the current mock generators, so every page keeps
+     working while the queries are swapped in.
+2. **Pick the auth library:** Better Auth (it ships a Prisma adapter,
+   `better-auth/adapters/prisma`, and a Next.js integration) or Auth.js
+   (`@auth/prisma-adapter`). I recommend Better Auth, which the design
+   notes already name. Its roles/admin plugin also covers step 4.
+3. **Sessions:**
    - server-side sessions in `httpOnly`, `Secure`, `SameSite=Lax` cookies;
    - separate cookie names for the admin subdomain;
    - no auth state in `localStorage`.
-3. **User auth:**
+4. **User auth:**
    - real email/password with hashing (argon2id or bcrypt);
    - real email verification codes: single use, expiring, with resend
      limited on the server;
    - Google OAuth;
    - password reset tokens;
    - login rate limiting and lockout.
-4. **Admin auth:**
+5. **Admin auth:**
    - admin accounts with roles (e.g. `editor` and `admin`) and 2FA;
    - remove the Basic Auth gate only once this is live;
    - keep the proxy's host split.
-5. **Authorization in a data access layer:**
+6. **Authorization in a data access layer:**
    - every server read or write checks the session, including pages,
      server actions and `/api` routes;
    - the account and admin layouts read the session server-side;
    - `RequireLogin` stays only as a no-flash UX layer.
-6. **Move browser state to the server:** favorites, lists (which makes
+7. **Move browser state to the server:** favorites, lists (which makes
    shared list links work across devices), history and the report limits.
    Report limits must be enforced per account and per IP on the server.
-7. **CSRF:** server actions are covered by Next's origin check. Any custom
+8. **CSRF:** server actions are covered by Next's origin check. Any custom
    POST route checks `Origin`.
 
 **Exit criteria:**
@@ -284,7 +315,7 @@ user data or content management goes live.
   reviewed by a lawyer. Sign-up already requires agreeing to them.
   Consider a cookie banner if analytics or ads are added; the Ads settings
   tab suggests they will be.
-- **L5. Mock data.** Replacing the mock catalog with database queries
+- **L5. Mock data.** Replacing the mock catalog with Prisma queries
   removes the build-time date drift. No interim change is worth making.
 - **Sitemap** (`app/sitemap.ts`) generated from the real catalog.
 - **Accessibility pass** with axe in CI, plus a keyboard-only walkthrough
