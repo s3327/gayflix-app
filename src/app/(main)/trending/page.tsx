@@ -4,8 +4,8 @@ import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
 import { FilterChipLink } from "@/components/FilterChip";
+import { listTrending } from "@/lib/catalog";
 import { paginate } from "@/lib/paginate";
-import { publishedTrendingItems } from "@/lib/mock-trending";
 import { pageParam, type SearchParams } from "@/lib/search-params";
 
 type TypeFilter = "all" | "movie" | "series";
@@ -31,10 +31,10 @@ export default async function TrendingPage({
       : "all";
   const sortDesc = searchParams.sort !== "asc";
 
+  // The top 100 published titles by views, ranked from #1.
+  const trending = await listTrending();
   const filtered =
-    typeFilter === "all"
-      ? publishedTrendingItems
-      : publishedTrendingItems.filter((item) => item.type === typeFilter);
+    typeFilter === "all" ? trending : trending.filter((item) => item.type === typeFilter);
 
   // Rank badges always show each title's true rank from the full 100 —
   // sorting only changes display order (ascending shows #100 first, not
@@ -86,21 +86,25 @@ export default async function TrendingPage({
         </Link>
       </div>
 
-      <div className="mt-6">
-        <MediaGrid>
-          {pageItems.map((item) => (
-            <MediaCard
-              key={item.id}
-              item={item}
-              badge={
-                <span className="flex h-8 min-w-8 items-center justify-center rounded-md bg-bg-base/85 px-2 font-display text-sm font-bold text-ink-brand backdrop-blur-sm">
-                  #{item.rank}
-                </span>
-              }
-            />
-          ))}
-        </MediaGrid>
-      </div>
+      {pageItems.length > 0 ? (
+        <div className="mt-6">
+          <MediaGrid>
+            {pageItems.map((item) => (
+              <MediaCard
+                key={item.id}
+                item={item}
+                badge={
+                  <span className="flex h-8 min-w-8 items-center justify-center rounded-md bg-bg-base/85 px-2 font-display text-sm font-bold text-ink-brand backdrop-blur-sm">
+                    #{item.rank}
+                  </span>
+                }
+              />
+            ))}
+          </MediaGrid>
+        </div>
+      ) : (
+        <p className="mt-6 text-sm text-ink-muted">Nothing is trending yet.</p>
+      )}
 
       <Pagination
         page={page}

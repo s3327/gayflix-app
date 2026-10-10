@@ -92,9 +92,10 @@ every pull request gets its own preview address.
    - **Not Development:** tools such as `vercel env pull` would copy the
      production database's address onto your computer, where a single
      `npm run db:migrate` could wipe it.
-   - **Not Preview:** preview addresses can't sign in anyway (see
-     [How deploys work](#how-deploys-work)), so they don't need the
-     database.
+   - **Not Preview:** every pull request's preview would then run its
+     unmerged code against your real data. Without the database, a
+     preview shows only the pages that don't need it (see
+     [How deploys work](#how-deploys-work)).
 5. Open **Settings → Environment Variables**.
 
 **You should see** `DATABASE_URL` listed for Production, with a value that
@@ -188,9 +189,11 @@ Accounts arrive in `main` with
    **Redeploy** instead.)
 4. Open the deployment and look at its build log. **You should see**, in
    this order:
-   - `4 migrations found in prisma/migrations`, four
-     `Applying migration ...` lines, then
-     `All migrations have been successfully applied.`
+   - `... migrations found in prisma/migrations`, an
+     `Applying migration ...` line for each one the database doesn't have
+     yet (all of them on the first deploy), then
+     `All migrations have been successfully applied.` A deploy with no
+     new migrations says `No pending migrations to apply.` instead.
    - the Next.js build, ending with a list of routes.
 5. When the deployment says **Ready**, open the site.
 
@@ -229,6 +232,16 @@ change one, redeploy.
 3. Open the `user` table and find the row with your email.
 4. Change its `role` from `user` to `admin` (lowercase, exactly) and save.
 
+If your database page has a SQL editor instead (such as the data editor
+in Vercel's Storage tab), run this with your own email:
+
+```sql
+UPDATE "user" SET "role" = 'admin' WHERE "email" = 'you@example.com';
+```
+
+The role must be exactly `admin`. Any other text, such as `user admin`,
+is saved as typed but doesn't open the admin panel.
+
 **Option B, from a terminal** (needs git and Node.js 22.12 or newer):
 
 ```bash
@@ -243,9 +256,10 @@ On Windows PowerShell, run
 first, then `npm run make-admin -- you@example.com`.
 
 Copy the connection string from the database's page (Vercel's Storage tab
-or Prisma Console). Don't save it in a `.env` file in the project:
-`npm run dev` and `npm run db:migrate` would then work on the production
-database.
+or Prisma Console). Both can keep it hidden once it's created; if you
+can't see it, use Option A, which doesn't need it. Don't save it in a
+`.env` file in the project: `npm run dev` and `npm run db:migrate` would
+then work on the production database.
 
 **You should see** `you@example.com is now an admin.`
 
@@ -372,8 +386,9 @@ Use a private browser window for the guest checks.
 
 **Previews**
 
-- [ ] A pull request's Vercel preview address shows the site. Signing in
-      fails there, which is expected.
+- [ ] A pull request's Vercel preview address shows the landing page.
+      Pages with titles show an error page there and signing in fails,
+      which is expected (see [How deploys work](#how-deploys-work)).
 
 ## Running the site
 
@@ -384,8 +399,12 @@ Use a private browser window for the guest checks.
   `BETTER_AUTH_SECRET` or `RESEND_API_KEY` is missing, then applies any
   new database migrations, then builds.
 - Each pull request gets a preview address. Previews have no database
-  (Part 3) and never run migrations. Sign-in doesn't work on them, because
-  it only accepts the production address.
+  (Part 3) and never run migrations, so only the pages that don't need
+  the database work there, such as the landing page and the legal pages.
+  Pages with titles (home, title pages, listings, search) show an error
+  page. Sign-in doesn't work either, because it only accepts the
+  production address. The pull request's **check** runs the end-to-end
+  tests against a database of its own instead.
 - By default, preview addresses only open for people signed in to your
   Vercel account.
 - A changed environment variable only takes effect after a redeploy.
@@ -404,6 +423,39 @@ back past a change that altered the database, ask in the project thread.
 - **Remove:** set their `role` back to `user` in Studio, or run
   `npm run make-admin -- them@example.com --revoke`. It applies right
   away.
+
+### Managing titles
+
+The movies and shows are rows in the database: one per title in the
+`media` table, and each series' episodes in the `episode` table. They
+start as the sample catalog (see
+[Before a public launch](#before-a-public-launch)). The admin panel's
+**Movies** and **Series** pages list them, drafts included, but can't
+change them yet. Until they can, change them in Studio or a SQL editor,
+as in 6.2. Changes show on the site right away.
+
+- **Hide a title:** set its `status` to `draft`. Its page, its episodes
+  and its place in listings, search and the sitemap disappear. Set it
+  back to `published` to show it again.
+- **Change the home page's main title:** set `featured` to `true` on the
+  new one and to `false` on the old one. With none featured, the home
+  page shows the newest title.
+- **Delete a title:** delete its row in `media`, and its episodes go with
+  it. This can't be undone, so hide titles you might want back. People
+  who saved a deleted title still see it in their favorites, lists and
+  history, but its page is gone.
+- **Add a title:** easiest once the admin panel can do it (it's in the
+  remediation plan). By hand, every column has to be filled in, and
+  `posterUrl` must be an `https` address on an image host listed in
+  `next.config.mjs`. A poster on any other host shows as a broken image,
+  so ask in the project thread to add your image host first.
+
+For example, to hide every sample title at once in a SQL editor (set
+them back to `'published'` to undo it):
+
+```sql
+UPDATE "media" SET "status" = 'draft';
+```
 
 ### Lost phone or authenticator app
 
@@ -459,7 +511,8 @@ accident. Private repositories need a paid GitHub plan for this.
   runs for you.
 - Never connect the production database to Vercel's Development
   environment, and never put its address in a `.env` file.
-- Don't edit tables in Studio beyond the steps in this guide.
+- Don't edit tables in Studio or a SQL editor beyond the steps in this
+  guide.
 
 ### Changing the secret
 
@@ -480,7 +533,9 @@ Only change the production `BETTER_AUTH_SECRET` if it leaked. Afterwards:
 | Most pages show an error page | `BETTER_AUTH_SECRET` is missing for that environment | Add it (4.1), redeploy |
 | The sign-up code never arrives | Wrong `RESEND_API_KEY`; or no verified domain and the address isn't your Resend email; or `EMAIL_FROM` isn't on the verified domain | Check Resend → Emails and Vercel → Logs; fix the key or finish 7.3 |
 | Sign-in fails on one address but works on another | Only the `SITE_URL` address can sign in (`.vercel.app` and `www` count as other addresses) | Use the main address, redirect the others in **Settings → Domains**, check `SITE_URL` |
-| `/admin/login` says "This account doesn't have admin access." | The account's `role` isn't `admin` | Part 6.2 |
+| `/admin/login` says "This account doesn't have admin access." | The account's `role` isn't exactly `admin` | Part 6.2 |
+| Pages with titles show an error page on a preview address | Previews have no database | Expected; see [How deploys work](#how-deploys-work) |
+| A title's poster is a broken image | Its `posterUrl` isn't on an image host listed in `next.config.mjs` | Ask in the project thread to add the host |
 | `/admin/login` says "Confirm this account's email first" | The email was never confirmed | Log in on the main site to get a code |
 | The app's codes are always wrong | The phone's clock is off | Turn on automatic date and time on the phone |
 | "Two-factor sign-in is locked for 15 minutes." | 10 wrong codes in a row | Wait 15 minutes |
@@ -497,11 +552,15 @@ what the screen or the build log says. Never paste a secret.
 - **Legal pages.** `/terms` and `/privacy` hold placeholder text. Have
   them written or reviewed by a lawyer, and add a cookie policy if you add
   analytics or ads.
-- **Catalog.** The movies and shows are still the built-in sample catalog.
-  The next change moves them into the database and deploys the same way:
-  merge, and the build applies its migration.
-- **Admin panel.** Reports is live. The other admin pages are placeholders
-  or show the sample catalog until then.
+- **Catalog.** The movies and shows are in the database but start as a
+  sample catalog with placeholder posters. Replace them with your own
+  titles (see [Managing titles](#managing-titles)). Two parts still show
+  sample data: Trending keeps the sample ranking, because views aren't
+  counted yet, and Continue Watching on `/home` shows sample titles to
+  everyone. Both are in the remediation plan.
+- **Admin panel.** Reports is live, and Movies and Series list the
+  catalog. Adding and editing titles there is in the remediation plan;
+  the other admin pages are placeholders.
 - **Error reporting.** Apart from Vercel's logs, nothing tells you about
   server errors yet. Error reporting such as Sentry is in the remediation
   plan (Phase 3).

@@ -14,6 +14,9 @@ const PAGES = [
   "/series",
   "/movie/chosen-family",
   "/series/the-brownstone",
+  // Titles with only the basics (no synopsis, cast or episodes).
+  "/movie/loud-and-proud",
+  "/series/loud-address",
   "/watch/chosen-family",
   "/episode/the-brownstone-season-1-episode-1",
   "/search?q=loud",

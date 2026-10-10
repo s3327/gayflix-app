@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { listPublicTitles } from "@/lib/find-basic-title";
+import { listPublishedTitles } from "@/lib/catalog";
 import { siteUrl } from "@/lib/site-url";
 import { titleHref } from "@/lib/title-href";
 
@@ -23,17 +23,17 @@ const STATIC_PATHS = [
 
 /**
  * Lists every public page plus every published title (drafts never
- * appear). Built from the mock catalog for now; it follows the real
- * catalog once listPublicTitles() becomes a database query.
+ * appear). Built per request from the catalog, so it's never stale.
  */
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
+  const titles = await listPublishedTitles();
 
   return [
     ...STATIC_PATHS.map((path) => ({ url: new URL(path, base).href })),
-    ...listPublicTitles().map((item) => ({
-      url: new URL(titleHref(item), base).href,
-      lastModified: item.updatedAt ?? item.createdAt,
+    ...titles.map((title) => ({
+      url: new URL(titleHref(title), base).href,
+      lastModified: title.updatedAt,
     })),
   ];
 }

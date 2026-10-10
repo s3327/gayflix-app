@@ -1,15 +1,14 @@
 import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
-import { paginate } from "@/lib/paginate";
-import { publishedMediaItems } from "@/lib/mock-media";
+import { listTitles } from "@/lib/catalog";
 import { pageParam, type SearchParams } from "@/lib/search-params";
 
 /**
  * All published series — same shape as /movie, just type === "series"
  * instead of "movie". See that page's header comment for why this is a
  * fixed-filter page (no chips) sorted by updatedAt rather than
- * createdAt, and for why it reads from publishedMediaItems.
+ * createdAt.
  */
 export default async function SeriesPage({
   searchParams: searchParamsPromise,
@@ -17,14 +16,11 @@ export default async function SeriesPage({
   searchParams: Promise<SearchParams>;
 }) {
   const searchParams = await searchParamsPromise;
-  const publishedSeries = publishedMediaItems.filter((item) => item.type === "series");
-
-  const sorted = [...publishedSeries].sort(
-    (a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
-  );
-
-  const requestedPage = pageParam(searchParams.page);
-  const { page, totalPages, pageItems } = paginate(sorted, requestedPage);
+  const { items: pageItems, page, totalPages } = await listTitles({
+    type: "series",
+    sort: "updated",
+    page: pageParam(searchParams.page),
+  });
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 sm:py-14">

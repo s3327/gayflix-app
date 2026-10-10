@@ -19,9 +19,9 @@ const nextConfig = {
   poweredByHeader: false,
   images: {
     remotePatterns: [
-      // Deterministic placeholder photos for mock data (mock-titles.ts,
-      // mock-media.ts, ...). Remove once real uploaded/imported artwork
-      // replaces these.
+      // Placeholder posters for the sample catalog (the
+      // *_catalog_sample_data migration) and Continue Watching. Remove once
+      // real uploaded/imported artwork replaces these.
       { protocol: "https", hostname: "picsum.photos" },
       { protocol: "https", hostname: "fastly.picsum.photos" },
       // add real poster/thumbnail CDN domains here once you have them, e.g.:

@@ -3,6 +3,15 @@
 /* Tests hold strings that look like classes (some deliberately invalid). */
 @source not "../**/*.test.ts";
 @source not "../../e2e";
+/* Migrations hold catalog data, not markup. */
+@source not "../../prisma";
+
+/*
+  A title's gradient (media.gradient) comes from the database, so it never
+  appears in the source for Tailwind to find: generate every gradient stop
+  in the brand and pride colors.
+*/
+@source inline("{from,via,to}-{brand-pink,brand-orange,pride-red,pride-yellow,pride-green,pride-blue,pride-purple}");
 
 /*
   Design tokens. Every value maps 1:1 to gayflix-design-tokens.html (v1,

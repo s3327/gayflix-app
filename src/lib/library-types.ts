@@ -3,10 +3,9 @@ import type { MediaType } from "@/lib/media";
 /**
  * Enough to render a title card (favorites, history, list items) without
  * looking the title up again: snapshotted when the user acts on it.
- * Deliberately NOT the full Media type: the rich movie-detail pages
- * (mock-movie-details.ts) don't have a posterUrl at all (they're
- * gradient-block only), so posterUrl and gradient are both optional and
- * MediaCoverThumb falls back between them.
+ * Deliberately NOT the full Media type. posterUrl and gradient are both
+ * optional (entries saved by older versions of the site may only have a
+ * gradient), and MediaCoverThumb falls back between them.
  */
 export type FavoriteEntry = {
   id: string;

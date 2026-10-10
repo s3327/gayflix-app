@@ -32,7 +32,7 @@ work with clear exit criteria.
 | L2 | OTP autofill broken | Low | ✅ |
 | L3 | Modals aren't accessible | Low | ✅ |
 | L4 | Search ships the mock catalog to the browser | Low | ✅ |
-| L5 | Mock dates depend on build time | Low | ⏭️ (goes away with real data) |
+| L5 | Mock dates depend on build time | Low | ✅ (catalog in the database, Phase 2) |
 | L6 | No robots, favicon, 404 or error pages | Low | ✅ |
 | L7 | Middleware `/admin` match too broad | Low | ✅ |
 | L8 | Placeholder legal pages | Low | ⏭️ (needs legal copy) |
@@ -387,9 +387,69 @@ Third migration: `prisma/migrations/*_two_factor`.
   session without two-factor being refused by the panel and the admin
   API (403); unit tests for `adminAccess()` and the optional gate.
 
-### Still to do in Phase 2
-- **Catalog:** `Media` and `Episode` move to Prisma with a seed from the
-  mock data. Reports then look titles up there instead of in the mocks.
+### Shipped: the catalog in the database ✅
+Migrations: `prisma/migrations/*_catalog` (the tables) and
+`*_catalog_sample_data` (the sample catalog).
+- **`Media` and `Episode`** (`media`, `episode`): a title's type and
+  draft/published status, what cards show, the detail fields (genres,
+  cast, director or creator, tags, rating, release date, runtime), the
+  poster, backdrop and gradient, a `featured` flag for the home hero and a
+  `viewCount` for Trending. Episodes belong to a series and are deleted
+  with it.
+- **The sample catalog** is loaded by a data migration, so every
+  environment, production included, starts with the titles the mock files
+  had: 292 titles (244 published, 48 drafts) and 32 episodes. Its dates
+  are set relative to when the migration runs, and the home page rows come
+  out as they were. This also ends the build-time date drift (L5).
+- **One data layer**, `src/lib/catalog.ts`. Every page and route, the
+  sitemap and reports read titles there. Public reads only return
+  published titles: a draft's page, watch page and episodes are 404s, and
+  drafts stay out of listings, search, suggestions and the sitemap. The
+  admin library's read is the only one that includes drafts, and it calls
+  `requireAdmin()` itself.
+- **The database does the work:** listings and filters are SQL with
+  `count` and `skip`/`take`, the filter chips are the values published
+  titles have, and search is one query (title, synopsis, country, genre,
+  or the year) with title matches first. Search text is escaped, so `%`
+  and `_` match themselves (Prisma's `contains` doesn't escape them).
+- **Nothing reads the catalog at build time.** Every read first waits for
+  a request (`connection()`), so builds work without a database: CI
+  builds before it migrates, and preview deploys skip migrations.
+- **One layout for title pages** (`TitleDetail`), for movies and series,
+  showing only the details a title has. The gradient-only pages and the
+  "basic" fallback page are gone. An id under the wrong type
+  (`/series/<a movie>`) redirects to the right page, and `/watch/<a
+  series>` opens its first episode.
+- **Reports** look the title up in the database: a published title, or
+  "Series: Episode" for an episode of one.
+- **Admin library** (`/admin/library/movies` and `/series`): every title,
+  drafts included, newest first, 50 per page, with a working title search
+  and status filter. Seasons and episodes are counted from the episodes.
+- **Removed:** `mock-titles.ts`, `mock-media.ts`, `mock-trending.ts`,
+  `mock-movie-details.ts`, `mock-series-details.ts`, `mock-library.ts`,
+  `find-basic-title.ts` and `BasicTitleFallback.tsx`.
+- **Verified:**
+  - new e2e tests: drafts are 404s and stay out of search and the
+    sitemap; a title appears when it's published and disappears when it's
+    unpublished; the wrong-type and series-on-`/watch` redirects;
+    suggestion order and `%` in a query; search paging; the admin
+    library's search and status filter;
+  - every existing page, library, report and axe test passes against the
+    database catalog;
+  - a build against a database without the catalog tables succeeds, and
+    the migrations apply to an empty database;
+  - unit tests for query clean-up, LIKE escaping and the page math.
+
+### Still to do
+- **Editing the catalog in the admin panel:** adding and editing titles
+  and episodes, and the library's edit, publish and trash buttons (still
+  UI only). Poster URLs entered there must be on an image host listed in
+  `next.config.mjs`: any other host shows a broken image (and an error
+  page in development).
+- **Trending** ranks titles by `viewCount`, which nothing increments yet,
+  so it keeps the sample numbers.
+- **Continue Watching** on the home page is still sample data, shown to
+  everyone.
 
 ### Original plan
 
@@ -496,13 +556,14 @@ through **Prisma ORM**.
   reviewed by a lawyer. Sign-up already requires agreeing to them.
   Consider a cookie banner if analytics or ads are added; the Ads settings
   tab suggests they will be.
-- **L5. Mock data.** Replacing the mock catalog with Prisma queries
-  removes the build-time date drift. No interim change is worth making.
+- ✅ **L5. Mock data.** The catalog is in the database (Phase 2), and the
+  sample catalog's dates are set when its migration runs, so nothing
+  depends on build time anymore.
 - ✅ **Sitemap.** `src/app/sitemap.ts` lists the public pages and every
-  published title, and `robots.txt` points to it. It reads the mock catalog
-  today and follows the real one once Phase 2 swaps in Prisma queries. Set
-  `SITE_URL` to the production domain (on Vercel it defaults to the
-  project's production domain).
+  published title, and `robots.txt` points to it. It reads the published
+  titles from the database on each request. Set `SITE_URL` to the
+  production domain (on Vercel it defaults to the project's production
+  domain).
 - 🟡 **Accessibility pass.** axe runs in CI (see M5 and N3). Still to do:
   a keyboard-only walkthrough of the drawer, carousels and the player.
 

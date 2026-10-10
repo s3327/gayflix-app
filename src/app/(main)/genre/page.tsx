@@ -1,5 +1,4 @@
 import CatalogFilterPage from "@/components/CatalogFilterPage";
-import { publishedMediaItems } from "@/lib/mock-media";
 import { type SearchParams } from "@/lib/search-params";
 
 export default async function GenrePage({
@@ -11,10 +10,8 @@ export default async function GenrePage({
   return (
     <CatalogFilterPage
       title="Genre"
-      paramName="genre"
+      field="genre"
       basePath="/genre"
-      items={publishedMediaItems}
-      getFieldValue={(item) => item.genre}
       emptyMessage="No titles found for this genre yet."
       searchParams={searchParams}
     />

@@ -2,25 +2,17 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
-import { publishedMediaItems } from "@/lib/mock-media";
-import { movies, series, newReleases, trendingNow } from "@/lib/mock-titles";
-import type { Media } from "@/lib/media";
-import { firstParam, type SearchParams } from "@/lib/search-params";
+import Pagination from "@/components/Pagination";
+import { searchTitles } from "@/lib/catalog";
+import { normalizeQuery } from "@/lib/search";
+import { firstParam, pageParam, type SearchParams } from "@/lib/search-params";
 
 const QUICK_SEARCHES = ["Drama", "Romance", "Comedy", "2026", "Documentary", "Coming of Age"];
 
-function getAllSearchableItems(): Media[] {
-  const seen = new Set<string>();
-  const all: Media[] = [];
-
-  for (const item of [...movies, ...series, ...newReleases, ...trendingNow, ...publishedMediaItems]) {
-    if (!seen.has(item.id)) {
-      seen.add(item.id);
-      all.push(item);
-    }
-  }
-
-  return all;
+function searchHref(query: string, page: number) {
+  const qs = new URLSearchParams({ q: query });
+  if (page !== 1) qs.set("page", String(page));
+  return `/search?${qs}`;
 }
 
 export default async function SearchPage({
@@ -29,20 +21,13 @@ export default async function SearchPage({
   searchParams: Promise<SearchParams>;
 }) {
   const searchParams = await searchParamsPromise;
-  const query = (firstParam(searchParams.q) ?? "").trim();
-  const qLower = query.toLowerCase();
-
-  const allItems = getAllSearchableItems();
-  const results = query
-    ? allItems.filter(
-        (item) =>
-          item.title.toLowerCase().includes(qLower) ||
-          item.genre.toLowerCase().includes(qLower) ||
-          (item.synopsis && item.synopsis.toLowerCase().includes(qLower)) ||
-          (item.country && item.country.toLowerCase().includes(qLower)) ||
-          String(item.year).includes(qLower)
-      )
-    : [];
+  const query = normalizeQuery(firstParam(searchParams.q) ?? "");
+  // Published titles whose title, synopsis, country or a genre contains
+  // the query, or from that year; title matches first.
+  const { items: results, total, page, totalPages } = await searchTitles(
+    query,
+    pageParam(searchParams.page)
+  );
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 sm:py-14">
@@ -95,16 +80,25 @@ export default async function SearchPage({
                 Results for &ldquo;{query}&rdquo;
               </h2>
               <span className="text-xs font-semibold text-ink-muted">
-                {results.length} {results.length === 1 ? "title" : "titles"} found
+                {total} {total === 1 ? "title" : "titles"} found
               </span>
             </div>
 
             {results.length > 0 ? (
-              <MediaGrid>
-                {results.map((item) => (
-                  <MediaCard key={item.id} item={item} />
-                ))}
-              </MediaGrid>
+              <>
+                <MediaGrid>
+                  {results.map((item) => (
+                    <MediaCard key={item.id} item={item} />
+                  ))}
+                </MediaGrid>
+                {totalPages > 1 && (
+                  <Pagination
+                    page={page}
+                    totalPages={totalPages}
+                    makeHref={(p) => searchHref(query, p)}
+                  />
+                )}
+              </>
             ) : (
               <div className="py-16 text-center">
                 <p className="text-base font-semibold text-ink-primary">

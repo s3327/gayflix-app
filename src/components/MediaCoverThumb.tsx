@@ -11,8 +11,8 @@ type CoverEntry = {
  * fallback, plus a dark gradient overlay on top" block — shared by
  * FavoriteCard, HistoryCard, ListCard's cover, and /list/[id]'s item
  * grid, all of which used to reimplement this identically. The
- * gradient fallback exists because the 4 rich mock-movie-details.ts
- * records have no posterUrl at all (gradient-block only).
+ * gradient fallback is for entries saved without a poster (the old
+ * detail pages saved favorites and history with a gradient only).
  *
  * Expects a `group` class on an ancestor if hover-scale is wanted —
  * this only renders the box itself, not the interactive wrapper

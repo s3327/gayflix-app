@@ -27,5 +27,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   `src/lib/library-actions.ts` and `src/lib/report-actions.ts`) check the
   session and validate every argument themselves; list functions also
   check ownership. Title snapshots go through `parseEntry()`.
+- **Catalog:** titles live in the `media` and `episode` tables and are
+  read only through `src/lib/catalog.ts`. Its public reads return
+  published titles only; drafts appear only in the admin library, which
+  calls `requireAdmin()`. Every read awaits `connection()` first, because
+  nothing may query the database at build time (CI builds before it
+  migrates, and previews have no database).
 - **Before pushing,** run `npm run check` (lint, typecheck, tests, build);
   CI runs the same on every push to `main`.

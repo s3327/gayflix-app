@@ -1,8 +1,7 @@
 import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
-import { paginate } from "@/lib/paginate";
-import { publishedMediaItems } from "@/lib/mock-media";
+import { listTitles } from "@/lib/catalog";
 import { pageParam, type SearchParams } from "@/lib/search-params";
 
 /**
@@ -15,12 +14,9 @@ import { pageParam, type SearchParams } from "@/lib/search-params";
  * Sorted by updatedAt, not createdAt — "recently edited," not
  * "recently added." An old title that just got fixed/re-uploaded shows
  * up on page 1; an old, untouched title doesn't, even though both were
- * added to the catalog long ago. See media.ts's updatedAt field comment
- * for why this is a distinct field rather than reusing createdAt.
+ * added to the catalog long ago.
  *
- * Reads from publishedMediaItems, not mediaItems — drafts are already
- * excluded, same as every other public listing page (see
- * mock-media.ts's publishedMediaItems comment).
+ * Published titles only, like every public listing (src/lib/catalog.ts).
  */
 export default async function MoviePage({
   searchParams: searchParamsPromise,
@@ -28,14 +24,11 @@ export default async function MoviePage({
   searchParams: Promise<SearchParams>;
 }) {
   const searchParams = await searchParamsPromise;
-  const publishedMovies = publishedMediaItems.filter((item) => item.type === "movie");
-
-  const sorted = [...publishedMovies].sort(
-    (a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
-  );
-
-  const requestedPage = pageParam(searchParams.page);
-  const { page, totalPages, pageItems } = paginate(sorted, requestedPage);
+  const { items: pageItems, page, totalPages } = await listTitles({
+    type: "movie",
+    sort: "updated",
+    page: pageParam(searchParams.page),
+  });
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 sm:py-14">

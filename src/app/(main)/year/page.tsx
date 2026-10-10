@@ -1,5 +1,4 @@
 import CatalogFilterPage from "@/components/CatalogFilterPage";
-import { publishedMediaItems } from "@/lib/mock-media";
 import { type SearchParams } from "@/lib/search-params";
 
 export default async function YearPage({
@@ -11,11 +10,8 @@ export default async function YearPage({
   return (
     <CatalogFilterPage
       title="Year"
-      paramName="year"
+      field="year"
       basePath="/year"
-      items={publishedMediaItems}
-      getFieldValue={(item) => String(item.year)}
-      chipSort="numeric-desc"
       emptyMessage="No titles found for this year yet."
       searchParams={searchParams}
     />

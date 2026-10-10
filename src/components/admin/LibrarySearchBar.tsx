@@ -1,24 +1,37 @@
 import { Search, ChevronDown } from "lucide-react";
 
 /**
- * Search bar for library list pages (Movies now, Series/Episodes later —
- * same component, since the layout and fields are identical). UI only —
- * no submit handler, no filtering logic yet.
+ * Search bar for library list pages (Movies, Series): a plain GET form,
+ * so the search lives in the URL (?q=…&status=…) and works without
+ * JavaScript.
  */
-export default function LibrarySearchBar() {
+export default function LibrarySearchBar({
+  action,
+  query,
+  status,
+}: {
+  /** The page the form reloads, e.g. /admin/library/movies. */
+  action: string;
+  query: string;
+  status: "all" | "draft" | "published";
+}) {
   return (
-    <div className="flex flex-wrap items-center gap-3 px-6 py-6 sm:px-10">
+    <form action={action} method="GET" className="flex flex-wrap items-center gap-3 px-6 py-6 sm:px-10">
       {/* Text field — takes all remaining space */}
       <input
-        type="text"
+        type="search"
+        name="q"
+        defaultValue={query}
         placeholder="Search by title"
+        aria-label="Search by title"
         className="min-w-[200px] flex-1 rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
       />
 
       {/* Status — default "All" */}
       <div className="relative shrink-0">
         <select
-          defaultValue="all"
+          name="status"
+          defaultValue={status}
           aria-label="Status"
           className="appearance-none rounded-md border border-border-subtle bg-bg-elevated py-2.5 pl-4 pr-10 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-hidden"
         >
@@ -29,14 +42,13 @@ export default function LibrarySearchBar() {
         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
       </div>
 
-      {/* Search — no action wired up yet */}
       <button
-        type="button"
+        type="submit"
         className="flex shrink-0 items-center gap-2 rounded-card bg-brand-pink px-6 py-2.5 text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark"
       >
         <Search className="h-4 w-4" />
         Search
       </button>
-    </div>
+    </form>
   );
 }

@@ -9,11 +9,8 @@ import HistoryCard from "@/components/HistoryCard";
  * WatchPlayer's Play button — one entry per title, most-recently-played
  * first (re-watching bumps it back to the top rather than duplicating).
  *
- * Currently the only page that can add to History is /watch/[id], which
- * only exists for the 4 rich mock-movie-details.ts titles (no watch
- * page/video entry point exists yet for series or the rest of the
- * catalog) — so this list will only ever show up to 4 titles until that
- * gap is closed separately.
+ * Titles are added from the players: /watch/[id] for a movie and
+ * /episode/[id] for an episode.
  */
 export default function AccountHistoryPage() {
   const { history, clearHistory } = useHistory();
