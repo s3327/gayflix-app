@@ -319,12 +319,37 @@ user data or content management goes live.
     session cookie is `HttpOnly; SameSite=Lax`, a sign-in from another
     origin gets 403, passwords and codes are stored hashed.
 
+### Shipped: favorites, lists, history and reports in the database ✅
+This is step 7 below. Second migration: `prisma/migrations/*_library`.
+- **Favorites, lists and watch history** belong to the account
+  (`Favorite`, `MediaList`, `ListItem`, `WatchHistory`). The `(main)`
+  layout loads them on the server, so pages render with them; changes
+  show at once and are undone with a toast if the server rejects them.
+- **Server functions** (`src/lib/library-actions.ts`) check the session
+  and validate every input themselves; list changes also check that the
+  list belongs to the caller. Title snapshots are whitelisted
+  (`parseEntry`): slug ids, https or same-site posters, gradient stops
+  only, since shared lists show one user's data to others.
+- **History** keeps the newest 200 titles per account. A guest's history
+  stays in the browser and moves into the account at the next sign-in.
+- **Shared list links work for anyone:** `/list/[id]` loads the list on
+  the server (ids are random UUIDs; still `noindex`). Visitors get a
+  read-only view; the owner can remove titles.
+- **Reports** are saved with the reason and details (`Report`). The daily
+  limit is enforced on the server: 5 a day per account, 1 a day per IP
+  for guests, resetting at midnight UTC. The IP is stored only as a keyed
+  hash. A per-reporter Postgres lock stops parallel requests from
+  slipping past the limit (checked by hand: 8 at once, 1 accepted).
+- **Verified:** e2e tests for favorites and lists across two devices, a
+  guest viewing a shared list read-only, guest history moving into an
+  account, and both report limits; unit tests for the input checks.
+
 ### Still to do in Phase 2
 - **Admin 2FA** (Better Auth's `twoFactor` plugin) and a shorter admin
   session, then retire the Basic Auth gate.
-- **Step 7 below:** favorites, lists, history and report limits move from
-  `localStorage` to the database, and the catalog (`Media`, `Episode`)
-  moves to Prisma with a seed from the mock data.
+- **Catalog:** `Media` and `Episode` move to Prisma with a seed from the
+  mock data. Reports then look titles up there instead of in the mocks.
+- **Report queue in the admin panel**, so reports can be read and closed.
 
 ### Original plan
 

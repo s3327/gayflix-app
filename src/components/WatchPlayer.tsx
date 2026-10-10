@@ -66,7 +66,11 @@ export default function WatchPlayer({ media }: { media: FavoriteEntry }) {
       </button>
 
       {isReportOpen && (
-        <ReportModal mediaTitle={media.title} onClose={() => setIsReportOpen(false)} />
+        <ReportModal
+          mediaId={media.id}
+          mediaTitle={media.title}
+          onClose={() => setIsReportOpen(false)}
+        />
       )}
     </div>
   );

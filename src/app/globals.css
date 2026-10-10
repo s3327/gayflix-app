@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Tests hold strings that look like classes (some deliberately invalid). */
+@source not "../**/*.test.ts";
+@source not "../../e2e";
+
 /*
   Design tokens. Every value maps 1:1 to gayflix-design-tokens.html (v1,
   approved), except the three shades adjusted for WCAG AA contrast on

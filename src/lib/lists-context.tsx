@@ -1,29 +1,17 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo } from "react";
-import type { FavoriteEntry } from "@/lib/favorites-context";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { SAVE_FAILED } from "@/lib/favorites-context";
+import * as library from "@/lib/library-actions";
+import { cleanListName, type FavoriteEntry, type MediaList } from "@/lib/library-types";
 import { useToast } from "@/lib/toast-context";
-import { usePersistedRecord } from "@/lib/use-persisted-record";
 
-const STORAGE_KEY = "gayflix:lists";
-
-export type MediaList = {
-  id: string;
-  name: string;
-  createdAt: string;
-  /**
-   * Snapshot copies, not just ids — a list is meant to hold onto a title
-   * even if it's later unfavorited (that's normal "watchlist" behavior:
-   * removing something from Favorites shouldn't silently empty every
-   * list it was ever added to). Deduped by id.
-   */
-  items: FavoriteEntry[];
-};
+export type { MediaList } from "@/lib/library-types";
 
 type ListsContextValue = {
   lists: MediaList[];
   getList: (id: string) => MediaList | undefined;
-  createList: (name: string, firstItem?: FavoriteEntry) => MediaList;
+  createList: (name: string, firstItem?: FavoriteEntry) => MediaList | undefined;
   deleteList: (id: string) => void;
   renameList: (id: string, name: string) => void;
   addToList: (listId: string, entry: FavoriteEntry) => void;
@@ -33,22 +21,47 @@ type ListsContextValue = {
 
 const ListsContext = createContext<ListsContextValue | null>(null);
 
-function makeListId() {
-  return `list-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
+type ListsRecord = Record<string, MediaList>;
 
 /**
- * No backend yet, so this is localStorage (via usePersistedRecord)
- * rather than a real API — same status as favorites-context.tsx.
+ * The signed-in user's lists, stored in their account (see
+ * src/lib/library-actions.ts). Anyone with a list's link can view it at
+ * /list/[id]; only the owner can change it. Changes show immediately and
+ * are undone, with a toast, if the server rejects them.
  *
- * This is also the foundation the (not-yet-built) community features
- * will sit on: share/explore/like/copy-to-my-list all need a `MediaList`
- * to point at, which is exactly what this provider already produces —
- * they're just not wired to anything beyond this browser yet.
+ * List ids are random UUIDs made here, so a new list can be used (and
+ * shared) before the server has answered.
  */
-export function ListsProvider({ children }: { children: React.ReactNode }) {
+export function ListsProvider({
+  userId,
+  initial,
+  children,
+}: {
+  userId: string | null;
+  initial?: ListsRecord;
+  children: React.ReactNode;
+}) {
   const { showToast } = useToast();
-  const [lists, setLists] = usePersistedRecord<MediaList>(STORAGE_KEY);
+  const [lists, setLists] = useState<ListsRecord>(initial ?? {});
+
+  // Runs an optimistic change, then the server call; on failure, puts
+  // the affected list back the way it was.
+  const commit = useCallback(
+    (listId: string, change: (prev: ListsRecord) => ListsRecord, save: () => Promise<void>) => {
+      const before = lists[listId];
+      setLists(change);
+      save().catch(() => {
+        setLists((prev) => {
+          const next = { ...prev };
+          if (before) next[listId] = before;
+          else delete next[listId];
+          return next;
+        });
+        showToast(SAVE_FAILED);
+      });
+    },
+    [lists, showToast]
+  );
 
   const getList = useCallback((id: string) => lists[id], [lists]);
 
@@ -60,18 +73,25 @@ export function ListsProvider({ children }: { children: React.ReactNode }) {
 
   const createList = useCallback(
     (name: string, firstItem?: FavoriteEntry) => {
-      const trimmed = name.trim() || "Untitled List";
+      if (!userId) {
+        showToast("Log in to make lists");
+        return undefined;
+      }
       const newList: MediaList = {
-        id: makeListId(),
-        name: trimmed,
+        id: crypto.randomUUID(),
+        name: cleanListName(name),
         createdAt: new Date().toISOString(),
         items: firstItem ? [firstItem] : [],
       };
-      setLists((prev) => ({ ...prev, [newList.id]: newList }));
-      showToast(`List "${trimmed}" created`);
+      commit(
+        newList.id,
+        (prev) => ({ ...prev, [newList.id]: newList }),
+        () => library.createList(newList.id, newList.name, firstItem)
+      );
+      showToast(`List "${newList.name}" created`);
       return newList;
     },
-    [setLists, showToast]
+    [commit, showToast, userId]
   );
 
   const deleteList = useCallback(
@@ -79,28 +99,32 @@ export function ListsProvider({ children }: { children: React.ReactNode }) {
       // Toast from outside the updater — updaters must stay pure (React
       // may run them twice in development).
       const name = lists[id]?.name;
-      setLists((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
+      commit(
+        id,
+        (prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        },
+        () => library.deleteList(id)
+      );
       if (name) showToast(`Deleted "${name}"`);
     },
-    [lists, setLists, showToast]
+    [commit, lists, showToast]
   );
 
   const renameList = useCallback(
     (id: string, name: string) => {
-      const trimmed = name.trim();
-      if (!trimmed) return;
-      setLists((prev) => {
-        const existing = prev[id];
-        if (!existing) return prev;
-        return { ...prev, [id]: { ...existing, name: trimmed } };
-      });
+      if (!name.trim()) return;
+      const cleaned = cleanListName(name);
+      commit(
+        id,
+        (prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], name: cleaned } } : prev),
+        () => library.renameList(id, cleaned)
+      );
       showToast("List renamed");
     },
-    [setLists, showToast]
+    [commit, showToast]
   );
 
   const addToList = useCallback(
@@ -111,37 +135,38 @@ export function ListsProvider({ children }: { children: React.ReactNode }) {
         showToast(`Already in "${list.name}"`);
         return;
       }
-      setLists((prev) => {
-        const existing = prev[listId];
-        if (!existing) return prev;
-        if (existing.items.some((item) => item.id === entry.id)) return prev;
-        return {
-          ...prev,
-          [listId]: { ...existing, items: [...existing.items, entry] },
-        };
-      });
+      commit(
+        listId,
+        (prev) => {
+          const existing = prev[listId];
+          if (!existing || existing.items.some((item) => item.id === entry.id)) return prev;
+          return { ...prev, [listId]: { ...existing, items: [...existing.items, entry] } };
+        },
+        () => library.addToList(listId, entry)
+      );
       showToast(`Added to "${list.name}"`);
     },
-    [lists, setLists, showToast]
+    [commit, lists, showToast]
   );
 
   const removeFromList = useCallback(
     (listId: string, itemId: string) => {
-      setLists((prev) => {
-        const existing = prev[listId];
-        if (!existing) return prev;
-        return {
-          ...prev,
-          [listId]: {
-            ...existing,
-            items: existing.items.filter((item) => item.id !== itemId),
-          },
-        };
-      });
       const listName = lists[listId]?.name ?? "list";
+      commit(
+        listId,
+        (prev) => {
+          const existing = prev[listId];
+          if (!existing) return prev;
+          return {
+            ...prev,
+            [listId]: { ...existing, items: existing.items.filter((item) => item.id !== itemId) },
+          };
+        },
+        () => library.removeFromList(listId, itemId)
+      );
       showToast(`Removed from "${listName}"`);
     },
-    [lists, setLists, showToast]
+    [commit, lists, showToast]
   );
 
   const value = useMemo<ListsContextValue>(
@@ -167,4 +192,14 @@ export function useLists() {
     throw new Error("useLists must be used within a ListsProvider");
   }
   return context;
+}
+
+/** Copies a list's share link, which works for anyone who opens it. */
+export async function copyListLink(listId: string, showToast: (message: string) => void) {
+  try {
+    await navigator.clipboard.writeText(`${window.location.origin}/list/${listId}`);
+    showToast("Link copied to clipboard");
+  } catch {
+    showToast("Couldn't copy the link. Open the list and copy it from the address bar.");
+  }
 }

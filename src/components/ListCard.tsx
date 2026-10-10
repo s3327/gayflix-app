@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Layers, Pencil, Share2, Trash2 } from "lucide-react";
-import { useLists, type MediaList } from "@/lib/lists-context";
+import { copyListLink, useLists, type MediaList } from "@/lib/lists-context";
 import { useToast } from "@/lib/toast-context";
 import NameListModal from "@/components/NameListModal";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -20,19 +20,6 @@ export default function ListCard({ list }: { list: MediaList }) {
   const { showToast } = useToast();
   const [isRenaming, setIsRenaming] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-
-  function handleShare() {
-    // No backend/community layer yet, so this link only resolves to
-    // anything on the same browser that created it (localStorage-backed
-    // — see lists-context.tsx). Still a real, copyable link; just not
-    // yet cross-device/cross-user. That's exactly the gap the (not built
-    // here) community feature closes later.
-    const url = `${window.location.origin}/list/${list.id}`;
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(url);
-    }
-    showToast("Link copied to clipboard");
-  }
 
   return (
     <li className="flex items-center gap-4 px-4 py-3 sm:px-6">
@@ -53,7 +40,7 @@ export default function ListCard({ list }: { list: MediaList }) {
       <div className="flex shrink-0 gap-1">
         <button
           type="button"
-          onClick={handleShare}
+          onClick={() => copyListLink(list.id, showToast)}
           aria-label="Share list"
           title="Share list"
           className="flex h-8 w-8 items-center justify-center rounded-md text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary"

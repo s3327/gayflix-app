@@ -5,10 +5,10 @@ the public site and the admin panel, deployed as one Next.js app.
 
 **Status:** accounts are real (Better Auth on Prisma Postgres: sign-up
 with an emailed code, login, password reset, Google sign-in, admin
-roles). The catalog is still mock data (`src/lib/mock-*.ts`), and
-favorites, lists, history and report limits still live in the browser's
-`localStorage`. See [docs/AUDIT_REMEDIATION_PLAN.md](docs/AUDIT_REMEDIATION_PLAN.md)
-for what has to change before launch.
+roles), and favorites, lists, watch history and reports are stored in
+the database. The catalog is still mock data (`src/lib/mock-*.ts`). See
+[docs/AUDIT_REMEDIATION_PLAN.md](docs/AUDIT_REMEDIATION_PLAN.md) for what
+has to change before launch.
 
 ## Stack
 
@@ -96,9 +96,11 @@ src/
                            request so scripts get the CSP nonce
     page.tsx             → landing page (no header)
     (main)/              → the browsing app: Header, NavMenu, Footer, and the
-                           Toast/Favorites/Lists/History providers
+                           Toast/Favorites/Lists/History providers (the layout
+                           loads a signed-in user's library on the server)
       account/           → profile, favorites, history (the layout sends guests
                            to /login on the server)
+      list/[id]/         → a shared list: anyone with the link can view it
     admin/               → admin panel (noindex; password gate re-checked in layout.tsx)
       (panel)/           → pages with the sidebar; admin role required
     api/auth/            → Better Auth (sign-up, sign-in, codes, reset, sessions)
@@ -112,6 +114,9 @@ src/
     session.ts           → getSession / requireUser / requireAdmin (server only)
     db.ts                → the Prisma client (server only)
     email.ts             → transactional email (Resend, or console in dev)
+    library*.ts          → favorites, lists and history: loading (library.ts),
+                           server functions (library-actions.ts), input checks
+    report*.ts           → reports and their daily limits
   generated/prisma/      → Prisma client (generated on npm install; not committed)
 prisma/                  → schema.prisma and migrations
 scripts/make-admin.mjs   → grant or revoke the admin role
@@ -131,13 +136,17 @@ docs/                    → design notes (build log) and the audit plan
   `firstParam`), because a repeated key arrives as an array.
 - **Drafts are never public.** Listings, search and detail lookups use the
   `published*` collections.
-- **Browser-stored state** uses `usePersistedState` / `usePersistedRecord`.
-  They stay in sync across components and tabs. State updaters must be pure,
-  so fire toasts and other side effects outside them.
+- **A user's data lives in the database.** Favorites, lists and history
+  change through the server functions in `src/lib/library-actions.ts`; the
+  providers update the screen first and undo it with a toast if the save
+  fails. The only browser-stored state left is a guest's watch history
+  (`usePersistedRecord`), which moves into the account at sign-in. State
+  updaters must be pure, so fire toasts and other side effects outside them.
 - **Auth checks happen on the server.** Account pages, server actions and
   API routes call `requireUser()` / `getSession()`; admin pages, actions and
   routes call `requireAdmin()` (`src/lib/session.ts`). Layouts don't run for
-  server actions or `/api`, so each of those checks for itself.
+  server actions or `/api`, so each of those checks for itself, and
+  validates its input, since anyone can call it with any arguments.
   `useAuth()` in client components is for display only.
 - **Schema changes:** edit `prisma/schema.prisma`, run `npm run db:migrate
   -- --name <change>`, commit the migration, then `npx prisma generate`
