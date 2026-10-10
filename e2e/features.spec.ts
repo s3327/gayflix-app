@@ -33,7 +33,13 @@ test.describe("signed in", () => {
   test("played episodes link back to the episode page", async ({ page, consoleProblems }) => {
     void consoleProblems;
     await page.goto("/episode/the-brownstone-season-1-episode-1", { waitUntil: "networkidle" });
+    // Playing saves to the account in the background; let it finish
+    // before leaving the page.
+    const saved = page.waitForResponse(
+      (r) => r.request().method() === "POST" && "next-action" in r.request().headers()
+    );
     await page.locator("main").getByRole("button").first().click();
+    expect((await saved).ok()).toBe(true);
     await page.goto("/account/history");
     await expect(
       page.locator('main a[href="/episode/the-brownstone-season-1-episode-1"]')
