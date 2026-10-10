@@ -20,9 +20,9 @@ work with clear exit criteria.
 | ID | Finding | Severity | Status |
 |---|---|---|---|
 | C1 | Next.js 14.2.5 with 30+ advisories (incl. middleware bypass, RCE) | Critical | ✅ |
-| H1 | Admin panel open to anyone on the admin subdomain | High | 🟡 |
+| H1 | Admin panel open to anyone on the admin subdomain | High | ✅ (admin role + 2FA, Phase 2) |
 | H2 | Admin login form sends the password in the URL | High | ✅ |
-| H3 | Login is a client-side `localStorage` flag | High | 🟡 |
+| H3 | Login is a client-side `localStorage` flag | High | ✅ (real sessions, Phase 2) |
 | M1 | Episode history links 404 | Medium | ✅ |
 | M2 | Toast fired inside a state updater (double toast in dev) | Medium | ✅ |
 | M3 | Toasts that don't match what happened | Medium | ✅ |
@@ -73,7 +73,7 @@ work with clear exit criteria.
   ESLint globs our own files and never ships. Dependabot will pick up a fix
   when one lands.
 
-### H1. Admin access 🟡 (interim gate shipped)
+### H1. Admin access ✅ (admin role + two-factor, Phase 2)
 **Decided (2026-10-10):** the admin panel lives at `domain.com/admin`, not
 on an `admin.` subdomain.
 - **Upside:** no extra DNS or domain setup, and the panel works on Vercel
@@ -83,7 +83,10 @@ on an `admin.` subdomain.
   that, and Phase 2 adds a server-side role check on every admin page,
   action and API route.
 
-- **Shipped:** an HTTP Basic Auth gate on the whole admin panel
+- **Now:** an admin account with two-factor, signed in within the last 12
+  hours (Phase 2, below). The Basic Auth gate described next is optional
+  since then.
+- **Shipped first:** an HTTP Basic Auth gate on the whole admin panel
   (`src/lib/admin-auth.ts`):
   - It is checked in `src/proxy.ts` and again in `src/app/admin/layout.tsx`
     as a second lock.
@@ -98,12 +101,14 @@ on an `admin.` subdomain.
 - **Verified:**
   - 401 without credentials or with wrong ones.
   - 200 with the right ones.
-  - 503 in production when unset.
+  - 503 in production when unset (until Phase 2; now only when just one
+    of the two is set).
   - `/administrators` is untouched.
   - Unit tests in `src/proxy.test.ts` and `src/lib/admin-auth.test.ts`.
-- **Action for you:** set both variables in Vercel (Production and Preview)
-  before the next deploy, or the admin panel will show "disabled".
-- **Permanent fix:** Phase 2 (real admin accounts with roles).
+- **Action for you:** until the Phase 2 change is merged, set both
+  variables in Vercel (Production and Preview), or the admin panel will
+  show "disabled". After it, they're optional.
+- **Permanent fix:** Phase 2 (admin accounts with roles and two-factor).
 
 ### H2. Admin login form ✅
 `src/app/admin/login/page.tsx` is now a client component. It:
@@ -274,6 +279,120 @@ there's no load-then-save effect cascade on mount.
 This is the permanent fix for H1 and H3. It should be done before any real
 user data or content management goes live.
 
+### Shipped: accounts, sessions and admin roles ✅
+- **Prisma 7.10.0** (pinned) with `prisma.config.ts`, the `prisma-client`
+  generator (output `src/generated/prisma`, not committed; `postinstall`
+  generates it) and the `@prisma/adapter-pg` driver adapter, which works
+  with Prisma Postgres's direct connection string and with any local
+  Postgres. One shared client in `src/lib/db.ts`. First migration:
+  `prisma/migrations/*_accounts`.
+- **Better Auth 1.7.7** (`src/lib/auth.ts`, served at `/api/auth/*`):
+  - email + password (scrypt hashes, 8+ characters);
+  - email confirmed by a 6-digit code before the first session (codes are
+    stored hashed, expire in 10 minutes, 5 attempts);
+  - password reset by emailed link (`/reset-password`), which signs out
+    every other session;
+  - Google sign-in once `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are set;
+  - sessions in the database behind an `httpOnly`, `SameSite=Lax` cookie
+    (`Secure` on https), 30-day expiry refreshed daily;
+  - rate limits stored in the database, so they hold across serverless
+    instances (sign-in: 3 tries per 10 seconds per IP);
+  - cross-origin auth requests are rejected (Better Auth's origin check).
+- **Email** (`src/lib/email.ts`): Resend over HTTP when `RESEND_API_KEY`
+  is set; printed to the console in development; an error in production
+  without a provider. Sent after the response, so timing can't reveal
+  whether an account exists.
+- **Server-side checks** (`src/lib/session.ts`):
+  - the account layout sends guests to `/login?next=…` before rendering;
+  - the admin panel layout requires the "admin" role (`requireAdmin()`);
+  - `useAuth()` now reads the real session; nothing about login is stored
+    in `localStorage`.
+- **Profile editing** on `/account` is real: display name, email change
+  (a code goes to the new address; nothing changes until it's entered)
+  and password change (needs the current password; signs out other
+  devices).
+- **Admins** are regular accounts with the "admin" role:
+  `npm run make-admin -- <email>` (or `--revoke`). See "Shipped: admin
+  two-factor" below for what the panel requires now.
+- **Verified:**
+  - e2e against a real Postgres (CI runs one as a service): sign-up with a
+    wrong and then a right code, logout, wrong password, unverified login,
+    password reset by link, identical answers for unknown emails, profile
+    edits (name, email by code, password), guests and regular users kept
+    out of admin, admin login and navigation;
+  - checked by hand: sign-in rate limit returns 429 after 3 tries, the
+    session cookie is `HttpOnly; SameSite=Lax`, a sign-in from another
+    origin gets 403, passwords and codes are stored hashed.
+
+### Shipped: favorites, lists, history and reports in the database ✅
+This is step 7 below. Second migration: `prisma/migrations/*_library`.
+- **Favorites, lists and watch history** belong to the account
+  (`Favorite`, `MediaList`, `ListItem`, `WatchHistory`). The `(main)`
+  layout loads them on the server, so pages render with them; changes
+  show at once and are undone with a toast if the server rejects them.
+- **Server functions** (`src/lib/library-actions.ts`) check the session
+  and validate every input themselves; list changes also check that the
+  list belongs to the caller. Title snapshots are whitelisted
+  (`parseEntry`): slug ids, https or same-site posters, gradient stops
+  only, since shared lists show one user's data to others.
+- **History** keeps the newest 200 titles per account. A guest's history
+  stays in the browser and moves into the account at the next sign-in.
+- **Shared list links work for anyone:** `/list/[id]` loads the list on
+  the server (ids are random UUIDs; still `noindex`). Visitors get a
+  read-only view; the owner can remove titles.
+- **Reports** are saved with the reason and details (`Report`). The daily
+  limit is enforced on the server: 5 a day per account, 1 a day per IP
+  for guests, resetting at midnight UTC. The IP is stored only as a keyed
+  hash. A per-reporter Postgres lock stops parallel requests from
+  slipping past the limit (checked by hand: 8 at once, 1 accepted).
+- **Report queue** at `/admin/reports`: open and resolved tabs, newest
+  first, with the title, reason, details, reporter (account email or
+  "Guest") and time. Resolve and reopen are server functions that call
+  `requireAdmin()` themselves and record which admin closed the report.
+- **Verified:** e2e tests for favorites and lists across two devices, a
+  guest viewing a shared list read-only, guest history moving into an
+  account, both report limits, and an admin resolving and reopening a
+  guest's report (plus an axe check of the queue); unit tests for the
+  input checks.
+
+### Shipped: admin two-factor and a 12-hour admin sign-in ✅
+Third migration: `prisma/migrations/*_two_factor`.
+- **Two-factor sign-in** with an authenticator app (Better Auth's
+  `twoFactor` plugin: TOTP, plus 10 single-use backup codes; secrets and
+  backup codes are stored encrypted). After the password, `/login` and
+  `/admin/login` ask for the code; devices are never remembered.
+  Ten wrong codes lock two-factor sign-in for 15 minutes.
+- **Admins must use it.** A new admin's first login goes to
+  `/admin/setup-2fa` (confirm password, scan the QR code, save the backup
+  codes, enter the first code). The panel stays closed until that's done.
+- **The panel only accepts a session that passed two-factor in the last
+  12 hours** (`adminAccess()` in `src/lib/admin-access.ts`, used by
+  `requireAdmin()`). Each session records whether it was created by the
+  two-factor step (`session.twoFactorVerified`, set by a database hook in
+  `src/lib/auth.ts`), so a session from Google sign-in, email
+  verification or impersonation never opens the panel, even for an admin.
+  The public site keeps its 30-day session.
+- **Better Auth's own admin endpoints** (`/api/auth/admin/*`: list users,
+  set roles, impersonate) get the same check, through a request hook.
+- **Code-based sign-in and code-based password reset are turned off**
+  (`disabledPaths`): the UI never used them, and code sign-in would have
+  skipped two-factor.
+- **The Basic Auth gate is now optional.** Set both
+  `ADMIN_BASIC_AUTH_USER` and `ADMIN_BASIC_AUTH_PASSWORD` for a second
+  lock in front of the login page, or neither. Only one set still fails
+  closed (503).
+- **Verified:** e2e tests for first-login setup (wrong password, then the
+  QR flow, with an axe check), sign-in with a wrong and then a right
+  code, a backup code working once on `/login`, the 12-hour expiry, and a
+  session without two-factor being refused by the panel and the admin
+  API (403); unit tests for `adminAccess()` and the optional gate.
+
+### Still to do in Phase 2
+- **Catalog:** `Media` and `Episode` move to Prisma with a seed from the
+  mock data. Reports then look titles up there instead of in the mocks.
+
+### Original plan
+
 **Decided (2026-10-10):** the database is **Prisma Postgres**, accessed
 through **Prisma ORM**.
 
@@ -314,7 +433,8 @@ through **Prisma ORM**.
      `Path=/admin` cookie or a role claim checked on every admin request);
    - no auth state in `localStorage`.
 4. **User auth:**
-   - real email/password with hashing (argon2id or bcrypt);
+   - real email/password with hashing (Better Auth uses scrypt, which is
+     also memory-hard);
    - real email verification codes: single use, expiring, with resend
      limited on the server;
    - Google OAuth;
@@ -395,12 +515,12 @@ npm run test:e2e         # Playwright + axe against the build
 npm audit --omit=dev     # expect: found 0 vulnerabilities
 ```
 
-Admin gate:
+Optional admin gate:
 
 ```bash
 ADMIN_BASIC_AUTH_USER=admin ADMIN_BASIC_AUTH_PASSWORD=secret npm start
 # then open http://localhost:3000/admin
 ```
 
-You should get a password prompt. Without the variables, the production
-build answers 503.
+You should get a password prompt. Without the variables there is no
+prompt, and `/admin` goes to the admin login.

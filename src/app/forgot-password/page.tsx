@@ -3,21 +3,33 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import FormError from "@/components/FormError";
+import { authClient, authErrorMessage } from "@/lib/auth-client";
 
 /**
- * Public forgot-password — linked from /login. Unlike admin's
- * forgot-password (still a bare "coming soon" placeholder), this one
- * has real UI for both states, since it's the page /login already
- * points real users at. Submitting doesn't actually send anything (no
- * backend/email service yet) — it just flips to the confirmation view,
- * the same "UI only" status as everything else in this scaffold.
+ * Public forgot-password, linked from /login. Better Auth emails a reset
+ * link to /reset-password if the account exists; the confirmation reads
+ * the same either way, so this page can't reveal who has an account.
  */
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    setError("");
+    setIsSubmitting(true);
+    const { error } = await authClient.requestPasswordReset({
+      email,
+      redirectTo: "/reset-password",
+    });
+    setIsSubmitting(false);
+    if (error) {
+      setError(authErrorMessage(error));
+      return;
+    }
     setSubmitted(true);
   }
 
@@ -70,6 +82,7 @@ export default function ForgotPasswordPage() {
                 id="email"
                 name="email"
                 type="email"
+                autoComplete="email"
                 required
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
@@ -78,11 +91,14 @@ export default function ForgotPasswordPage() {
               />
             </div>
 
+            <FormError message={error} />
+
             <button
               type="submit"
-              className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark"
+              disabled={isSubmitting}
+              className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-wait disabled:opacity-70"
             >
-              Send Reset Link
+              {isSubmitting ? "Sending…" : "Send Reset Link"}
             </button>
 
             <Link

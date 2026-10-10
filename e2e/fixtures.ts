@@ -1,4 +1,5 @@
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, expect, type Browser, type Page } from "@playwright/test";
+import type { Account } from "./accounts";
 
 export const ADMIN_CREDENTIALS = { username: "e2e-admin", password: "e2e-password" };
 
@@ -24,10 +25,21 @@ export const test = base.extend<{ consoleProblems: string[] }>({
 
 export { expect };
 
-/** Logs in through the (still fake) login form. */
-export async function logIn(page: Page, next?: string) {
+/** Logs in through the login form (optionally with a ?next= target). */
+export async function logIn(page: Page, account: Account, next?: string) {
   await page.goto(next ? `/login?next=${encodeURIComponent(next)}` : "/login");
-  await page.getByLabel("Email").fill("e2e@example.com");
-  await page.getByLabel("Password").fill("anything");
+  await page.getByLabel("Email").fill(account.email);
+  await page.getByLabel("Password").fill(account.password);
   await page.getByRole("button", { name: "Log In" }).click();
+}
+
+/** A guest with an IP address of its own, so the per-IP report limit starts fresh. */
+export async function guestPage(browser: Browser) {
+  const ip = `198.51.100.${Math.floor(Math.random() * 250) + 1}`;
+  // Contexts made in a test inherit its `use` options, signed-in state included.
+  const context = await browser.newContext({
+    extraHTTPHeaders: { "x-forwarded-for": ip },
+    storageState: { cookies: [], origins: [] },
+  });
+  return context.newPage();
 }

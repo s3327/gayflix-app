@@ -1,43 +1,75 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import FormError from "@/components/FormError";
 import Modal from "@/components/Modal";
-import { useReportLimit, GUEST_REPORT_LIMIT, LOGGED_IN_REPORT_LIMIT } from "@/lib/use-report-limit";
+import { reportAllowance, submitReport } from "@/lib/report-actions";
+import {
+  GUEST_REPORT_LIMIT,
+  LOGGED_IN_REPORT_LIMIT,
+  MAX_REPORT_DETAILS,
+  REPORT_REASONS,
+  type ReportAllowance,
+} from "@/lib/reports";
 import { useToast } from "@/lib/toast-context";
 
-const REASONS = [
-  "Video won't play",
-  "Wrong video for this title",
-  "Poor video/audio quality",
-  "Audio out of sync",
-  "Subtitles missing or wrong",
-  "Other",
-];
-
 /**
- * No backend — submitting just records the click against this browser's
- * daily count (see use-report-limit.ts) and shows a toast. There's
- * nowhere yet for the actual report content (reason/details) to go;
- * that's wiring for whenever a real reports pipeline/admin queue exists.
+ * Reports are saved on the server, which also enforces the daily limit
+ * (per account, or per IP address for guests). The modal asks how many
+ * are left when it opens, so the note below is accurate before the
+ * first click.
  */
 export default function ReportModal({
+  mediaId,
   mediaTitle,
   onClose,
 }: {
+  mediaId: string;
   mediaTitle: string;
   onClose: () => void;
 }) {
-  const { limit, remaining, canReport, recordReport, isLoggedIn } = useReportLimit();
   const { showToast } = useToast();
+  const [allowance, setAllowance] = useState<ReportAllowance | null>(null);
   const [reason, setReason] = useState("");
   const [details, setDetails] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: React.FormEvent) {
+  useEffect(() => {
+    let cancelled = false;
+    reportAllowance().then(
+      (result) => {
+        if (!cancelled) setAllowance(result);
+      },
+      () => {
+        if (!cancelled) setError("Couldn't load your report limit. You can still try sending one.");
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const canReport = allowance ? allowance.remaining > 0 : error !== "";
+
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!canReport || !reason) return;
-    recordReport();
-    showToast("Report submitted — thanks for letting us know");
-    onClose();
+    if (!canReport || !reason || isSubmitting) return;
+    setIsSubmitting(true);
+    setError("");
+    try {
+      const result = await submitReport({ mediaId, reason, details });
+      if (result.ok) {
+        showToast("Report submitted — thanks for letting us know");
+        onClose();
+        return;
+      }
+      setError(result.error);
+      if (result.allowance) setAllowance(result.allowance);
+    } catch {
+      setError("Couldn't send your report. Please try again.");
+    }
+    setIsSubmitting(false);
   }
 
   return (
@@ -51,13 +83,13 @@ export default function ReportModal({
       <p className="mt-3 rounded-md bg-bg-elevated px-3 py-2 text-xs text-ink-secondary">
         Guests can submit {GUEST_REPORT_LIMIT} report a day. Logged-in users get
         up to {LOGGED_IN_REPORT_LIMIT} a day.{" "}
-        {canReport ? (
+        {!allowance ? null : allowance.remaining > 0 ? (
           <>
             You have{" "}
             <span className="font-semibold text-ink-primary">
-              {remaining} of {limit}
+              {allowance.remaining} of {allowance.limit}
             </span>{" "}
-            left today{isLoggedIn ? "" : " — log in for more"}.
+            left today{allowance.isLoggedIn ? "" : " — log in for more"}.
           </>
         ) : (
           <span className="font-semibold text-status-error">
@@ -85,7 +117,7 @@ export default function ReportModal({
             <option value="" disabled>
               Select a reason
             </option>
-            {REASONS.map((r) => (
+            {REPORT_REASONS.map((r) => (
               <option key={r} value={r}>
                 {r}
               </option>
@@ -103,6 +135,7 @@ export default function ReportModal({
           <textarea
             id="report-details"
             rows={3}
+            maxLength={MAX_REPORT_DETAILS}
             disabled={!canReport}
             value={details}
             onChange={(event) => setDetails(event.target.value)}
@@ -111,13 +144,15 @@ export default function ReportModal({
           />
         </div>
 
+        <FormError message={error} />
+
         <div className="flex gap-2">
           <button
             type="submit"
-            disabled={!canReport || !reason}
+            disabled={!canReport || !reason || isSubmitting}
             className="rounded-card bg-brand-pink px-5 py-2 text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Submit
+            {isSubmitting ? "Sending…" : "Submit"}
           </button>
           <button
             type="button"

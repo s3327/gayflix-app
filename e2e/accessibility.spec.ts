@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { test, expect } from "@playwright/test";
+import { ADMIN_STATE, USER_STATE } from "./accounts";
 import { ADMIN_CREDENTIALS } from "./fixtures";
 
 const PUBLIC_PAGES = [
@@ -13,6 +14,8 @@ const PUBLIC_PAGES = [
   "/login",
   "/signup",
   "/verify-email?email=a%40b.co",
+  "/forgot-password",
+  "/reset-password?error=INVALID_TOKEN",
 ];
 
 async function seriousViolations(page: import("@playwright/test").Page) {
@@ -31,9 +34,19 @@ for (const path of PUBLIC_PAGES) {
   });
 }
 
+test.describe("account", () => {
+  test.use({ storageState: USER_STATE });
+  for (const path of ["/account", "/account/history"]) {
+    test(`${path} has no serious accessibility violations`, async ({ page }) => {
+      await page.goto(path, { waitUntil: "networkidle" });
+      expect(await seriousViolations(page)).toEqual([]);
+    });
+  }
+});
+
 test.describe("admin", () => {
-  test.use({ httpCredentials: ADMIN_CREDENTIALS });
-  for (const path of ["/admin/login", "/admin/library/movies", "/admin/setting"]) {
+  test.use({ httpCredentials: ADMIN_CREDENTIALS, storageState: ADMIN_STATE });
+  for (const path of ["/admin/login", "/admin/library/movies", "/admin/setting", "/admin/reports"]) {
     test(`${path} has no serious accessibility violations`, async ({ page }) => {
       await page.goto(path, { waitUntil: "networkidle" });
       expect(await seriousViolations(page)).toEqual([]);

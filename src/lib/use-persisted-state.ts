@@ -3,19 +3,14 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 /**
- * Generic localStorage-backed state for any JSON-serializable value —
- * more general than usePersistedRecord (which is specifically for
- * Record<string, T> shapes like Favorites/Lists/History). Auth's
- * isLoggedIn is just a boolean, so it needs this rather than the
- * record-shaped one.
+ * Generic localStorage-backed state for any JSON-serializable value.
+ * usePersistedRecord (a guest's watch history) is a thin wrapper over it.
  *
  * Built on useSyncExternalStore rather than "load in an effect, save in
  * another effect":
  *  - no setState-in-effect cascade on mount;
- *  - every hook instance reading the same key stays in sync (two
- *    components calling useReportLimit see the same count);
- *  - other tabs' writes arrive through the `storage` event, so logging
- *    out in one tab logs out the others.
+ *  - every hook instance reading the same key stays in sync;
+ *  - other tabs' writes arrive through the `storage` event.
  *
  * The server snapshot is always "nothing stored", so the server render
  * and the hydration pass both use `initialValue`; React then re-renders

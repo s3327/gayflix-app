@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import FormError from "@/components/FormError";
 import GoogleAuthButton from "@/components/GoogleAuthButton";
-import { useAuth } from "@/lib/auth-context";
+import TwoFactorForm from "@/components/TwoFactorForm";
+import { authClient, authErrorMessage, signInWithGoogle } from "@/lib/auth-client";
 import { safeNextPath } from "@/lib/safe-redirect";
 
 /**
@@ -16,16 +18,19 @@ import { safeNextPath } from "@/lib/safe-redirect";
  * but this is a separate page: admin auth and user auth are different
  * systems.
  *
- * No real auth yet — same "UI only" status as admin/login. Submitting
- * routes straight to /account (or the validated ?next= page); there's no email-verification step in the
- * login flow itself (that only happens once, at sign-up — see
- * /signup and /verify-email).
+ * Signs in with Better Auth and goes to /account (or the validated
+ * ?next= page). An account whose email was never confirmed gets a fresh
+ * code and is sent to /verify-email instead (Better Auth sends the code
+ * on that sign-in attempt). Accounts with two-factor turned on (admins)
+ * enter a code from their authenticator app before the session starts.
  */
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
 
   // Where to go after logging in: the ?next= page that sent the user
   // here (e.g. RequireLogin on /account/favorite), validated so it can
@@ -35,18 +40,32 @@ export default function LoginPage() {
     return safeNextPath(new URLSearchParams(window.location.search).get("next"));
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    login();
+    setError("");
+    setIsSubmitting(true);
+    const { data, error } = await authClient.signIn.email({ email, password });
+    setIsSubmitting(false);
+
+    if (error?.code === "EMAIL_NOT_VERIFIED") {
+      const params = new URLSearchParams({ email, next: destination() });
+      router.push(`/verify-email?${params}`);
+      return;
+    }
+    if (error) {
+      setError(authErrorMessage(error));
+      return;
+    }
+    if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
+      setNeedsTwoFactor(true);
+      return;
+    }
     router.push(destination());
   }
 
-  function handleGoogleAuth() {
-    // Google handles its own verification, so this skips straight to
-    // /account — no /verify-email hop, unlike the email/password sign-up
-    // flow.
-    login();
-    router.push(destination());
+  async function handleGoogleAuth() {
+    // Google verifies the email itself, so this skips /verify-email.
+    setError(await signInWithGoogle(destination()));
   }
 
   return (
@@ -65,60 +84,75 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-ink-muted">Log in to Gayflix</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="email"
-              className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
-            >
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
+        {needsTwoFactor ? (
+          <TwoFactorForm
+            onVerified={() => router.push(destination())}
+            onStartOver={() => {
+              setNeedsTwoFactor(false);
+              setPassword("");
+            }}
+          />
+        ) : (
+          <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
+            <div className="flex flex-col gap-1.5">
               <label
-                htmlFor="password"
+                htmlFor="email"
                 className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
               >
-                Password
+                Email
               </label>
-              <Link
-                href="/forgot-password"
-                className="text-xs font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
-              >
-                Forgot password?
-              </Link>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.com"
+                className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+              />
             </div>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="••••••••"
-              className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
-            />
-          </div>
 
-          <button
-            type="submit"
-            className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark"
-          >
-            Log In
-          </button>
-        </form>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="password"
+                  className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
+                >
+                  Password
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="••••••••"
+                className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+              />
+            </div>
+
+            <FormError message={error} />
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-wait disabled:opacity-70"
+            >
+              {isSubmitting ? "Logging In…" : "Log In"}
+            </button>
+          </form>
+        )}
 
         <div className="mt-6 flex items-center gap-3">
           <div className="h-px flex-1 bg-border-subtle" />

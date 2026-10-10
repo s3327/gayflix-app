@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 
 /**
- * Header's account icon — branches on real login state now (see
+ * Header's account icon — branches on the real session (see
  * auth-context.tsx). Guests get a plain link straight to /login,
  * same as clicking Search used to just link to /search: no menu, no
  * interactivity needed for a single destination.
@@ -58,9 +58,9 @@ export default function AccountMenu() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
-  function handleLogout() {
-    logout();
+  async function handleLogout() {
     setIsOpen(false);
+    await logout();
     showToast("Logged out");
     router.push("/home");
   }

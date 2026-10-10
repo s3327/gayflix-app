@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { checkAdminAccess } from "@/lib/admin-auth";
 
 const configured = {
-  NODE_ENV: "production",
   ADMIN_BASIC_AUTH_USER: "admin",
   ADMIN_BASIC_AUTH_PASSWORD: "s3cret:with-colon-ü",
 };
@@ -26,14 +25,12 @@ describe("checkAdminAccess", () => {
     expect(checkAdminAccess(`Basic ${btoa("no-separator")}`, configured)).toBe("unauthorized");
   });
 
-  it("fails closed in production when credentials aren't configured", () => {
-    expect(checkAdminAccess(null, { NODE_ENV: "production" })).toBe("disabled");
-    expect(
-      checkAdminAccess(null, { NODE_ENV: "production", ADMIN_BASIC_AUTH_USER: "admin" })
-    ).toBe("disabled");
+  it("is off when neither variable is set", () => {
+    expect(checkAdminAccess(null, {})).toBe("allowed");
   });
 
-  it("stays open in development when credentials aren't configured", () => {
-    expect(checkAdminAccess(null, { NODE_ENV: "development" })).toBe("allowed");
+  it("fails closed when only one variable is set", () => {
+    expect(checkAdminAccess(null, { ADMIN_BASIC_AUTH_USER: "admin" })).toBe("disabled");
+    expect(checkAdminAccess(null, { ADMIN_BASIC_AUTH_PASSWORD: "secret" })).toBe("disabled");
   });
 });

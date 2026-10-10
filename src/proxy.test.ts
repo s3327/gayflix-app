@@ -19,6 +19,11 @@ describe("proxy: content security policy", () => {
     expect(response.headers.get("x-middleware-request-content-security-policy")).toBe(csp);
   });
 
+  it("passes the requested path on for server layouts", () => {
+    const response = proxy(request("http://gayflix.test/account/history?page=2"));
+    expect(response.headers.get("x-middleware-request-x-pathname")).toBe("/account/history?page=2");
+  });
+
   it("uses a different nonce for every request", () => {
     const a = proxy(request("http://gayflix.test/home")).headers.get("content-security-policy");
     const b = proxy(request("http://gayflix.test/home")).headers.get("content-security-policy");
@@ -60,15 +65,14 @@ describe("proxy (admin gate at /admin)", () => {
     expect(response.headers.get("cache-control")).toBe("private, no-store");
   });
 
-  it("disables the panel in production when no credentials are set", () => {
-    vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("ADMIN_BASIC_AUTH_USER", "");
+  it("disables the panel when only one credential is set", () => {
+    vi.stubEnv("ADMIN_BASIC_AUTH_USER", "admin");
     vi.stubEnv("ADMIN_BASIC_AUTH_PASSWORD", "");
     expect(proxy(request(ADMIN)).status).toBe(503);
   });
 
-  it("stays open in development when no credentials are set", () => {
-    vi.stubEnv("NODE_ENV", "development");
+  it("has no gate when neither credential is set", () => {
+    vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("ADMIN_BASIC_AUTH_USER", "");
     vi.stubEnv("ADMIN_BASIC_AUTH_PASSWORD", "");
     expect(proxy(request(ADMIN)).headers.get("x-middleware-next")).toBe("1");

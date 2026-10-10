@@ -1,26 +1,24 @@
 /**
- * Interim protection for the admin panel until real admin accounts exist:
- * HTTP Basic Auth against one shared credential pair from the
- * environment. It is checked in src/proxy.ts for every /admin request and
- * again in the admin root layout. Any future admin API route or server
- * action must call checkAdminAccess itself too: the proxy only covers
- * /admin paths, not /api.
+ * An optional outer lock on the admin panel: HTTP Basic Auth against one
+ * shared credential pair from the environment, checked in src/proxy.ts
+ * for every /admin request and again in the admin root layout.
+ *
+ * The real lock is the admin account itself: the "admin" role plus a
+ * two-factor sign-in (requireAdmin in src/lib/session.ts). This gate was
+ * the interim protection before those existed, and stays available for
+ * anyone who wants a second password in front of the login page.
  *
  * - Both ADMIN_BASIC_AUTH_USER and ADMIN_BASIC_AUTH_PASSWORD set:
  *   a matching `Authorization: Basic …` header is required.
- * - Either unset in development: allowed, so localhost:3000/admin keeps
- *   working with no setup.
- * - Either unset in production: the panel is disabled (fail closed),
- *   never silently public.
+ * - Neither set: no gate.
+ * - Only one set: the panel is disabled (fail closed), since that is a
+ *   half-finished configuration rather than a choice.
  */
 
 export type AdminAccess = "allowed" | "unauthorized" | "disabled";
 
-type AdminEnv = {
-  NODE_ENV?: string;
-  ADMIN_BASIC_AUTH_USER?: string;
-  ADMIN_BASIC_AUTH_PASSWORD?: string;
-};
+// ADMIN_BASIC_AUTH_USER and ADMIN_BASIC_AUTH_PASSWORD.
+type AdminEnv = Record<string, string | undefined>;
 
 export const ADMIN_AUTH_REALM = "Gayflix Admin";
 
@@ -63,9 +61,8 @@ export function checkAdminAccess(
   const expectedUser = env.ADMIN_BASIC_AUTH_USER;
   const expectedPassword = env.ADMIN_BASIC_AUTH_PASSWORD;
 
-  if (!expectedUser || !expectedPassword) {
-    return env.NODE_ENV === "production" ? "disabled" : "allowed";
-  }
+  if (!expectedUser && !expectedPassword) return "allowed";
+  if (!expectedUser || !expectedPassword) return "disabled";
 
   const credentials = authorization ? decodeBasicCredentials(authorization) : null;
   if (!credentials) return "unauthorized";

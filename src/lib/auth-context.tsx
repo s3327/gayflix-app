@@ -1,35 +1,73 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo } from "react";
-import { usePersistedState } from "@/lib/use-persisted-state";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { authClient } from "@/lib/auth-client";
 
-const STORAGE_KEY = "gayflix:auth";
+type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: Date | string;
+  role?: string | null;
+};
 
 type AuthContextValue = {
   isLoggedIn: boolean;
-  login: () => void;
-  logout: () => void;
+  /** True until the first session check finishes (always on the server render). */
+  isPending: boolean;
+  user: AuthUser | null;
+  /** True from logout() until the next sign-in, so pages can tell "logged out on purpose" from "session ended". */
+  isLoggingOut: boolean;
+  logout: () => Promise<void>;
+  /** Re-reads the session, after changing the user's name or email. */
+  refresh: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 /**
- * No real backend/session yet — this is a plain localStorage-backed
- * boolean, same "UI only" status as everything else in this scaffold.
- * `login()` is called by /login, /signup, and /verify-email once their
- * (fake) flow completes; `logout()` is called from Header's account
- * menu. Lives at the root layout, not (main)'s, since /login/etc. are
- * outside the (main) route group but still need to call login().
+ * The signed-in user, for client components. Backed by the real session
+ * (an httpOnly cookie checked against the database through
+ * /api/auth/get-session), so nothing here can be forged from the
+ * browser. Signing in happens on the auth pages through `authClient`;
+ * the session updates here automatically when it does.
+ *
+ * Server components and route handlers use getSession() from
+ * src/lib/session.ts instead.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [isLoggedIn, setIsLoggedIn] = usePersistedState<boolean>(STORAGE_KEY, false);
+  const { data, isPending, refetch } = authClient.useSession();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const login = useCallback(() => setIsLoggedIn(true), [setIsLoggedIn]);
-  const logout = useCallback(() => setIsLoggedIn(false), [setIsLoggedIn]);
+  // Signing in again (a new user appearing) ends the "logged out on
+  // purpose" state. Adjusted during render rather than in an effect
+  // (React's recommended pattern for state that follows other state).
+  const userId = data?.user?.id;
+  const [lastUserId, setLastUserId] = useState(userId);
+  if (userId !== lastUserId) {
+    setLastUserId(userId);
+    if (userId) setIsLoggingOut(false);
+  }
+
+  const logout = useCallback(async () => {
+    setIsLoggingOut(true);
+    await authClient.signOut();
+  }, []);
+
+  const refresh = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ isLoggedIn, login, logout }),
-    [isLoggedIn, login, logout]
+    () => ({
+      isLoggedIn: Boolean(data?.user),
+      isPending,
+      user: data?.user ?? null,
+      isLoggingOut,
+      logout,
+      refresh,
+    }),
+    [data, isPending, isLoggingOut, logout, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

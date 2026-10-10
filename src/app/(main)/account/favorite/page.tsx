@@ -15,7 +15,7 @@ type Tab = "favorites" | "lists";
  * Reads from FavoritesProvider and ListsProvider, both set up in
  * (main)/layout.tsx — so titles favorited/grouped from anywhere in the
  * signed-in app show up here immediately, no separate fetch/sync
- * needed. Both are localStorage-backed, no real backend yet.
+ * needed. Both are saved to the user's account.
  *
  * Favorites and Lists are deliberately independent: adding a title to a
  * list does not remove it from Favorites, and removing a title from

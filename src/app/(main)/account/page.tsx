@@ -2,15 +2,18 @@
 
 import { useState } from "react";
 import { Check } from "lucide-react";
+import FormError from "@/components/FormError";
 import OtpInput from "@/components/OtpInput";
+import { authClient, authErrorMessage } from "@/lib/auth-client";
+import { useAuth } from "@/lib/auth-context";
 
 type EmailStep = "idle" | "confirm-current" | "new-email" | "verify" | "done";
-type PasswordStep = "idle" | "new-password" | "verify" | "done";
+type PasswordStep = "idle" | "new-password" | "done";
 
-// Static placeholder profile data — no real session/user record to read
-// from yet (see AccountLayout's note on deferred auth).
-const INITIAL_NAME = "Jamie Rivera";
-const INITIAL_EMAIL = "jamie@example.com";
+function memberSince(createdAt: Date | string | undefined) {
+  if (!createdAt) return "";
+  return new Date(createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
 
 /**
  * Default view under /account. Two modes:
@@ -20,53 +23,77 @@ const INITIAL_EMAIL = "jamie@example.com";
  *    "done" confirmation, and an overall Save/Cancel pair at the
  *    bottom.
  *
- * No backend — every "success" here (email confirmed, code verified,
- * password matches) is a local check against in-memory state, not a
- * real API call. Swap in the real thing once auth/session
- * architecture exists.
+ * Reads and changes the real account:
+ *  - Save updates the display name.
+ *  - Change Email sends a code to the new address; the email changes
+ *    only once that code is entered.
+ *  - Change Password needs the current password, and signs out every
+ *    other device.
  */
 export default function AccountPage() {
+  const { user, refresh } = useAuth();
+  const activeEmail = user?.email ?? "";
+
   const [isEditing, setIsEditing] = useState(false);
-  const [savedName, setSavedName] = useState(INITIAL_NAME);
-  const [displayName, setDisplayName] = useState(INITIAL_NAME); // draft, bound to the input
-  const [activeEmail, setActiveEmail] = useState(INITIAL_EMAIL);
+  const [displayName, setDisplayName] = useState(""); // draft, bound to the input
+  const [saveError, setSaveError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const [emailStep, setEmailStep] = useState<EmailStep>("idle");
   const [confirmCurrentEmail, setConfirmCurrentEmail] = useState("");
   const [emailConfirmError, setEmailConfirmError] = useState(false);
   const [newEmail, setNewEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
 
   const [passwordStep, setPasswordStep] = useState<PasswordStep>("idle");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [passwordMismatch, setPasswordMismatch] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
 
   function resetSubFlows() {
     setEmailStep("idle");
     setConfirmCurrentEmail("");
     setEmailConfirmError(false);
     setNewEmail("");
+    setEmailError("");
     setPasswordStep("idle");
+    setCurrentPassword("");
     setNewPassword("");
     setConfirmNewPassword("");
     setPasswordMismatch(false);
+    setPasswordError("");
+    setSaveError("");
+  }
+
+  function handleStartEditing() {
+    setDisplayName(user?.name ?? "");
+    setIsEditing(true);
   }
 
   function handleCancel() {
-    // Discards the display-name draft, back to the last saved value.
-    // Email/password changes are left alone here — each already went
-    // through its own explicit verification step, which is treated as
-    // its own commit point, not something Cancel should silently undo.
-    setDisplayName(savedName);
+    // Discards the display-name draft. Email/password changes are left
+    // alone here — each already went through its own explicit
+    // verification step, which is its own commit point.
     resetSubFlows();
     setIsEditing(false);
   }
 
-  function handleSave() {
-    // Commits the display-name draft. Any email/password change that
-    // already reached "done" was applied at verification time, not
-    // here — this just wraps up the edit session.
-    setSavedName(displayName);
+  async function handleSave() {
+    // Saves the display name. Any email/password change that already
+    // reached "done" was applied at that point, not here.
+    const name = displayName.trim();
+    if (name && name !== user?.name) {
+      setIsSaving(true);
+      const { error } = await authClient.updateUser({ name });
+      setIsSaving(false);
+      if (error) {
+        setSaveError(authErrorMessage(error));
+        return;
+      }
+      await refresh();
+    }
     resetSubFlows();
     setIsEditing(false);
   }
@@ -81,29 +108,46 @@ export default function AccountPage() {
     setEmailStep("new-email");
   }
 
-  function handleSubmitNewEmail(event: React.FormEvent) {
+  async function handleSubmitNewEmail(event: React.FormEvent) {
     event.preventDefault();
     if (!newEmail.trim()) return;
+    setEmailError("");
+    const { error } = await authClient.emailOtp.requestEmailChange({ newEmail: newEmail.trim() });
+    if (error) {
+      setEmailError(authErrorMessage(error));
+      return;
+    }
     setEmailStep("verify");
   }
 
-  function handleEmailCodeComplete() {
-    // Any complete 6-digit code "succeeds" — no real verification yet.
-    setActiveEmail(newEmail);
+  async function handleEmailCodeComplete(otp: string) {
+    setEmailError("");
+    const { error } = await authClient.emailOtp.changeEmail({ newEmail: newEmail.trim(), otp });
+    if (error) {
+      setEmailError(authErrorMessage(error));
+      return;
+    }
+    await refresh();
     setEmailStep("done");
   }
 
-  function handleSubmitNewPassword(event: React.FormEvent) {
+  async function handleSubmitNewPassword(event: React.FormEvent) {
     event.preventDefault();
     if (!newPassword || newPassword !== confirmNewPassword) {
       setPasswordMismatch(true);
       return;
     }
     setPasswordMismatch(false);
-    setPasswordStep("verify");
-  }
-
-  function handlePasswordCodeComplete() {
+    setPasswordError("");
+    const { error } = await authClient.changePassword({
+      currentPassword,
+      newPassword,
+      revokeOtherSessions: true,
+    });
+    if (error) {
+      setPasswordError(authErrorMessage(error));
+      return;
+    }
     setPasswordStep("done");
   }
 
@@ -120,7 +164,7 @@ export default function AccountPage() {
         {!isEditing && (
           <button
             type="button"
-            onClick={() => setIsEditing(true)}
+            onClick={handleStartEditing}
             className="shrink-0 rounded-card bg-brand-pink px-5 py-2.5 text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark"
           >
             Edit Profile
@@ -134,7 +178,7 @@ export default function AccountPage() {
             <span className="text-xs font-semibold uppercase tracking-wide text-ink-secondary">
               Name
             </span>
-            <p className="text-sm text-ink-primary">{savedName}</p>
+            <p className="text-sm text-ink-primary">{user?.name}</p>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -155,7 +199,7 @@ export default function AccountPage() {
             <span className="text-xs font-semibold uppercase tracking-wide text-ink-secondary">
               Member Since
             </span>
-            <p className="text-sm text-ink-primary">January 2026</p>
+            <p className="text-sm text-ink-primary">{memberSince(user?.createdAt)}</p>
           </div>
         </div>
       ) : (
@@ -204,6 +248,7 @@ export default function AccountPage() {
                 </p>
                 <input
                   type="email"
+                  aria-label="Current email"
                   required
                   value={confirmCurrentEmail}
                   onChange={(event) => {
@@ -243,12 +288,15 @@ export default function AccountPage() {
                 </p>
                 <input
                   type="email"
+                  aria-label="New email"
+                  autoComplete="email"
                   required
                   value={newEmail}
                   onChange={(event) => setNewEmail(event.target.value)}
                   placeholder="new@example.com"
                   className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
                 />
+                <FormError message={emailError} />
                 <div className="flex gap-2">
                   <button
                     type="submit"
@@ -274,6 +322,7 @@ export default function AccountPage() {
                   <span className="font-semibold text-ink-primary">{newEmail}</span>
                 </p>
                 <OtpInput onComplete={handleEmailCodeComplete} />
+                <FormError message={emailError} />
               </div>
             )}
 
@@ -310,6 +359,22 @@ export default function AccountPage() {
               <form onSubmit={handleSubmitNewPassword} className="flex flex-col gap-3">
                 <input
                   type="password"
+                  aria-label="Current password"
+                  autoComplete="current-password"
+                  required
+                  value={currentPassword}
+                  onChange={(event) => {
+                    setCurrentPassword(event.target.value);
+                    setPasswordError("");
+                  }}
+                  placeholder="Current password"
+                  className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+                />
+                <input
+                  type="password"
+                  aria-label="New password"
+                  autoComplete="new-password"
+                  minLength={8}
                   required
                   value={newPassword}
                   onChange={(event) => {
@@ -321,6 +386,8 @@ export default function AccountPage() {
                 />
                 <input
                   type="password"
+                  aria-label="Confirm new password"
+                  autoComplete="new-password"
                   required
                   value={confirmNewPassword}
                   onChange={(event) => {
@@ -335,6 +402,7 @@ export default function AccountPage() {
                     Passwords don&apos;t match.
                   </p>
                 )}
+                <FormError message={passwordError} />
                 <div className="flex gap-2">
                   <button
                     type="submit"
@@ -353,32 +421,24 @@ export default function AccountPage() {
               </form>
             )}
 
-            {passwordStep === "verify" && (
-              <div className="flex flex-col items-center gap-4 py-2">
-                <p className="text-center text-sm text-ink-secondary">
-                  Enter the 6-digit code we sent to{" "}
-                  <span className="font-semibold text-ink-primary">{activeEmail}</span>
-                </p>
-                <OtpInput onComplete={handlePasswordCodeComplete} />
-              </div>
-            )}
-
             {passwordStep === "done" && (
               <div className="flex items-center gap-2 text-sm font-medium text-status-success">
                 <Check className="h-4 w-4" />
-                Password changed
+                Password changed. Other devices have been signed out.
               </div>
             )}
           </div>
 
           {/* Save / Cancel */}
+          <FormError message={saveError} />
           <div className="flex gap-3 border-t border-border-subtle pt-6">
             <button
               type="button"
               onClick={handleSave}
-              className="rounded-card bg-brand-pink px-6 py-3 text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark"
+              disabled={isSaving}
+              className="rounded-card bg-brand-pink px-6 py-3 text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-wait disabled:opacity-70"
             >
-              Save
+              {isSaving ? "Saving…" : "Save"}
             </button>
             <button
               type="button"

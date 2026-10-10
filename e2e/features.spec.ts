@@ -1,3 +1,4 @@
+import { accounts, USER_STATE } from "./accounts";
 import { test, expect, logIn } from "./fixtures";
 
 test("header search suggests titles from /api/search", async ({ page, consoleProblems }) => {
@@ -14,27 +15,36 @@ test("guests are sent to login and brought back afterwards", async ({ page, cons
   void consoleProblems;
   await page.goto("/account/history");
   await expect(page).toHaveURL(/\/login\?next=%2Faccount%2Fhistory$/);
-  await page.getByLabel("Email").fill("e2e@example.com");
-  await page.getByLabel("Password").fill("anything");
+  const { user } = accounts();
+  await page.getByLabel("Email").fill(user.email);
+  await page.getByLabel("Password").fill(user.password);
   await page.getByRole("button", { name: "Log In" }).click();
   await expect(page).toHaveURL(/\/account\/history$/);
 });
 
 test("login ignores off-site ?next= targets", async ({ page }) => {
-  await logIn(page, "https://evil.example/");
+  await logIn(page, accounts().user, "https://evil.example/");
   await expect(page).toHaveURL(/\/account$/);
 });
 
-test("played episodes link back to the episode page", async ({ page, consoleProblems }) => {
-  void consoleProblems;
-  await logIn(page);
-  await expect(page).toHaveURL(/\/account$/);
-  await page.goto("/episode/the-brownstone-season-1-episode-1", { waitUntil: "networkidle" });
-  await page.locator("main").getByRole("button").first().click();
-  await page.goto("/account/history");
-  await expect(
-    page.locator('main a[href="/episode/the-brownstone-season-1-episode-1"]')
-  ).toBeVisible();
+test.describe("signed in", () => {
+  test.use({ storageState: USER_STATE });
+
+  test("played episodes link back to the episode page", async ({ page, consoleProblems }) => {
+    void consoleProblems;
+    await page.goto("/episode/the-brownstone-season-1-episode-1", { waitUntil: "networkidle" });
+    // Playing saves to the account in the background; let it finish
+    // before leaving the page.
+    const saved = page.waitForResponse(
+      (r) => r.request().method() === "POST" && "next-action" in r.request().headers()
+    );
+    await page.locator("main").getByRole("button").first().click();
+    expect((await saved).ok()).toBe(true);
+    await page.goto("/account/history");
+    await expect(
+      page.locator('main a[href="/episode/the-brownstone-season-1-episode-1"]')
+    ).toBeVisible();
+  });
 });
 
 test("dialogs trap focus, lock scroll and restore focus", async ({ page, consoleProblems }) => {

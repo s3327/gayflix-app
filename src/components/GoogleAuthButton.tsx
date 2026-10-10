@@ -1,10 +1,9 @@
 import GoogleIcon from "@/components/GoogleIcon";
 
 /**
- * "Continue with Google" button shared by /login and /signup. No real
- * OAuth wired up yet — the parent page just passes whatever onClick it
- * wants (both currently just route straight to /home, same as the rest
- * of this scaffold's placeholder auth).
+ * "Continue with Google" button shared by /login and /signup. The pages
+ * pass signInWithGoogle() (src/lib/auth-client.ts), which hands the
+ * browser to Google once GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are set.
  */
 export default function GoogleAuthButton({
   label,

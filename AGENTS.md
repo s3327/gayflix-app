@@ -12,8 +12,20 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - **Commits:** don't add `Co-Authored-By` trailers to commit messages.
 - **Admin panel:** lives at `/admin` on the main domain (not a subdomain).
-  `src/proxy.ts` gates it; admin data access must also check access itself.
-- **Database:** Prisma Postgres with Prisma ORM 7.x (decided 2026-10-10).
-  The rollout plan is Phase 2 of `docs/AUDIT_REMEDIATION_PLAN.md`.
+  Every admin page, server action and API route must call `requireAdmin()`
+  (`src/lib/session.ts`): it checks the "admin" role and that the session
+  passed two-factor in the last 12 hours (`src/lib/admin-access.ts`).
+  `src/proxy.ts` can also put an optional password gate in front.
+- **Database:** Prisma Postgres with Prisma ORM 7.x (decided 2026-10-10),
+  through `@prisma/adapter-pg`. Pin Prisma versions exactly (npm's `latest`
+  tag has pointed at pre-releases). Prisma 7 doesn't generate the client on
+  `migrate`; run `npx prisma generate` after schema changes.
+- **Accounts:** Better Auth (`src/lib/auth.ts`). Server code reads the
+  session with `getSession()` / `requireUser()`; never trust client state
+  for access decisions.
+- **Server functions** (`"use server"` files such as
+  `src/lib/library-actions.ts` and `src/lib/report-actions.ts`) check the
+  session and validate every argument themselves; list functions also
+  check ownership. Title snapshots go through `parseEntry()`.
 - **Before pushing,** run `npm run check` (lint, typecheck, tests, build);
   CI runs the same on every push to `main`.
