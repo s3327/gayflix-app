@@ -1,4 +1,5 @@
 import {
+  Flag,
   LayoutDashboard,
   Import,
   Library,
@@ -53,6 +54,7 @@ export const adminNav: NavEntry[] = [
     ],
   },
   { type: "link", label: "Users", href: "/admin/users", icon: Users },
+  { type: "link", label: "Reports", href: "/admin/reports", icon: Flag },
   { type: "link", label: "Trash", href: "/admin/trash", icon: Trash2 },
   { type: "link", label: "Setting", href: "/admin/setting", icon: Settings },
 ];

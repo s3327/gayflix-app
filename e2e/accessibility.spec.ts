@@ -46,7 +46,7 @@ test.describe("account", () => {
 
 test.describe("admin", () => {
   test.use({ httpCredentials: ADMIN_CREDENTIALS, storageState: ADMIN_STATE });
-  for (const path of ["/admin/login", "/admin/library/movies", "/admin/setting"]) {
+  for (const path of ["/admin/login", "/admin/library/movies", "/admin/setting", "/admin/reports"]) {
     test(`${path} has no serious accessibility violations`, async ({ page }) => {
       await page.goto(path, { waitUntil: "networkidle" });
       expect(await seriousViolations(page)).toEqual([]);

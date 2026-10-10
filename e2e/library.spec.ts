@@ -1,6 +1,6 @@
 import type { Browser, Page } from "@playwright/test";
 import { createVerifiedAccount, newAccount, type Account } from "./accounts";
-import { test, expect, logIn } from "./fixtures";
+import { guestPage, test, expect, logIn } from "./fixtures";
 
 /*
  * Favorites, lists, history and reports are stored on the server, so
@@ -23,13 +23,6 @@ async function signedInPage(browser: Browser, account: Account) {
   await logIn(page, account);
   await expect(page).not.toHaveURL(/\/login/);
   return page;
-}
-
-/** A guest with an IP address of its own, so the per-IP report limit starts fresh. */
-async function guestPage(browser: Browser) {
-  const ip = `198.51.100.${Math.floor(Math.random() * 250) + 1}`;
-  const context = await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": ip } });
-  return context.newPage();
 }
 
 test("favorites and lists follow the account to another device", async ({ browser, request }) => {

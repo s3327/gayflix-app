@@ -13,7 +13,7 @@ import {
   unverifySessions,
   USER_STATE,
 } from "./accounts";
-import { ADMIN_CREDENTIALS } from "./fixtures";
+import { ADMIN_CREDENTIALS, guestPage } from "./fixtures";
 
 const test = base;
 
@@ -86,6 +86,31 @@ test.describe("with the admin password", () => {
     test("/admin goes straight to the dashboard", async ({ page }) => {
       await page.goto("/admin");
       await expect(page).toHaveURL(/\/admin\/dashboard$/);
+    });
+
+    test("can resolve and reopen reports", async ({ browser, page }) => {
+      const details = `e2e report ${Date.now()}`;
+      const guest = await guestPage(browser);
+      await guest.goto("/watch/chosen-family", { waitUntil: "networkidle" });
+      await guest.getByRole("button", { name: "Report an issue" }).click();
+      await guest.getByLabel("What's the issue?").selectOption("Wrong video for this title");
+      await guest.getByLabel("Additional details (optional)").fill(details);
+      await guest.getByRole("button", { name: "Submit" }).click();
+      await expect(guest.getByText("Report submitted")).toBeVisible();
+
+      await page.goto("/admin/reports");
+      const open = page.getByRole("listitem").filter({ hasText: details });
+      await expect(open).toContainText("Chosen Family");
+      await expect(open).toContainText("Wrong video for this title");
+      await expect(open).toContainText("Guest");
+      await open.getByRole("button", { name: "Resolve report on Chosen Family" }).click();
+      await expect(open).toBeHidden();
+
+      await page.getByRole("link", { name: "Resolved" }).click();
+      const resolved = page.getByRole("listitem").filter({ hasText: details });
+      await expect(resolved).toContainText(`Resolved by ${accounts().admin.email}`);
+      await resolved.getByRole("button", { name: "Reopen report on Chosen Family" }).click();
+      await expect(resolved).toBeHidden();
     });
 
     test("can use the admin API", async ({ page }) => {

@@ -108,6 +108,7 @@ src/
       list/[id]/         → a shared list: anyone with the link can view it
     admin/               → admin panel (noindex; password gate re-checked in layout.tsx)
       (panel)/           → pages with the sidebar; admin role + two-factor required
+                           (reports/ is the queue of "Report an issue" submissions)
       setup-2fa/         → where a new admin turns on two-factor
     api/auth/            → Better Auth (sign-up, sign-in, codes, reset, sessions)
     api/search/          → header search suggestions (catalog stays server-side)

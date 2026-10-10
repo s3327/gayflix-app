@@ -345,9 +345,15 @@ This is step 7 below. Second migration: `prisma/migrations/*_library`.
   for guests, resetting at midnight UTC. The IP is stored only as a keyed
   hash. A per-reporter Postgres lock stops parallel requests from
   slipping past the limit (checked by hand: 8 at once, 1 accepted).
+- **Report queue** at `/admin/reports`: open and resolved tabs, newest
+  first, with the title, reason, details, reporter (account email or
+  "Guest") and time. Resolve and reopen are server functions that call
+  `requireAdmin()` themselves and record which admin closed the report.
 - **Verified:** e2e tests for favorites and lists across two devices, a
   guest viewing a shared list read-only, guest history moving into an
-  account, and both report limits; unit tests for the input checks.
+  account, both report limits, and an admin resolving and reopening a
+  guest's report (plus an axe check of the queue); unit tests for the
+  input checks.
 
 ### Shipped: admin two-factor and a 12-hour admin sign-in ✅
 Third migration: `prisma/migrations/*_two_factor`.
@@ -384,7 +390,6 @@ Third migration: `prisma/migrations/*_two_factor`.
 ### Still to do in Phase 2
 - **Catalog:** `Media` and `Episode` move to Prisma with a seed from the
   mock data. Reports then look titles up there instead of in the mocks.
-- **Report queue in the admin panel**, so reports can be read and closed.
 
 ### Original plan
 
