@@ -35,7 +35,7 @@ export default function NameListModal({
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="e.g. Weekend Watchlist"
-          className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none"
+          className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
         />
         <div className="flex gap-2">
           <button

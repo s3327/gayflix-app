@@ -86,7 +86,7 @@ export default function AddToListModal({
           value={newListName}
           onChange={(event) => setNewListName(event.target.value)}
           placeholder="New list name"
-          className="w-full rounded-md border border-border-subtle bg-bg-elevated px-3 py-2 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none"
+          className="w-full rounded-md border border-border-subtle bg-bg-elevated px-3 py-2 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
         />
         <button
           type="submit"

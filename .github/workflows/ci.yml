@@ -36,6 +36,6 @@ jobs:
           name: playwright-traces
           path: test-results/
           retention-days: 7
-      # Production dependencies only: dev tooling (Tailwind 3's file
-      # watcher, ESLint) has advisories that never reach the deployed app.
+      # Production dependencies only: dev tooling (ESLint's file globbing)
+      # can have advisories that never reach the deployed app.
       - run: npm audit --omit=dev --audit-level=high

@@ -66,10 +66,12 @@ work with clear exit criteria.
   - `npm audit --omit=dev` reports **0 vulnerabilities**.
   - Build, typecheck, lint and tests are green.
   - Every page was loaded in a real browser with no console or hydration errors.
-- **Remaining dev-only advisories:** `braces` (Tailwind 3's file watcher)
-  and `postcss-selector-parser` (Tailwind 3). They run only at build time on
-  our own files and never ship. They clear with the Tailwind 4 migration in
-  Phase 3.
+- **Remaining dev-only advisories:** the Tailwind 4 migration (Phase 3)
+  cleared Tailwind 3's `braces` and `postcss-selector-parser`. One remains:
+  `braces` inside `eslint-config-next`'s copy of `fast-glob`. Every
+  `braces` version is affected and there is no fix yet; it only runs when
+  ESLint globs our own files and never ships. Dependabot will pick up a fix
+  when one lands.
 
 ### H1. Admin access 🟡 (interim gate shipped)
 **Decided (2026-10-10):** the admin panel lives at `domain.com/admin`, not
@@ -349,9 +351,22 @@ through **Prisma ORM**.
 - **Video embeds.** When a player provider is chosen, add its origin to
   `frame-src` (and `media-src` if streaming directly), and use `sandbox`
   on the iframe.
-- **Tailwind 4 migration.** Move the tokens to CSS `@theme` (or use
-  `@config` for a smaller first step). This clears the remaining dev-only
-  audit findings.
+- ✅ **Tailwind 4 migration** (`tailwindcss` 4.3.3, `@tailwindcss/postcss`):
+  - Tokens moved from `tailwind.config.ts` to the `@theme` block in
+    `src/app/globals.css`, with their comments. Autoprefixer was dropped
+    (Tailwind 4 handles prefixes).
+  - Class renames came from the official upgrade tool (`outline-none` →
+    `outline-hidden`, `bg-gradient-to-*` → `bg-linear-to-*`, `rounded` →
+    `rounded-sm`, `backdrop-blur` → `backdrop-blur-sm` and so on).
+  - v3 behaviour kept on purpose: borders default to `border-subtle`,
+    buttons keep the pointer cursor, and the home hero title keeps its
+    line height.
+  - **Verified:** before/after screenshots of 31 pages at desktop and
+    mobile sizes are pixel-identical apart from one intended change.
+    Placeholder gradients defined in the mock data (`src/lib/`) now
+    render; Tailwind 3 never scanned `src/lib`, so they were silently
+    missing. The e2e and axe suite passes, and `npm audit` lists only the
+    ESLint `braces` advisory above.
 - **Monitoring.** Error reporting such as Sentry, wired into `error.tsx`
   and route handlers.
 

@@ -70,7 +70,7 @@ export default async function WatchPage({
       {/* Mini poster + title/rating/tagline/tags */}
       <div className="mt-8 flex gap-4 sm:gap-6">
         <div
-          className={`relative aspect-[2/3] w-24 shrink-0 overflow-hidden rounded-card bg-bg-surface bg-gradient-to-br sm:w-32 ${gradient}`}
+          className={`relative aspect-2/3 w-24 shrink-0 overflow-hidden rounded-card bg-bg-surface bg-linear-to-br sm:w-32 ${gradient}`}
         >
           {posterUrl && (
             <Image

@@ -36,7 +36,7 @@ export default function NavMenu() {
     // Hidden entirely on mobile — the header's hamburger menu takes
     // over navigation at that size instead (see MobileNavMenu.tsx).
     // Sticks directly under the header's own sticky position.
-    <div className="sticky top-16 z-40 hidden border-b border-border-subtle bg-bg-base/95 backdrop-blur sm:block sm:top-20">
+    <div className="sticky top-16 z-40 hidden border-b border-border-subtle bg-bg-base/95 backdrop-blur-sm sm:block sm:top-20">
       <nav
         aria-label="Primary"
         className="mx-auto flex max-w-[1440px] items-center justify-between gap-8 overflow-x-auto px-4 py-3 scrollbar-none sm:px-8"

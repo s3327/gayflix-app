@@ -74,7 +74,7 @@ export default function SignupPage() {
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Jamie Rivera"
-              className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none"
+              className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
             />
           </div>
 
@@ -93,7 +93,7 @@ export default function SignupPage() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="you@example.com"
-              className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none"
+              className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
             />
           </div>
 
@@ -112,7 +112,7 @@ export default function SignupPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="••••••••"
-              className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none"
+              className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
             />
           </div>
 
@@ -132,7 +132,7 @@ export default function SignupPage() {
             type="checkbox"
             checked={agreedToTerms}
             onChange={(event) => setAgreedToTerms(event.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 rounded border-border-strong bg-bg-elevated text-ink-brand accent-brand-pink focus-visible:outline-none"
+            className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-border-strong bg-bg-elevated text-ink-brand accent-brand-pink focus-visible:outline-hidden"
           />
           <span>
             I agree to the{" "}

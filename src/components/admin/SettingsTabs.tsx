@@ -131,7 +131,7 @@ export default function SettingsTabs() {
                   value={periodDays}
                   onChange={(e) => setPeriodDays(Number(e.target.value))}
                   disabled={!badgeEnabled}
-                  className="w-full appearance-none rounded-md border border-border-subtle bg-bg-elevated py-2.5 pl-4 pr-10 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-none disabled:opacity-50"
+                  className="w-full appearance-none rounded-md border border-border-subtle bg-bg-elevated py-2.5 pl-4 pr-10 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-hidden disabled:opacity-50"
                 >
                   {PERIOD_OPTIONS.map((opt) => (
                     <option key={opt.days} value={opt.days}>

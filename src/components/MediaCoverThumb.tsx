@@ -7,7 +7,7 @@ type CoverEntry = {
 };
 
 /**
- * The "aspect-[2/3] box, real poster if there is one, else a gradient
+ * The "aspect-2/3 box, real poster if there is one, else a gradient
  * fallback, plus a dark gradient overlay on top" block — shared by
  * FavoriteCard, HistoryCard, ListCard's cover, and /list/[id]'s item
  * grid, all of which used to reimplement this identically. The
@@ -27,8 +27,8 @@ export default function MediaCoverThumb({
 }) {
   return (
     <div
-      className={`relative aspect-[2/3] w-full overflow-hidden rounded-card bg-bg-elevated transition-transform duration-200 ease-out group-hover:scale-105 ${
-        !entry.posterUrl && entry.gradient ? `bg-gradient-to-br ${entry.gradient}` : ""
+      className={`relative aspect-2/3 w-full overflow-hidden rounded-card bg-bg-elevated transition-transform duration-200 ease-out group-hover:scale-105 ${
+        !entry.posterUrl && entry.gradient ? `bg-linear-to-br ${entry.gradient}` : ""
       }`}
     >
       {entry.posterUrl && (
@@ -40,7 +40,7 @@ export default function MediaCoverThumb({
           className="object-cover"
         />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-bg-base/40 via-transparent to-transparent" />
+      <div className="absolute inset-0 bg-linear-to-t from-bg-base/40 via-transparent to-transparent" />
     </div>
   );
 }

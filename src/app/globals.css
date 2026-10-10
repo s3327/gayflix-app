@@ -1,10 +1,109 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/*
+  Design tokens. Every value maps 1:1 to gayflix-design-tokens.html (v1,
+  approved), except the three shades adjusted for WCAG AA contrast on
+  2026-10-10 (noted below). If a token changes, change it here; never
+  hardcode a hex in a component.
+*/
+@theme {
+  /* Brand primary: Flame Pink. Buttons, links, primary actions.
+     #EC008C in the v1 sheet; deepened a touch so white button text
+     clears 4.5:1. */
+  --color-brand-pink: #e40087;
+  --color-brand-pink-light: #ff5fb0; /* hover */
+  --color-brand-pink-soft: #c25693; /* muted / subtle fills */
+  --color-brand-pink-dark: #9e0068; /* active / pressed */
+
+  /* Brand secondary: Sunset Orange. Secondary CTAs, badges. */
+  --color-brand-orange: #ff8200;
+  --color-brand-orange-light: #ffa84d;
+  --color-brand-orange-soft: #d99a5c;
+  --color-brand-orange-dark: #b85e00;
+
+  /* Pride spectrum: decorative only (genre tags, category chips,
+     gradients). Never used for interactive states; brand pink owns
+     "click me". */
+  --color-pride-red: #e4002b;
+  --color-pride-red-light: #ff5c72;
+
+  --color-pride-yellow: #ffd100;
+  --color-pride-yellow-light: #ffe066;
+
+  --color-pride-green: #00a651;
+  --color-pride-green-light: #4cd684;
+
+  --color-pride-blue: #0072ce;
+  --color-pride-blue-light: #5ca8f2;
+
+  --color-pride-purple: #732982;
+  --color-pride-purple-light: #a15fb0;
+
+  /* Background: dark, cinematic. Three flat layers, no shadows. */
+  --color-bg-base: #0b0b0f; /* page background */
+  --color-bg-surface: #17171f; /* cards, rows, nav */
+  --color-bg-elevated: #212129; /* modals, dropdowns, hovered/focused card */
+
+  --color-border-subtle: #2a2a34;
+  --color-border-strong: #3d3d4a;
+
+  /* Text, named "ink" so classes read text-ink-primary etc. */
+  --color-ink-primary: #ffffff;
+  --color-ink-secondary: #b7b7c3;
+  /* #7A7A87 in the v1 sheet; lightened to clear 4.5:1 on every layer. */
+  --color-ink-muted: #878794;
+  --color-ink-disabled: #4c4c56;
+  --color-ink-onBrand: #ffffff;
+  /* Pink text on dark backgrounds (links, active nav). The pink fill is
+     too dark to read as text at 4.5:1; brand-pink-light stays its hover. */
+  --color-ink-brand: #f13da8;
+
+  --color-status-success: #22c55e;
+  --color-status-error: #ff4757;
+  --color-status-warning: #ffb020;
+  --color-status-info: #38bdf8;
+
+  /* Keyboard focus: deliberately not brand pink, so focus is never
+     confused with hover/active. */
+  --color-focus: #ffd100;
+
+  /* Wired to the next/font CSS variables set in app/layout.tsx. */
+  --font-display: var(--font-baloo), sans-serif;
+  --font-body: var(--font-inter), sans-serif;
+
+  --default-ring-color: #ffd100;
+
+  --ring-offset-color: #0b0b0f;
+
+  --radius-card: 10px;
+  --radius-pill: 999px;
+}
+
+@utility scrollbar-none {
+  /* For horizontally-scrolling content rows — scrollable by drag/swipe/
+     trackpad, just without the visible scrollbar track cluttering the UI. */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+  &::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
+  }
+}
 
 @layer base {
-  * {
-    @apply border-border-subtle;
+  /* Tailwind 4 defaults borders to currentcolor; every border here uses
+     the subtle token unless a class says otherwise. */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-border-subtle);
+  }
+
+  /* Tailwind 4 dropped the pointer cursor on buttons; keep it. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
   }
 
   ::selection {
@@ -28,19 +127,7 @@
 
   /* Consistent, visible keyboard focus everywhere — never suppressed */
   :focus-visible {
-    outline: 2px solid theme("colors.focus");
+    outline: 2px solid var(--color-focus);
     outline-offset: 3px;
-  }
-}
-
-@layer utilities {
-  /* For horizontally-scrolling content rows — scrollable by drag/swipe/
-     trackpad, just without the visible scrollbar track cluttering the UI. */
-  .scrollbar-none {
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE/Edge */
-  }
-  .scrollbar-none::-webkit-scrollbar {
-    display: none; /* Chrome/Safari */
   }
 }

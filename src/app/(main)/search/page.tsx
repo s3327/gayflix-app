@@ -61,7 +61,7 @@ export default async function SearchPage({
               name="q"
               defaultValue={query}
               placeholder="Search by title, genre, year..."
-              className="w-full rounded-card border border-border-subtle bg-bg-surface py-3.5 pl-12 pr-4 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none"
+              className="w-full rounded-card border border-border-subtle bg-bg-surface py-3.5 pl-12 pr-4 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
             />
           </div>
           <button

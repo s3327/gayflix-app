@@ -114,12 +114,12 @@ export default function SwipeableRow({
 
       {canScrollLeft && (
         <>
-          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-bg-base to-transparent sm:w-16" />
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-linear-to-r from-bg-base to-transparent sm:w-16" />
           <button
             type="button"
             onClick={() => scrollByPage(-1)}
             aria-label="Scroll left"
-            className="absolute left-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-bg-elevated/90 text-ink-primary shadow-lg backdrop-blur transition-all hover:scale-110 hover:bg-brand-pink hover:text-ink-onBrand"
+            className="absolute left-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-bg-elevated/90 text-ink-primary shadow-lg backdrop-blur-sm transition-all hover:scale-110 hover:bg-brand-pink hover:text-ink-onBrand"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
@@ -128,12 +128,12 @@ export default function SwipeableRow({
 
       {canScrollRight && (
         <>
-          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-bg-base to-transparent sm:w-16" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-linear-to-l from-bg-base to-transparent sm:w-16" />
           <button
             type="button"
             onClick={() => scrollByPage(1)}
             aria-label="Scroll right"
-            className="absolute right-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-bg-elevated/90 text-ink-primary shadow-lg backdrop-blur transition-all hover:scale-110 hover:bg-brand-pink hover:text-ink-onBrand"
+            className="absolute right-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-bg-elevated/90 text-ink-primary shadow-lg backdrop-blur-sm transition-all hover:scale-110 hover:bg-brand-pink hover:text-ink-onBrand"
           >
             <ChevronRight className="h-5 w-5" />
           </button>

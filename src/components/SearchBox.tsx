@@ -135,7 +135,7 @@ export default function SearchBox() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search titles..."
-              className="w-full bg-transparent text-sm text-ink-primary placeholder:text-ink-muted focus:outline-none"
+              className="w-full bg-transparent text-sm text-ink-primary placeholder:text-ink-muted focus:outline-hidden"
             />
           </form>
 
@@ -152,7 +152,7 @@ export default function SearchBox() {
                       href={titleHref(item)}
                       className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-bg-elevated"
                     >
-                      <div className="relative h-14 w-10 shrink-0 overflow-hidden rounded-sm bg-bg-elevated">
+                      <div className="relative h-14 w-10 shrink-0 overflow-hidden rounded-xs bg-bg-elevated">
                         <Image
                           src={item.posterUrl}
                           alt=""

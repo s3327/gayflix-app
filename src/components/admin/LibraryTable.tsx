@@ -32,7 +32,7 @@ export default function LibraryTable({
               <input
                 type="checkbox"
                 aria-label="Select all"
-                className="h-4 w-4 rounded border-border-strong accent-brand-pink"
+                className="h-4 w-4 rounded-sm border-border-strong accent-brand-pink"
               />
             </th>
             <th className="px-4 py-3 text-left">Title</th>
@@ -51,7 +51,7 @@ export default function LibraryTable({
                 <input
                   type="checkbox"
                   aria-label={`Select ${item.title}`}
-                  className="h-4 w-4 rounded border-border-strong accent-brand-pink"
+                  className="h-4 w-4 rounded-sm border-border-strong accent-brand-pink"
                 />
               </td>
               <td className="px-4 py-3">

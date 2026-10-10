@@ -26,16 +26,16 @@ export default function HomePage() {
           />
         )}
         <div
-          className={`absolute inset-0 bg-gradient-to-br opacity-40 mix-blend-multiply ${featuredTitle.gradient}`}
+          className={`absolute inset-0 bg-linear-to-br opacity-40 mix-blend-multiply ${featuredTitle.gradient}`}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-bg-base via-bg-base/40 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-bg-base/80 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-bg-base via-bg-base/40 to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-r from-bg-base/80 via-transparent to-transparent" />
 
         <div className="relative flex h-full max-w-[1440px] flex-col justify-end px-4 pb-12 sm:px-8 sm:pb-16 lg:mx-auto">
           <p className="font-body text-sm font-semibold uppercase tracking-widest text-ink-secondary">
             Featured Today
           </p>
-          <h1 className="mt-2 max-w-xl font-display text-4xl font-bold leading-tight sm:text-6xl">
+          <h1 className="mt-2 max-w-xl font-display text-4xl font-bold leading-tight sm:text-6xl sm:leading-none">
             {featuredTitle.title}
           </h1>
           <p className="mt-2 text-sm text-ink-secondary">
@@ -55,7 +55,7 @@ export default function HomePage() {
             </Link>
             <Link
               href={moreInfoHref}
-              className="flex items-center gap-2 rounded-card border border-border-strong bg-bg-base/40 px-7 py-3 font-body text-sm font-bold text-ink-primary backdrop-blur transition-colors hover:bg-bg-elevated"
+              className="flex items-center gap-2 rounded-card border border-border-strong bg-bg-base/40 px-7 py-3 font-body text-sm font-bold text-ink-primary backdrop-blur-sm transition-colors hover:bg-bg-elevated"
             >
               <Info className="h-4 w-4" />
               More Info

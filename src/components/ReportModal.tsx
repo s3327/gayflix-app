@@ -80,7 +80,7 @@ export default function ReportModal({
             disabled={!canReport}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="" disabled>
               Select a reason
@@ -107,7 +107,7 @@ export default function ReportModal({
             value={details}
             onChange={(event) => setDetails(event.target.value)}
             placeholder="Anything else that would help us look into it"
-            className="w-full resize-none rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full resize-none rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
 

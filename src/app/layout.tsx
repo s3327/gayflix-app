@@ -6,8 +6,8 @@ import { siteUrl } from "@/lib/site-url";
 import "./globals.css";
 
 // Self-hosted at build time by next/font — no runtime request to Google Fonts,
-// no layout shift. Exposed as CSS variables and mapped in tailwind.config.ts
-// under fontFamily.display / fontFamily.body.
+// no layout shift. Exposed as CSS variables and mapped in globals.css
+// as --font-display / --font-body.
 const baloo = Baloo_2({
   subsets: ["latin"],
   weight: ["500", "600", "700", "800"],

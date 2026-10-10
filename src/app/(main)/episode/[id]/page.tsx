@@ -130,7 +130,7 @@ export default async function EpisodePage({
       {/* Mini poster + title/season-episode badge/tags */}
       <div className="mt-8 flex gap-4 sm:gap-6">
         <div
-          className={`aspect-[2/3] w-24 shrink-0 overflow-hidden rounded-card bg-bg-surface bg-gradient-to-br sm:w-32 ${series.gradient}`}
+          className={`aspect-2/3 w-24 shrink-0 overflow-hidden rounded-card bg-bg-surface bg-linear-to-br sm:w-32 ${series.gradient}`}
         />
         <div className="min-w-0">
           <Link

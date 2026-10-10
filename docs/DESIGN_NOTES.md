@@ -30,7 +30,8 @@ once real page designs come in.
 
 ## Design tokens
 
-Every color/font token lives in **`tailwind.config.ts`**, matching
+Every color/font token lives in the `@theme` block of **`src/app/globals.css`**
+(Tailwind 4; this was `tailwind.config.ts` before 2026-10-10), matching
 `gayflix-design-tokens.html` (the approved v1 reference sheet), except
 for three shades adjusted for WCAG AA contrast on 2026-10-10: `ink.muted`
 (#878794), `brand.pink` (#E40087) and the new `ink.brand` (#F13DA8) for
@@ -69,7 +70,7 @@ src/components/
 src/lib/
   mock-titles.ts       → placeholder catalog data — swap for real DB queries later
 public/brand/          → logo assets (full lockup, icon-only, wordmark+tagline)
-tailwind.config.ts     → design token system (source of truth for color/type)
+src/app/globals.css    → design token system (@theme; source of truth for color/type)
 ```
 
 ## Routing split: landing vs. app

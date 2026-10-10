@@ -12,7 +12,7 @@ export default function LibrarySearchBar() {
       <input
         type="text"
         placeholder="Search by title"
-        className="min-w-[200px] flex-1 rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none"
+        className="min-w-[200px] flex-1 rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
       />
 
       {/* Status — default "All" */}
@@ -20,7 +20,7 @@ export default function LibrarySearchBar() {
         <select
           defaultValue="all"
           aria-label="Status"
-          className="appearance-none rounded-md border border-border-subtle bg-bg-elevated py-2.5 pl-4 pr-10 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-none"
+          className="appearance-none rounded-md border border-border-subtle bg-bg-elevated py-2.5 pl-4 pr-10 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-hidden"
         >
           <option value="all">All</option>
           <option value="draft">Draft</option>

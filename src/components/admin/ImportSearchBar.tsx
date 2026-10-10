@@ -27,7 +27,7 @@ export default function ImportSearchBar() {
       <input
         type="text"
         placeholder={placeholder}
-        className="min-w-[200px] flex-1 rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none"
+        className="min-w-[200px] flex-1 rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
       />
 
       {/* Search by — gates Title vs. IMDb ID for the import process later */}
@@ -36,7 +36,7 @@ export default function ImportSearchBar() {
           value={searchBy}
           onChange={(e) => setSearchBy(e.target.value as SearchBy)}
           aria-label="Search by"
-          className="appearance-none rounded-md border border-border-subtle bg-bg-elevated py-2.5 pl-4 pr-10 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-none"
+          className="appearance-none rounded-md border border-border-subtle bg-bg-elevated py-2.5 pl-4 pr-10 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-hidden"
         >
           <option value="title">Title</option>
           <option value="imdb_id">IMDb ID</option>
@@ -49,7 +49,7 @@ export default function ImportSearchBar() {
         <select
           defaultValue="movie"
           aria-label="Media type"
-          className="appearance-none rounded-md border border-border-subtle bg-bg-elevated py-2.5 pl-4 pr-10 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-none"
+          className="appearance-none rounded-md border border-border-subtle bg-bg-elevated py-2.5 pl-4 pr-10 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-hidden"
         >
           <option value="movie">Movie</option>
           <option value="series">Series</option>
@@ -62,7 +62,7 @@ export default function ImportSearchBar() {
         <select
           defaultValue="omdb"
           aria-label="Source"
-          className="appearance-none rounded-md border border-border-subtle bg-bg-elevated py-2.5 pl-4 pr-10 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-none"
+          className="appearance-none rounded-md border border-border-subtle bg-bg-elevated py-2.5 pl-4 pr-10 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-hidden"
         >
           <option value="omdb">OMDb</option>
         </select>

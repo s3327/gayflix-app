@@ -12,7 +12,7 @@ what has to change before launch.
 ## Stack
 
 - **Next.js 16** (App Router, Turbopack) + **React 19** + TypeScript (strict)
-- **Tailwind CSS 3** with the approved design tokens in `tailwind.config.ts`
+- **Tailwind CSS 4** with the approved design tokens in `src/app/globals.css` (`@theme`)
 - Fonts self-hosted with `next/font`: **Baloo 2** (display) and **Inter** (body)
 - **Vitest** for unit tests, **ESLint 9** (flat config) with `eslint-config-next`
 - **Database (planned):** Prisma Postgres via Prisma ORM. It isn't wired in

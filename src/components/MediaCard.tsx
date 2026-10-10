@@ -24,7 +24,7 @@ export default function MediaCard({
 
   return (
     <Link href={href} className="group block">
-      <div className="relative aspect-[2/3] w-full overflow-hidden rounded-card bg-bg-surface transition-transform duration-200 ease-out group-hover:z-10 group-hover:scale-105">
+      <div className="relative aspect-2/3 w-full overflow-hidden rounded-card bg-bg-surface transition-transform duration-200 ease-out group-hover:z-10 group-hover:scale-105">
         <Image
           src={item.posterUrl}
           alt={item.title}
@@ -32,7 +32,7 @@ export default function MediaCard({
           sizes="(min-width: 1024px) 220px, (min-width: 640px) 200px, 30vw"
           className="object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-bg-base/40 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-bg-base/40 via-transparent to-transparent" />
 
         {badge && <span className="absolute left-2 top-2">{badge}</span>}
       </div>

@@ -65,9 +65,9 @@ export default async function SeriesPage({
           {/* Poster */}
           <div className="mx-auto w-full max-w-[240px] shrink-0 md:mx-0 md:w-72">
             <div
-              className={`relative aspect-[2/3] w-full overflow-hidden rounded-card bg-bg-surface bg-gradient-to-br ${show.gradient}`}
+              className={`relative aspect-2/3 w-full overflow-hidden rounded-card bg-bg-surface bg-linear-to-br ${show.gradient}`}
             >
-              <div className="absolute inset-0 bg-gradient-to-t from-bg-base/30 via-transparent to-transparent" />
+              <div className="absolute inset-0 bg-linear-to-t from-bg-base/30 via-transparent to-transparent" />
             </div>
 
             {show.episodes.length > 0 && (

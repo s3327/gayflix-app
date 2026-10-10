@@ -172,7 +172,7 @@ export default function AccountPage() {
               id="displayName"
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
-              className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-none"
+              className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-hidden"
             />
           </div>
 
@@ -211,7 +211,7 @@ export default function AccountPage() {
                     setEmailConfirmError(false);
                   }}
                   placeholder={activeEmail}
-                  className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none"
+                  className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
                 />
                 {emailConfirmError && (
                   <p className="text-xs text-status-error">
@@ -247,7 +247,7 @@ export default function AccountPage() {
                   value={newEmail}
                   onChange={(event) => setNewEmail(event.target.value)}
                   placeholder="new@example.com"
-                  className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none"
+                  className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
                 />
                 <div className="flex gap-2">
                   <button
@@ -317,7 +317,7 @@ export default function AccountPage() {
                     setPasswordMismatch(false);
                   }}
                   placeholder="New password"
-                  className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none"
+                  className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
                 />
                 <input
                   type="password"
@@ -328,7 +328,7 @@ export default function AccountPage() {
                     setPasswordMismatch(false);
                   }}
                   placeholder="Confirm new password"
-                  className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-none"
+                  className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
                 />
                 {passwordMismatch && (
                   <p className="text-xs text-status-error">

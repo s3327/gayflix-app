@@ -27,7 +27,7 @@ export default function CardIconButton({
       onClick={onClick}
       aria-label={label}
       title={label}
-      className={`absolute top-2 ${position === "left" ? "left-2" : "right-2"} flex h-8 w-8 items-center justify-center rounded-full bg-bg-base/70 backdrop-blur transition-colors hover:bg-bg-base ${
+      className={`absolute top-2 ${position === "left" ? "left-2" : "right-2"} flex h-8 w-8 items-center justify-center rounded-full bg-bg-base/70 backdrop-blur-sm transition-colors hover:bg-bg-base ${
         tone === "brand" ? "text-ink-brand" : "text-ink-primary"
       }`}
     >

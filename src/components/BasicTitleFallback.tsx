@@ -15,7 +15,7 @@ export default function BasicTitleFallback({
     <main className="mx-auto max-w-[1200px] px-4 py-10 sm:px-8 sm:py-14">
       <div className="flex flex-col gap-8 md:flex-row md:gap-12">
         <div className="mx-auto w-full max-w-[240px] shrink-0 md:mx-0 md:w-72">
-          <div className="relative aspect-[2/3] w-full overflow-hidden rounded-card bg-bg-surface">
+          <div className="relative aspect-2/3 w-full overflow-hidden rounded-card bg-bg-surface">
             <Image
               src={item.posterUrl}
               alt={item.title}

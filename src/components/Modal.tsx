@@ -89,7 +89,7 @@ export default function Modal({
   return (
     <div
       onClick={handleBackdropClick}
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-bg-base/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-60 flex items-center justify-center bg-bg-base/70 p-4 backdrop-blur-xs"
     >
       <div
         ref={panelRef}
@@ -97,7 +97,7 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-sm rounded-card border border-border-subtle bg-bg-surface p-6 focus-visible:outline-none"
+        className="w-full max-w-sm rounded-card border border-border-subtle bg-bg-surface p-6 focus-visible:outline-hidden"
       >
         <div className="flex items-center justify-between gap-4">
           <h2 className="font-display text-lg font-bold">{title}</h2>

@@ -22,7 +22,7 @@ import MobileNavMenu from "@/components/MobileNavMenu";
  */
 export default function Header() {
   return (
-    <header className="sticky top-0 z-50 border-b border-border-subtle bg-bg-base/95 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-border-subtle bg-bg-base/95 backdrop-blur-sm">
       <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[1fr_auto_1fr] items-center px-4 sm:h-20 sm:px-8">
         {/* Left: hamburger menu, mobile only — opens MobileNavMenu's
             drawer. invisible (not hidden) on purpose: this is a grid
@@ -39,7 +39,7 @@ export default function Header() {
         <Link
           href="/"
           aria-label="Gayflix home"
-          className="shrink-0 justify-self-center rounded-sm focus-visible:outline-none"
+          className="shrink-0 justify-self-center rounded-xs focus-visible:outline-hidden"
         >
           <Image
             src="/brand/gayflix-icon.png"
