@@ -71,7 +71,16 @@ work with clear exit criteria.
   Phase 3.
 
 ### H1. Admin access 🟡 (interim gate shipped)
-- **Shipped:** an HTTP Basic Auth gate on the whole admin subdomain
+**Decided (2026-10-10):** the admin panel lives at `domain.com/admin`, not
+on an `admin.` subdomain.
+- **Upside:** no extra DNS or domain setup, and the panel works on Vercel
+  preview deployments.
+- **Trade-off:** admin shares an origin with the public site, so a
+  script-injection bug on a public page could reach admin. The CSP limits
+  that, and Phase 2 adds a server-side role check on every admin page,
+  action and API route.
+
+- **Shipped:** an HTTP Basic Auth gate on the whole admin panel
   (`src/lib/admin-auth.ts`):
   - It is checked in `src/proxy.ts` and again in `src/app/admin/layout.tsx`
     as a second lock.
@@ -79,7 +88,7 @@ work with clear exit criteria.
   - The comparison runs in constant time and supports UTF-8.
   - **It fails closed:** in production with no credentials set, the panel
     returns 503.
-  - Dev with no credentials stays open, so `admin.localhost:3000` still
+  - Dev with no credentials stays open, so `localhost:3000/admin` still
     works out of the box.
   - Admin responses carry `X-Robots-Tag: noindex` and robots metadata.
   - The `/admin` path match is now exact (`/admin` or `/admin/…`).
@@ -87,7 +96,6 @@ work with clear exit criteria.
   - 401 without credentials or with wrong ones.
   - 200 with the right ones.
   - 503 in production when unset.
-  - The public domain's `/admin/*` redirects home.
   - `/administrators` is untouched.
   - Unit tests in `src/proxy.test.ts` and `src/lib/admin-auth.test.ts`.
 - **Action for you:** set both variables in Vercel (Production and Preview)
@@ -258,10 +266,11 @@ through **Prisma ORM**.
 2. **Pick the auth library:** Better Auth (it ships a Prisma adapter,
    `better-auth/adapters/prisma`, and a Next.js integration) or Auth.js
    (`@auth/prisma-adapter`). I recommend Better Auth, which the design
-   notes already name. Its roles/admin plugin also covers step 4.
+   notes already name. Its roles/admin plugin also covers step 5.
 3. **Sessions:**
    - server-side sessions in `httpOnly`, `Secure`, `SameSite=Lax` cookies;
-   - separate cookie names for the admin subdomain;
+   - admin sessions kept separate from user sessions (shorter lifetime,
+     `Path=/admin` cookie or a role claim checked on every admin request);
    - no auth state in `localStorage`.
 4. **User auth:**
    - real email/password with hashing (argon2id or bcrypt);
@@ -333,7 +342,7 @@ Admin gate:
 
 ```bash
 ADMIN_BASIC_AUTH_USER=admin ADMIN_BASIC_AUTH_PASSWORD=secret npm start
-# then open http://admin.localhost:3000/admin/dashboard
+# then open http://localhost:3000/admin
 ```
 
 You should get a password prompt. Without the variables, the production

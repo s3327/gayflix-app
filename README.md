@@ -29,8 +29,8 @@ npm run dev
 ```
 
 - Public site: http://localhost:3000 (the landing page; the app itself starts at `/home`)
-- Admin panel: http://admin.localhost:3000/admin/dashboard (browsers resolve
-  `*.localhost` to your machine, so no hosts-file edits are needed)
+- Admin panel: http://localhost:3000/admin (password-protected when the
+  `ADMIN_BASIC_AUTH_*` variables are set; open in development otherwise)
 
 ## Scripts
 
@@ -50,18 +50,17 @@ CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests, build and
 
 | Variable | Purpose |
 |---|---|
-| `ADMIN_BASIC_AUTH_USER`, `ADMIN_BASIC_AUTH_PASSWORD` | Password gate for the admin subdomain. **Required in production**: without them the admin panel answers 503. In development, leaving them unset keeps the panel open. |
+| `ADMIN_BASIC_AUTH_USER`, `ADMIN_BASIC_AUTH_PASSWORD` | Password gate for `/admin`. **Required in production**: without them the admin panel answers 503. In development, leaving them unset keeps the panel open. |
 
-On Vercel, set these under Project → Settings → Environment Variables,
-and add `admin.<your-domain>` as a domain on the same project.
+On Vercel, set these under Project → Settings → Environment Variables
+(for both Production and Preview).
 
 ## Architecture
 
 ```
 src/
-  proxy.ts               → host routing: admin.<domain>/* is rewritten to /admin/*
-                           (after the admin password check); /admin/* on the
-                           public domain redirects to /
+  proxy.ts               → admin password gate on /admin and /admin/* (noindex,
+                           no-store); nothing else runs through it
   app/
     layout.tsx           → fonts, <html>/<body>, AuthProvider
     page.tsx             → landing page (no header)
@@ -93,8 +92,8 @@ docs/                    → design notes (build log) and the audit plan
   They stay in sync across components and tabs. State updaters must be pure,
   so fire toasts and other side effects outside them.
 - **Admin code** that reads or changes data (future API routes and server
-  actions) must call `checkAdminAccess()` itself; the proxy rewrite doesn't
-  cover `/api`.
+  actions) must call `checkAdminAccess()` itself, because the proxy only
+  covers `/admin` paths, not `/api`.
 - **Third-party origins** (CDNs, video embeds) need adding both to
   `images.remotePatterns` and to the CSP in `next.config.mjs`.
 

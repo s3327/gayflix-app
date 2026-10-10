@@ -35,7 +35,7 @@ const securityHeaders = [
   },
   // Browsers ignore this over plain http, so it's safe for local
   // `next start`; on the real (https) domain it pins https for 2 years,
-  // admin subdomain included.
+  // subdomains included.
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
 ];
 

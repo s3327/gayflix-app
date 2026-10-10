@@ -10,9 +10,9 @@ export const metadata: Metadata = {
 };
 
 /**
- * Root layout for everything under /admin (served at admin.domain.com via
- * the proxy's rewrite). Intentionally does NOT import the public
- * <Header/> — the admin panel gets its own chrome (sidebar) in (panel).
+ * Root layout for everything under /admin (domain.com/admin). Intentionally
+ * does NOT import the public <Header/> — the admin panel gets its own
+ * chrome (sidebar) in (panel).
  *
  * The access check here repeats the one in src/proxy.ts on purpose: the
  * proxy is the front door, this is the second lock in case a request

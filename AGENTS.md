@@ -11,6 +11,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 # Project conventions
 
 - **Commits:** don't add `Co-Authored-By` trailers to commit messages.
+- **Admin panel:** lives at `/admin` on the main domain (not a subdomain).
+  `src/proxy.ts` gates it; admin data access must also check access itself.
 - **Database:** Prisma Postgres with Prisma ORM 7.x (decided 2026-10-10).
   The rollout plan is Phase 2 of `docs/AUDIT_REMEDIATION_PLAN.md`.
 - **Before pushing,** run `npm run check` (lint, typecheck, tests, build);

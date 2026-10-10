@@ -1,14 +1,14 @@
 /**
  * Interim protection for the admin panel until real admin accounts exist:
  * HTTP Basic Auth against one shared credential pair from the
- * environment. It is checked in src/proxy.ts for every admin-host request
- * and again in the admin root layout, and any future admin API route or
- * server action must call checkAdminAccess itself too (API routes aren't
- * covered by the proxy's admin rewrite).
+ * environment. It is checked in src/proxy.ts for every /admin request and
+ * again in the admin root layout. Any future admin API route or server
+ * action must call checkAdminAccess itself too: the proxy only covers
+ * /admin paths, not /api.
  *
  * - Both ADMIN_BASIC_AUTH_USER and ADMIN_BASIC_AUTH_PASSWORD set:
  *   a matching `Authorization: Basic …` header is required.
- * - Either unset in development: allowed, so admin.localhost:3000 keeps
+ * - Either unset in development: allowed, so localhost:3000/admin keeps
  *   working with no setup.
  * - Either unset in production: the panel is disabled (fail closed),
  *   never silently public.
