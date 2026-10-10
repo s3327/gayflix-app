@@ -45,9 +45,14 @@ account an admin:
 npm run make-admin -- you@example.com
 ```
 
+The first time that account logs in at `/admin/login`, it sets up
+two-factor sign-in with an authenticator app. After that, every admin
+sign-in needs a code, and lasts 12 hours.
+
 - Public site: http://localhost:3000 (the landing page; the app itself starts at `/home`)
-- Admin panel: http://localhost:3000/admin (password-protected when the
-  `ADMIN_BASIC_AUTH_*` variables are set; open in development otherwise)
+- Admin panel: http://localhost:3000/admin (needs an admin account with
+  two-factor; also behind an extra password when the optional
+  `ADMIN_BASIC_AUTH_*` variables are set)
 
 ## Scripts
 
@@ -77,7 +82,7 @@ on every pull request. Dependabot opens weekly dependency update PRs.
 | `BETTER_AUTH_URL` | The site's public URL. Defaults to `SITE_URL` / Vercel's production domain. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in. Redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`. |
 | `RESEND_API_KEY`, `EMAIL_FROM` | **Required in production.** Sends verification codes and reset links through Resend. In development, emails print to the server console. |
-| `ADMIN_BASIC_AUTH_USER`, `ADMIN_BASIC_AUTH_PASSWORD` | Outer password gate for `/admin` (admin pages also need an admin account). **Required in production**: without them the admin panel answers 503. In development, leaving them unset keeps the gate open. |
+| `ADMIN_BASIC_AUTH_USER`, `ADMIN_BASIC_AUTH_PASSWORD` | Optional extra password in front of `/admin`. Admin pages always need an admin account with two-factor; set both of these for a second lock, or neither. Setting only one disables the panel (503). |
 | `SITE_URL` | Public origin for `sitemap.xml`, `robots.txt` and metadata URLs, read at build time. Optional on Vercel, which defaults to the production domain. |
 
 On Vercel, set these under Project → Settings → Environment Variables
@@ -90,7 +95,7 @@ deploy.
 ```
 src/
   proxy.ts               → per-request CSP nonce on every page, plus the admin
-                           password gate on /admin and /admin/* (noindex, no-store)
+                           optional password gate on /admin and /admin/* (noindex, no-store)
   app/
     layout.tsx           → fonts, <html>/<body>, AuthProvider; renders per
                            request so scripts get the CSP nonce
@@ -102,7 +107,8 @@ src/
                            to /login on the server)
       list/[id]/         → a shared list: anyone with the link can view it
     admin/               → admin panel (noindex; password gate re-checked in layout.tsx)
-      (panel)/           → pages with the sidebar; admin role required
+      (panel)/           → pages with the sidebar; admin role + two-factor required
+      setup-2fa/         → where a new admin turns on two-factor
     api/auth/            → Better Auth (sign-up, sign-in, codes, reset, sessions)
     api/search/          → header search suggestions (catalog stays server-side)
     login/, signup/, verify-email/, forgot-password/, reset-password/

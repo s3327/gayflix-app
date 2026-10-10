@@ -5,14 +5,17 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import FormError from "@/components/FormError";
+import TwoFactorForm from "@/components/TwoFactorForm";
 import { authClient, authErrorMessage } from "@/lib/auth-client";
 
 /**
  * Admin sign-in. Admins use the same accounts as the public site; what
  * makes one an admin is the "admin" role (granted with
- * `npm run make-admin -- <email>`). Every admin page checks the role on
- * the server (requireAdmin in src/lib/session.ts), so this form is only
- * the way in, not the lock.
+ * `npm run make-admin -- <email>`). Every admin page checks on the
+ * server (requireAdmin in src/lib/session.ts) that the role is there and
+ * that this sign-in passed two-factor in the last 12 hours, so this form
+ * is only the way in, not the lock. An admin who hasn't set up
+ * two-factor yet is sent to /admin/setup-2fa after the password step.
  *
  * The form must never fall back to a native GET submit — that would put
  * the password in the URL (history, server logs, Referer headers). So it
@@ -23,6 +26,16 @@ export default function AdminLoginPage() {
   const router = useRouter();
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
+
+  function enter(user: { role?: string | null } | undefined) {
+    if (user?.role !== "admin") {
+      setNeedsTwoFactor(false);
+      setError("This account doesn't have admin access.");
+      return;
+    }
+    router.push("/admin/dashboard");
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -43,11 +56,11 @@ export default function AdminLoginPage() {
       setError(authErrorMessage(error));
       return;
     }
-    if ((data?.user as { role?: string | null } | undefined)?.role !== "admin") {
-      setError("This account doesn't have admin access.");
+    if ("twoFactorRedirect" in data && data.twoFactorRedirect) {
+      setNeedsTwoFactor(true);
       return;
     }
-    router.push("/admin/dashboard");
+    enter("user" in data ? (data.user as { role?: string | null }) : undefined);
   }
 
   return (
@@ -66,65 +79,69 @@ export default function AdminLoginPage() {
             Admin Login
           </h1>
           <p className="mt-1 text-sm text-ink-muted">
-            Sign in to manage Gayflix
+            Sign in to manage Gayflix. Admin sign-ins last 12 hours.
           </p>
         </div>
 
-        <form method="post" onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="email"
-              className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
-            >
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="username"
-              required
-              placeholder="you@gayflix.com"
-              className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
+        {needsTwoFactor ? (
+          <TwoFactorForm onVerified={enter} onStartOver={() => setNeedsTwoFactor(false)} />
+        ) : (
+          <form method="post" onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
+            <div className="flex flex-col gap-1.5">
               <label
-                htmlFor="password"
+                htmlFor="email"
                 className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
               >
-                Password
+                Email
               </label>
-              <Link
-                href="/forgot-password"
-                className="text-xs font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
-              >
-                Forgot password?
-              </Link>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="username"
+                required
+                placeholder="you@gayflix.com"
+                className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+              />
             </div>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              placeholder="••••••••"
-              className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
-            />
-          </div>
 
-          <FormError message={error} />
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="password"
+                  className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
+                >
+                  Password
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                placeholder="••••••••"
+                className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-wait disabled:opacity-70"
-          >
-            {isSubmitting ? "Logging In…" : "Log In"}
-          </button>
-        </form>
+            <FormError message={error} />
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-wait disabled:opacity-70"
+            >
+              {isSubmitting ? "Logging In…" : "Log In"}
+            </button>
+          </form>
+        )}
       </div>
     </main>
   );

@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import { adminAccess } from "@/lib/admin-access";
 import { auth } from "@/lib/auth";
 
 /**
@@ -11,10 +12,6 @@ import { auth } from "@/lib/auth";
 export const getSession = cache(async () =>
   auth.api.getSession({ headers: await headers() })
 );
-
-export function isAdmin(session: Awaited<ReturnType<typeof getSession>>): boolean {
-  return session?.user.role === "admin";
-}
 
 /**
  * For account pages: sends guests to /login, which brings them back to
@@ -27,11 +24,15 @@ export async function requireUser(returnTo: string) {
 }
 
 /**
- * For admin pages, server actions and API routes: only accounts with the
- * "admin" role get through. Everyone else goes to the admin login page.
+ * For admin pages, server actions and API routes: only an admin who
+ * signed in with two-factor in the last 12 hours gets through (see
+ * adminAccess). Admins without two-factor go to set it up; everyone
+ * else goes to the admin login page.
  */
 export async function requireAdmin() {
   const session = await getSession();
-  if (!isAdmin(session)) redirect("/admin/login");
+  const access = adminAccess(session);
+  if (access === "setup-2fa") redirect("/admin/setup-2fa");
+  if (access !== "ok") redirect("/admin/login");
   return session!;
 }

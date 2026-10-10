@@ -17,7 +17,7 @@ function adminDenied(access: "unauthorized" | "disabled") {
     return new NextResponse("Authentication required.", { status: 401, headers });
   }
   return new NextResponse(
-    "The admin panel is disabled: set ADMIN_BASIC_AUTH_USER and ADMIN_BASIC_AUTH_PASSWORD to enable it.",
+    "The admin panel is disabled: set both ADMIN_BASIC_AUTH_USER and ADMIN_BASIC_AUTH_PASSWORD, or neither.",
     { status: 503, headers }
   );
 }
@@ -26,10 +26,11 @@ function adminDenied(access: "unauthorized" | "disabled") {
  * Runs before every page request (see `config.matcher`) and does two
  * things:
  *
- * 1. Guards the admin panel at /admin. Every /admin request needs the
- *    admin password (src/lib/admin-auth.ts) before anything renders; the
- *    admin layout checks again as a second lock. Admin responses are
- *    marked noindex and never cached.
+ * 1. Guards the admin panel at /admin. When the optional admin password
+ *    is configured (src/lib/admin-auth.ts), every /admin request needs it
+ *    before anything renders; the admin layout checks again as a second
+ *    lock. Admin responses are marked noindex and never cached. The
+ *    account checks (role and two-factor) happen in requireAdmin().
  * 2. Sets a per-request nonce-based Content-Security-Policy
  *    (src/lib/csp.ts). Next.js picks the nonce up from the request
  *    header and applies it to its scripts — which is why the root layout

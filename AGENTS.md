@@ -12,9 +12,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - **Commits:** don't add `Co-Authored-By` trailers to commit messages.
 - **Admin panel:** lives at `/admin` on the main domain (not a subdomain).
-  `src/proxy.ts` puts a password gate in front of it, and every admin page,
-  server action and API route must also call `requireAdmin()`
-  (`src/lib/session.ts`), which checks the account's "admin" role.
+  Every admin page, server action and API route must call `requireAdmin()`
+  (`src/lib/session.ts`): it checks the "admin" role and that the session
+  passed two-factor in the last 12 hours (`src/lib/admin-access.ts`).
+  `src/proxy.ts` can also put an optional password gate in front.
 - **Database:** Prisma Postgres with Prisma ORM 7.x (decided 2026-10-10),
   through `@prisma/adapter-pg`. Pin Prisma versions exactly (npm's `latest`
   tag has pointed at pre-releases). Prisma 7 doesn't generate the client on

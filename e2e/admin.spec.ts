@@ -1,8 +1,33 @@
-import { test as base, expect } from "@playwright/test";
-import { accounts, ADMIN_STATE, USER_STATE } from "./accounts";
+import AxeBuilder from "@axe-core/playwright";
+import { test as base, expect, type APIRequestContext, type Browser } from "@playwright/test";
+import {
+  accounts,
+  adminPasswordStep,
+  ADMIN_STATE,
+  ageSessions,
+  createVerifiedAccount,
+  grantAdmin,
+  newAccount,
+  setUpTwoFactor,
+  totp,
+  unverifySessions,
+  USER_STATE,
+} from "./accounts";
 import { ADMIN_CREDENTIALS } from "./fixtures";
 
 const test = base;
+
+/** A fresh admin account, signed in and through two-factor setup, in its own browser. */
+async function newAdmin(browser: Browser, request: APIRequestContext) {
+  const admin = newAccount("admin2fa");
+  await createVerifiedAccount(request, admin);
+  await grantAdmin(admin.email);
+  const context = await browser.newContext({ httpCredentials: ADMIN_CREDENTIALS });
+  const page = await context.newPage();
+  await adminPasswordStep(page, admin);
+  await setUpTwoFactor(page, admin);
+  return { admin, page };
+}
 
 test("the admin panel asks for the admin password", async ({ request }) => {
   const response = await request.get("/admin/dashboard");
@@ -62,5 +87,85 @@ test.describe("with the admin password", () => {
       await page.goto("/admin");
       await expect(page).toHaveURL(/\/admin\/dashboard$/);
     });
+
+    test("can use the admin API", async ({ page }) => {
+      const response = await page.request.get("/api/auth/admin/list-users");
+      expect(response.status()).toBe(200);
+    });
+  });
+
+  test("a new admin sets up two-factor before seeing the panel", async ({ browser, request }) => {
+    const admin = newAccount("admin-setup");
+    await createVerifiedAccount(request, admin);
+    await grantAdmin(admin.email);
+    const page = await (await browser.newContext({ httpCredentials: ADMIN_CREDENTIALS })).newPage();
+    await adminPasswordStep(page, admin);
+    await expect(page).toHaveURL(/\/admin\/setup-2fa$/);
+    await page.goto("/admin/library/movies");
+    await expect(page).toHaveURL(/\/admin\/setup-2fa$/);
+    const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(axe.violations.filter((v) => v.impact === "serious" || v.impact === "critical")).toEqual([]);
+
+    await page.getByLabel("Confirm your password").fill("not-the-password");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.locator("main").getByRole("alert")).toHaveText("That password isn't right.");
+    await expect(page.getByRole("list", { name: "Backup codes" })).toBeHidden();
+    await setUpTwoFactor(page, admin);
+  });
+
+  test("admins sign in with an authenticator code or a backup code", async ({ browser, request }) => {
+    const { admin } = await newAdmin(browser, request);
+    const page = await (await browser.newContext({ httpCredentials: ADMIN_CREDENTIALS })).newPage();
+
+    await adminPasswordStep(page, admin);
+    await page.getByLabel("Digit 1 of 6").fill(totp(admin.totpSecret!) === "000000" ? "111111" : "000000");
+    await expect(page.locator("main").getByRole("alert")).toHaveText(
+      "That code isn't right. Check your authenticator app and try again."
+    );
+    await page.getByLabel("Digit 1 of 6").fill(totp(admin.totpSecret!));
+    await expect(page).toHaveURL(/\/admin\/dashboard$/);
+
+    // The same password-then-code step is on the public login page, and
+    // each backup code works once.
+    const [backupCode] = admin.backupCodes!;
+    for (const attempt of ["first use", "second use"]) {
+      await page.context().clearCookies();
+      await page.goto("/login");
+      await page.getByLabel("Email").fill(admin.email);
+      await page.getByLabel("Password").fill(admin.password);
+      await page.getByRole("button", { name: "Log In" }).click();
+      await page.getByRole("button", { name: "Use a backup code instead" }).click();
+      await page.getByLabel("Backup code").fill(backupCode);
+      await page.getByRole("button", { name: "Verify" }).click();
+      if (attempt === "first use") {
+        await expect(page).toHaveURL(/\/account$/);
+      } else {
+        await expect(page.locator("main").getByRole("alert")).toHaveText(
+          "That backup code isn't right, or it has already been used."
+        );
+      }
+    }
+  });
+
+  test("admin sign-ins last 12 hours", async ({ browser, request }) => {
+    const { admin, page } = await newAdmin(browser, request);
+    await ageSessions(admin.email, 13);
+    await page.goto("/admin/dashboard");
+    await expect(page).toHaveURL(/\/admin\/login$/);
+    // Still signed in on the public site.
+    await page.goto("/account");
+    await expect(page).toHaveURL(/\/account$/);
+  });
+
+  test("a session that skipped two-factor can't use the panel or the admin API", async ({
+    browser,
+    request,
+  }) => {
+    const { admin, page } = await newAdmin(browser, request);
+    await unverifySessions(admin.email);
+    await page.goto("/admin/dashboard");
+    await expect(page).toHaveURL(/\/admin\/login$/);
+    const response = await page.request.get("/api/auth/admin/list-users");
+    expect(response.status()).toBe(403);
   });
 });

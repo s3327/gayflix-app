@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
-import { getSession, isAdmin } from "@/lib/session";
+import { requireAdmin } from "@/lib/session";
 
 export default async function AdminRootPage() {
-  redirect(isAdmin(await getSession()) ? "/admin/dashboard" : "/admin/login");
+  await requireAdmin();
+  redirect("/admin/dashboard");
 }

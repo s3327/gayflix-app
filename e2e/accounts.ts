@@ -1,9 +1,17 @@
+import { createHmac } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import type { APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import pg from "pg";
 import { BASE_URL, OUTBOX_FILE } from "../playwright.config";
 
-export type Account = { name: string; email: string; password: string };
+export type Account = {
+  name: string;
+  email: string;
+  password: string;
+  /** Base32 authenticator key, once two-factor is set up. */
+  totpSecret?: string;
+  backupCodes?: string[];
+};
 
 const ACCOUNTS_FILE = ".playwright/accounts.json";
 export const USER_STATE = ".playwright/user.json";
@@ -62,13 +70,75 @@ export async function createVerifiedAccount(request: APIRequestContext, account:
   if (!verify.ok()) throw new Error(`verify failed: ${verify.status()} ${await verify.text()}`);
 }
 
-/** Same as `npm run make-admin -- <email>`. */
-export async function grantAdmin(email: string) {
+async function sql(query: string, params: unknown[]) {
   const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   try {
-    await client.query(`UPDATE "user" SET role = 'admin' WHERE email = $1`, [email]);
+    await client.query(query, params);
   } finally {
     await client.end();
   }
+}
+
+/** Same as `npm run make-admin -- <email>`. */
+export async function grantAdmin(email: string) {
+  await sql(`UPDATE "user" SET role = 'admin' WHERE email = $1`, [email]);
+}
+
+/** Makes every session of this account look `hours` old. */
+export async function ageSessions(email: string, hours: number) {
+  await sql(
+    `UPDATE "session" SET "createdAt" = now() - make_interval(hours => $2)
+     WHERE "userId" = (SELECT id FROM "user" WHERE email = $1)`,
+    [email, hours]
+  );
+}
+
+/** Marks every session of this account as not having passed two-factor. */
+export async function unverifySessions(email: string) {
+  await sql(
+    `UPDATE "session" SET "twoFactorVerified" = false
+     WHERE "userId" = (SELECT id FROM "user" WHERE email = $1)`,
+    [email]
+  );
+}
+
+/** The current 6-digit code for a base32 key, as an authenticator app shows it (RFC 6238). */
+export function totp(base32Secret: string, now = Date.now()): string {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const bits = [...base32Secret.toUpperCase()]
+    .map((char) => alphabet.indexOf(char).toString(2).padStart(5, "0"))
+    .join("");
+  const key = Buffer.from((bits.match(/.{8}/g) ?? []).map((byte) => parseInt(byte, 2)));
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(now / 30_000)));
+  const hmac = createHmac("sha1", key).update(counter).digest();
+  const offset = hmac[hmac.length - 1] & 0xf;
+  return String((hmac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, "0");
+}
+
+/**
+ * Logs in at /admin/login with email and password only. Admins with
+ * two-factor get the code step next; admins without it get sent to set
+ * it up.
+ */
+export async function adminPasswordStep(page: Page, account: Account) {
+  await page.goto("/admin/login");
+  await page.getByLabel("Email").fill(account.email);
+  await page.getByLabel("Password").fill(account.password);
+  await page.getByRole("button", { name: "Log In" }).click();
+}
+
+/** Completes /admin/setup-2fa and records the authenticator key and backup codes on `account`. */
+export async function setUpTwoFactor(page: Page, account: Account) {
+  await expect(page).toHaveURL(/\/admin\/setup-2fa$/);
+  await page.getByLabel("Confirm your password").fill(account.password);
+  await page.getByRole("button", { name: "Continue" }).click();
+  account.totpSecret = (await page.locator("main code").innerText()).replace(/\s/g, "");
+  account.backupCodes = await page
+    .getByRole("list", { name: "Backup codes" })
+    .getByRole("listitem")
+    .allInnerTexts();
+  await page.getByLabel("Digit 1 of 6").fill(totp(account.totpSecret));
+  await expect(page).toHaveURL(/\/admin\/dashboard$/);
 }

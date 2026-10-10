@@ -1,6 +1,6 @@
 "use client";
 
-import { adminClient, emailOTPClient } from "better-auth/client/plugins";
+import { adminClient, emailOTPClient, twoFactorClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
 /**
@@ -8,7 +8,9 @@ import { createAuthClient } from "better-auth/react";
  * /api/auth on the same origin, so no base URL is needed.
  */
 export const authClient = createAuthClient({
-  plugins: [emailOTPClient(), adminClient()],
+  // Sign-in forms handle the two-factor step themselves (TwoFactorForm),
+  // so the client doesn't redirect anywhere on its own.
+  plugins: [emailOTPClient(), adminClient(), twoFactorClient({ onTwoFactorRedirect: () => {} })],
 });
 
 const MESSAGES: Record<string, string> = {
@@ -22,6 +24,11 @@ const MESSAGES: Record<string, string> = {
   INVALID_EMAIL: "Enter a valid email address.",
   INVALID_PASSWORD: "That password isn't right.",
   CREDENTIAL_ACCOUNT_NOT_FOUND: "This account signs in with Google, so it has no password to change.",
+  INVALID_CODE: "That code isn't right. Check your authenticator app and try again.",
+  INVALID_BACKUP_CODE: "That backup code isn't right, or it has already been used.",
+  TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE: "Too many wrong codes. Log in again to get a new try.",
+  ACCOUNT_TEMPORARILY_LOCKED: "Too many wrong codes. Two-factor sign-in is locked for 15 minutes.",
+  INVALID_TWO_FACTOR_COOKIE: "This sign-in has expired. Log in again.",
 };
 
 type AuthError = { code?: string; message?: string; status?: number };

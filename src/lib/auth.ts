@@ -1,8 +1,10 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
-import { admin, emailOTP } from "better-auth/plugins";
+import { admin, emailOTP, twoFactor } from "better-auth/plugins";
 import { after } from "next/server";
+import { adminAccess } from "@/lib/admin-access";
 import { db } from "@/lib/db";
 import { sendEmail, type Email } from "@/lib/email";
 import { siteUrl } from "@/lib/site-url";
@@ -25,10 +27,18 @@ function deliver(email: Email) {
 
 const OTP_SUBJECTS = {
   "email-verification": "Your Gayflix verification code",
-  "sign-in": "Your Gayflix sign-in code",
+  "sign-in": "Your Gayflix sign-in code", // unused: code sign-in is disabled
   "forget-password": "Your Gayflix password reset code",
   "change-email": "Confirm your new Gayflix email",
 } as const;
+
+// The only endpoints that create a session after checking a second
+// factor. Sessions made anywhere else (password alone, Google, email
+// verification, impersonation) are not "two-factor verified".
+const TWO_FACTOR_VERIFY_PATHS = new Set([
+  "/two-factor/verify-totp",
+  "/two-factor/verify-backup-code",
+]);
 
 // Google sign-in is offered once both credentials are set.
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
@@ -47,6 +57,10 @@ const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
  *   production, SameSite=Lax).
  * - Roles come from the admin plugin: "user" by default, "admin" for
  *   the admin panel (see requireAdmin in src/lib/session.ts).
+ * - Two-factor sign-in with an authenticator app (plus backup codes).
+ *   Admins must turn it on, and the admin panel only accepts a session
+ *   that passed it in the last 12 hours (src/lib/admin-access.ts). Each
+ *   session records whether it did (`twoFactorVerified`).
  * - Rate limits are stored in the database so they hold across
  *   serverless instances.
  */
@@ -78,7 +92,39 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 30, // 30 days
     updateAge: 60 * 60 * 24, // refresh the expiry at most once a day
+    additionalFields: {
+      twoFactorVerified: { type: "boolean", required: false, defaultValue: false, input: false },
+    },
   },
+  databaseHooks: {
+    session: {
+      create: {
+        before: async (session, ctx) => ({
+          data: { ...session, twoFactorVerified: TWO_FACTOR_VERIFY_PATHS.has(ctx?.path ?? "") },
+        }),
+      },
+    },
+  },
+  hooks: {
+    // The admin plugin's own endpoints (/api/auth/admin/*: list users,
+    // set roles, impersonate, ...) get the same check as the admin panel.
+    before: createAuthMiddleware(async (ctx) => {
+      // Stopping impersonation runs as the impersonated user, so it's exempt.
+      if (!ctx.path.startsWith("/admin/") || ctx.path === "/admin/stop-impersonating") return;
+      const session = await getSessionFromCtx(ctx);
+      if (adminAccess(session) !== "ok") {
+        throw new APIError("FORBIDDEN", { message: "Admin access needs a two-factor sign-in." });
+      }
+    }),
+  },
+  // Sign-in and password reset by emailed code: the UI doesn't use them,
+  // and code sign-in would skip two-factor.
+  disabledPaths: [
+    "/sign-in/email-otp",
+    "/email-otp/request-password-reset",
+    "/forget-password/email-otp",
+    "/email-otp/reset-password",
+  ],
   rateLimit: {
     // On in production by default. AUTH_RATE_LIMIT=off exists only for
     // the e2e suite, which signs in many times from one address.
@@ -105,6 +151,7 @@ export const auth = betterAuth({
       },
     }),
     admin({ defaultRole: "user", adminRoles: ["admin"] }),
+    twoFactor({ issuer: "Gayflix" }),
     // Must stay last: lets server actions set auth cookies.
     nextCookies(),
   ],
