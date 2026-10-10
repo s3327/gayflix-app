@@ -85,10 +85,28 @@ on every pull request. Dependabot opens weekly dependency update PRs.
 | `ADMIN_BASIC_AUTH_USER`, `ADMIN_BASIC_AUTH_PASSWORD` | Optional extra password in front of `/admin`. Admin pages always need an admin account with two-factor; set both of these for a second lock, or neither. Setting only one disables the panel (503). |
 | `SITE_URL` | Public origin for `sitemap.xml`, `robots.txt` and metadata URLs, read at build time. Optional on Vercel, which defaults to the production domain. |
 
-On Vercel, set these under Project → Settings → Environment Variables
-(for both Production and Preview), and set the build command to
-`npm run db:deploy && npm run build` so migrations run before each
-deploy.
+## Deploying to Vercel
+
+1. Import the repository at [vercel.com/new](https://vercel.com/new).
+2. In the project's **Storage** tab, add a Prisma Postgres database. That
+   sets `DATABASE_URL` for you. (Or create one at console.prisma.io and
+   add its direct `postgres://` connection string yourself.)
+3. Under **Settings → Environment Variables**, add `BETTER_AUTH_SECRET`
+   and `RESEND_API_KEY`, plus `EMAIL_FROM` with an address on a domain
+   you've verified in Resend. Without `EMAIL_FROM`, emails come from
+   Resend's test address, which only delivers to your own Resend account's
+   email. Add any of the optional variables above too.
+4. Deploy. `vercel.json` runs `scripts/vercel-build.sh`, which stops a
+   production build if `DATABASE_URL`, `BETTER_AUTH_SECRET` or
+   `RESEND_API_KEY` is missing, then applies pending migrations before
+   building. Preview deploys skip both steps, since they usually share the
+   production database, so a pull request that changes the schema only
+   works on its preview once it's merged.
+5. Sign up on the live site, then make that account an admin: run
+   `npm run make-admin -- you@example.com` with `DATABASE_URL` set to the
+   production connection string, or set its `role` to `admin` in the
+   `user` table with Prisma Console's Studio.
+6. Log in at `/admin/login` and set up two-factor.
 
 ## Architecture
 
@@ -127,6 +145,8 @@ src/
   generated/prisma/      → Prisma client (generated on npm install; not committed)
 prisma/                  → schema.prisma and migrations
 scripts/make-admin.mjs   → grant or revoke the admin role
+scripts/vercel-build.sh  → Vercel's build command: migrations, then the build
+vercel.json              → points Vercel at that build command
 e2e/                     → Playwright end-to-end and axe accessibility tests
 next.config.mjs          → image hosts and security headers (HSTS, framing, ...)
 docs/                    → design notes (build log) and the audit plan
