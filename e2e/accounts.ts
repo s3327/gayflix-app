@@ -70,12 +70,12 @@ export async function createVerifiedAccount(request: APIRequestContext, account:
   if (!verify.ok()) throw new Error(`verify failed: ${verify.status()} ${await verify.text()}`);
 }
 
-/** Runs one statement against the test database. */
-export async function sql(query: string, params: unknown[]) {
+/** Runs one statement against the test database; returns the rows it selects. */
+export async function sql<Row = Record<string, unknown>>(query: string, params: unknown[]) {
   const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   try {
-    await client.query(query, params);
+    return (await client.query(query, params)).rows as Row[];
   } finally {
     await client.end();
   }

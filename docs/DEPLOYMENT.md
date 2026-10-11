@@ -169,6 +169,7 @@ turned off and says so.
 | `SITE_URL` | Part 7 | | |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Part 8 (optional) | | |
 | `ADMIN_BASIC_AUTH_USER`, `ADMIN_BASIC_AUTH_PASSWORD` | Optional, both or neither | | |
+| `IMAGE_HOSTS` | Optional, for posters on your own image host (see [Managing titles](#managing-titles)) | | |
 
 `BETTER_AUTH_URL` isn't needed. It follows `SITE_URL`, or Vercel's
 production address when `SITE_URL` isn't set.
@@ -429,29 +430,44 @@ back past a change that altered the database, ask in the project thread.
 The movies and shows are rows in the database: one per title in the
 `media` table, and each series' episodes in the `episode` table. They
 start as the sample catalog (see
-[Before a public launch](#before-a-public-launch)). The admin panel's
-**Movies** and **Series** pages list them, drafts included, but can't
-change them yet. Until they can, change them in Studio or a SQL editor,
-as in 6.2. Changes show on the site right away.
+[Before a public launch](#before-a-public-launch)). Manage them in the
+admin panel; changes show on the site right away.
 
-- **Hide a title:** set its `status` to `draft`. Its page, its episodes
-  and its place in listings, search and the sitemap disappear. Set it
-  back to `published` to show it again.
-- **Change the home page's main title:** set `featured` to `true` on the
-  new one and to `false` on the old one. With none featured, the home
-  page shows the newest title.
-- **Delete a title:** delete its row in `media`, and its episodes go with
-  it. This can't be undone, so hide titles you might want back. People
-  who saved a deleted title still see it in their favorites, lists and
-  history, but its page is gone.
-- **Add a title:** easiest once the admin panel can do it (it's in the
-  remediation plan). By hand, every column has to be filled in, and
-  `posterUrl` must be an `https` address on an image host listed in
-  `next.config.mjs`. A poster on any other host shows as a broken image,
-  so ask in the project thread to add your image host first.
+- **Add a title:** **Upload → Movies** or **Upload → Series** (or **Add a
+  movie** on **Library → Movies**). A new title is a draft, seen only in
+  the admin panel, until you set its status to **Published**. Its address
+  (such as `/movie/wildflower`) is made from its title and doesn't change
+  later, even if the title does.
+- **Add episodes:** **Add an episode** on the series' page, or **Upload →
+  Episodes**. After each one, the form stays open for the next. A series'
+  card shows how many seasons it has episodes in.
+- **Edit a title or an episode:** click it in **Library → Movies**,
+  **Series** or **Episodes**.
+- **Hide or show titles:** the eye button on a title's row, or tick
+  several rows and use **Publish** or **Unpublish** above the list. A
+  hidden title's page, its episodes and its place in listings, search and
+  the sitemap disappear until it's published again.
+- **Change the home page's main title:** tick **Feature on the home page**
+  on the new one and save. The title featured before stops being
+  featured. With none featured, the home page shows the newest title.
+- **Remove a title:** **Move to trash**, on its row or its page. It's off
+  the site at once. In **Trash**, **Restore** brings it back as a draft,
+  and **Delete for good** deletes it with its episodes, which can't be
+  undone. People who saved a deleted title still see it in their
+  favorites, lists and history, but its page is gone.
+- **Delete an episode:** on the episode's page. It's deleted for good:
+  episodes don't go to the trash.
 
-For example, to hide every sample title at once in a SQL editor (set
-them back to `'published'` to undo it):
+**Posters and backdrops** are links to images, not uploads. A link must
+start with `https://` and point to an allowed image host. At first that's
+only the sample catalog's `picsum.photos`. To use your own, add
+`IMAGE_HOSTS` in Vercel (**Settings → Environment Variables**,
+Production) with the host names, separated by commas, such as
+`images.example.com,cdn.example.org`, then redeploy: the site reads the
+list when it's built.
+
+To hide every title at once, a SQL editor (as in 6.2) is quicker than the
+list's 50 rows a page. Set them back to `'published'` to undo it:
 
 ```sql
 UPDATE "media" SET "status" = 'draft';
@@ -535,7 +551,8 @@ Only change the production `BETTER_AUTH_SECRET` if it leaked. Afterwards:
 | Sign-in fails on one address but works on another | Only the `SITE_URL` address can sign in (`.vercel.app` and `www` count as other addresses) | Use the main address, redirect the others in **Settings → Domains**, check `SITE_URL` |
 | `/admin/login` says "This account doesn't have admin access." | The account's `role` isn't exactly `admin` | Part 6.2 |
 | Pages with titles show an error page on a preview address | Previews have no database | Expected; see [How deploys work](#how-deploys-work) |
-| A title's poster is a broken image | Its `posterUrl` isn't on an image host listed in `next.config.mjs` | Ask in the project thread to add the host |
+| The title form says "Images can only come from …" | The image's host isn't allowed | Add it to `IMAGE_HOSTS` and redeploy (see [Managing titles](#managing-titles)) |
+| A title's poster is a broken image | The image was moved or deleted on its host, or its host was taken out of `IMAGE_HOSTS` | Edit the title and use a working link on an allowed host |
 | `/admin/login` says "Confirm this account's email first" | The email was never confirmed | Log in on the main site to get a code |
 | The app's codes are always wrong | The phone's clock is off | Turn on automatic date and time on the phone |
 | "Two-factor sign-in is locked for 15 minutes." | 10 wrong codes in a row | Wait 15 minutes |
@@ -552,15 +569,14 @@ what the screen or the build log says. Never paste a secret.
 - **Legal pages.** `/terms` and `/privacy` hold placeholder text. Have
   them written or reviewed by a lawyer, and add a cookie policy if you add
   analytics or ads.
-- **Catalog.** The movies and shows are in the database but start as a
-  sample catalog with placeholder posters. Replace them with your own
-  titles (see [Managing titles](#managing-titles)). Two parts still show
+- **Catalog.** The movies and shows start as a sample catalog with
+  placeholder posters. Replace them with your own titles in the admin
+  panel (see [Managing titles](#managing-titles)). Two parts still show
   sample data: Trending keeps the sample ranking, because views aren't
   counted yet, and Continue Watching on `/home` shows sample titles to
   everyone. Both are in the remediation plan.
-- **Admin panel.** Reports is live, and Movies and Series list the
-  catalog. Adding and editing titles there is in the remediation plan;
-  the other admin pages are placeholders.
+- **Admin panel.** Library, Upload, Trash and Reports work. Dashboard,
+  Import, Users and Setting are still placeholders.
 - **Error reporting.** Apart from Vercel's logs, nothing tells you about
   server errors yet. Error reporting such as Sentry is in the remediation
   plan (Phase 3).

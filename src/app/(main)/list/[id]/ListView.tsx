@@ -58,7 +58,7 @@ export default function ListView({
                     {item.title}
                   </p>
                   <p className="mt-0.5 truncate text-xs text-ink-secondary">
-                    {item.year} · {item.duration}
+                    {[item.year, item.duration].filter(Boolean).join(" · ")}
                   </p>
                 </Link>
 

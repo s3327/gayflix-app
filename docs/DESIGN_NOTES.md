@@ -5,8 +5,10 @@
 > states that were later superseded: for example, Next.js 14 is now 16,
 > `middleware.ts` is now `src/proxy.ts`, the admin panel moved from the
 > `admin.` subdomain to `/admin`, the catalog's `mock-*.ts` files are now
-> the database (read through `src/lib/catalog.ts`), and the footer,
-> poster cards and Watch Now all link to real pages now. For setup and
+> the database (read through `src/lib/catalog.ts`), the footer, poster
+> cards and Watch Now all link to real pages now, and the library's
+> buttons and the Upload and Trash pages work (the admin title editor,
+> `src/lib/admin-catalog-actions.ts`). For setup and
 > current architecture, see the [README](../README.md). For the security
 > audit and its fixes, see
 > [AUDIT_REMEDIATION_PLAN.md](AUDIT_REMEDIATION_PLAN.md).

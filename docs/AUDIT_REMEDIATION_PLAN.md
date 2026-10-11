@@ -120,8 +120,8 @@ on an `admin.` subdomain.
 
 **Verified in a browser:** the URL stays clean after submit.
 
-### H3. User login 🟡 (UX guard shipped)
-- **Shipped:**
+### H3. User login ✅ (real sessions, Phase 2)
+- **Shipped first, as a UX guard:**
   - `/account/*` now sends guests to `/login?next=…` (`RequireLogin.tsx`),
     and login returns them to that page.
   - `?next=` is validated by `safeNextPath()`, so the login page can't be
@@ -129,9 +129,11 @@ on an `admin.` subdomain.
     tab tricks and absolute URLs).
   - Stored state now syncs across tabs, so logging out in one tab logs out
     the others.
-- **Still true:** the login flag lives in `localStorage` and any password
-  works. This is a UX layer only.
-- **Permanent fix:** Phase 2.
+- **Then fixed for good in Phase 2:** the `localStorage` login flag is
+  gone. Accounts and sessions are real (Better Auth on the database), so
+  only the right password signs in, and account pages check the session
+  on the server. See
+  [Shipped: accounts, sessions and admin roles](#shipped-accounts-sessions-and-admin-roles-).
 
 ### M1. Episode history links ✅
 - History entries recorded on `/episode/[id]` now carry `kind: "episode"`.
@@ -440,12 +442,51 @@ Migrations: `prisma/migrations/*_catalog` (the tables) and
     the migrations apply to an empty database;
   - unit tests for query clean-up, LIKE escaping and the page math.
 
+### Shipped: the admin title editor ✅
+Migration: `prisma/migrations/*_media_trash` (a `trashedAt` column).
+- **Titles:** Upload → Movies and Upload → Series add a title, as a draft
+  unless its status is set to Published; clicking a title in the library
+  opens its edit page, with every field the title pages show. A title's
+  address is made from its title when it's added (unique among titles
+  and episodes) and never changes, so links and saved favorites keep
+  working.
+- **The library's buttons work:** edit, publish or unpublish, and move to
+  trash on each row, and Publish, Unpublish and Move to trash for the
+  ticked rows.
+- **Trash** (`/admin/trash`): moving a title to the trash also makes it a
+  draft and stops it being featured, so the public site drops it without
+  any change to its reads. Restore brings it back as a draft; Delete for
+  good is only offered there, and takes the title's episodes with it.
+- **Episodes:** added from a series' page or Upload → Episodes (the form
+  stays open for the next one), listed in Library → Episodes by series,
+  and edited or deleted (after a confirmation) on their own page. A
+  series' card shows the seasons it has episodes in, recalculated
+  whenever its episodes change; a movie's comes from its runtime.
+- **One featured title:** featuring a title unfeatures the previous one.
+- **Server-side checks:** every change goes through the server functions
+  in `src/lib/admin-catalog-actions.ts`. Each calls `requireAdmin()`
+  itself and checks every field (`src/lib/title-form.ts`) and every id
+  the page bound to it. A form with problems comes back with the fields
+  marked and what was typed kept, and focus on the first field to fix.
+- **Images are links, not uploads.** They must be `https` and on an
+  allowed host: the sample catalog's `picsum.photos`, plus any listed in
+  the `IMAGE_HOSTS` setting (`src/lib/image-hosts.mjs`). The same list
+  feeds `next/image`, so a saved image always displays.
+- **Verified:**
+  - new e2e tests: add a movie as a draft (a 404 on the site), publish it
+    and rename it, the row buttons, trash, restore and delete for good;
+    an image on a host that isn't allowed is refused with the typed
+    values kept; a series with episodes, the next-episode form, a
+    duplicate episode number, moving an episode to another season and
+    deleting one; bulk publish and trash on the ticked rows only; the
+    wrong-type redirect and the not-found page;
+  - axe checks on the new admin pages;
+  - unit tests for the field checks, durations, addresses and image
+    hosts.
+
 ### Still to do
-- **Editing the catalog in the admin panel:** adding and editing titles
-  and episodes, and the library's edit, publish and trash buttons (still
-  UI only). Poster URLs entered there must be on an image host listed in
-  `next.config.mjs`: any other host shows a broken image (and an error
-  page in development).
+- **Image uploads:** posters and backdrops are links for now. Uploading
+  files needs a storage service such as Vercel Blob.
 - **Trending** ranks titles by `viewCount`, which nothing increments yet,
   so it keeps the sample numbers.
 - **Continue Watching** on the home page is still sample data, shown to
