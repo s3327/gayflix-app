@@ -133,7 +133,7 @@ test.describe("on a phone", () => {
   test.describe("signed in", () => {
     test.use({ storageState: USER_STATE });
 
-    test("the account links scroll into view", async ({ page }) => {
+    test("the account links show their whole focus ring", async ({ page }) => {
       await page.goto("/account");
       const links = page.getByRole("navigation", { name: "Account" }).last().getByRole("link");
       for (const name of ["Account", "Favorite", "History", "Setting"]) {

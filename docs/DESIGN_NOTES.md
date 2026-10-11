@@ -12,8 +12,8 @@
 > use real views and watch history (no progress bars yet), and the
 > swipeable rows' arrows are for mouse users only, since Tab moves through
 > the cards (see the accessibility pass in the audit plan). The `/`
-> landing placeholder now redirects to `/home` (the logo links there),
-> and the `/user` placeholder is gone. For setup and
+> landing placeholder is now a real landing page, and the `/user`
+> placeholder is gone. For setup and
 > current architecture, see the [README](../README.md). For the security
 > audit and its fixes, see
 > [AUDIT_REMEDIATION_PLAN.md](AUDIT_REMEDIATION_PLAN.md).

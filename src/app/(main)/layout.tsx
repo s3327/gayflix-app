@@ -10,9 +10,8 @@ import { ToastProvider } from "@/lib/toast-context";
 
 /**
  * Shared layout for the browsing experience — /home, /search, /browse,
- * the title pages and the account pages. "/" lives outside this group:
- * it redirects to /home for now, and a marketing landing page there
- * would likely want its own (simpler, or fully custom) header.
+ * the title pages and the account pages. The landing page at "/" lives
+ * outside this group, with its own simpler header (src/app/page.tsx).
  *
  * Favorites/Lists/History/Toast providers live here (not higher up) so
  * this stuff only works within the signed-in app — same scope as

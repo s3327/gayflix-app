@@ -21,7 +21,9 @@ export default function Footer() {
   return (
     <footer className="border-t border-border-subtle bg-bg-surface">
       <div className="mx-auto max-w-[1440px] px-4 py-12 sm:px-8">
-        <div className="flex flex-col gap-10 sm:flex-row sm:justify-between">
+        {/* Brand above the link columns until lg; side by side there'd
+            be too little room on tablets, and the columns would wrap. */}
+        <div className="flex flex-col gap-10 lg:flex-row lg:justify-between">
           {/* Brand */}
           <div className="max-w-xs">
             <Image

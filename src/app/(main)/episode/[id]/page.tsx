@@ -72,7 +72,8 @@ export default async function EpisodePage({
       {/* Previous / Next episode — label on top so it's clear at a
           glance this is navigation, not just a title link; season/
           episode number included since "Next" alone doesn't say which
-          one. */}
+          one. At the first or last episode, the missing one shrinks to
+          its label so the other has room for its title on phones. */}
       <div className="mt-4 flex items-stretch justify-between gap-3">
         {previous ? (
           <Link
@@ -92,7 +93,7 @@ export default async function EpisodePage({
         ) : (
           <span
             aria-disabled="true"
-            className="flex flex-1 shrink-0 items-center gap-2 rounded-card border border-border-subtle px-4 py-2.5 text-sm font-semibold text-ink-disabled sm:flex-none"
+            className="flex shrink-0 items-center gap-2 rounded-card border border-border-subtle px-4 py-2.5 text-sm font-semibold text-ink-disabled"
           >
             <ChevronLeft className="h-4 w-4" />
             Previous
@@ -117,7 +118,7 @@ export default async function EpisodePage({
         ) : (
           <span
             aria-disabled="true"
-            className="flex flex-1 shrink-0 items-center justify-end gap-2 rounded-card border border-border-subtle px-4 py-2.5 text-sm font-semibold text-ink-disabled sm:flex-none"
+            className="flex shrink-0 items-center justify-end gap-2 rounded-card border border-border-subtle px-4 py-2.5 text-sm font-semibold text-ink-disabled"
           >
             Next
             <ChevronRight className="h-4 w-4" />

@@ -3,6 +3,7 @@ import { ADMIN_STATE, USER_STATE } from "./accounts";
 import { ADMIN_CREDENTIALS, seriousViolations } from "./fixtures";
 
 const PUBLIC_PAGES = [
+  "/",
   "/home",
   "/trending",
   "/genre",

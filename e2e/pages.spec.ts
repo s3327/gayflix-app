@@ -1,3 +1,4 @@
+import { USER_STATE } from "./accounts";
 import { test, expect } from "./fixtures";
 
 const PAGES = [
@@ -37,10 +38,29 @@ for (const path of PAGES) {
   });
 }
 
-test("the bare domain and the logo open the home page", async ({ page }) => {
+test("the landing page leads into the site, and the logo leads back to it", async ({ page }) => {
   await page.goto("/");
-  await expect(page).toHaveURL(/\/home$/);
-  await expect(page.getByRole("link", { name: "Gayflix home" })).toHaveAttribute("href", "/home");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Love. Stories. Ours.");
+  await expect(page.getByRole("link", { name: "Start Browsing" }).first()).toHaveAttribute(
+    "href",
+    "/home"
+  );
+  await expect(page.getByRole("link", { name: "Sign Up" })).toHaveAttribute("href", "/signup");
+  await page.getByRole("link", { name: "Drama", exact: true }).click();
+  await expect(page).toHaveURL(/\/genre\?genre=Drama$/);
+  await expect(page.getByRole("link", { name: "Gayflix home" })).toHaveAttribute("href", "/");
+});
+
+test.describe("signed in", () => {
+  test.use({ storageState: USER_STATE });
+
+  test("the landing page sends members home instead of to sign up", async ({ page }) => {
+    await page.goto("/");
+    await expect(
+      page.getByRole("navigation", { name: "Account" }).getByRole("link", { name: "Go to Home" })
+    ).toHaveAttribute("href", "/home");
+    await expect(page.getByRole("link", { name: "Sign Up" })).toHaveCount(0);
+  });
 });
 
 test("pages name themselves in the tab, and title pages carry a link preview", async ({

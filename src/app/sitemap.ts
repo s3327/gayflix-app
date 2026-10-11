@@ -4,9 +4,9 @@ import { siteUrl } from "@/lib/site-url";
 import { titleHref } from "@/lib/title-href";
 
 // Public browse pages. Account, auth, list, search and admin pages are
-// left out on purpose; robots.ts disallows most of them. So is "/", which
-// redirects to /home.
+// left out on purpose; robots.ts disallows most of them.
 const STATIC_PATHS = [
+  "/",
   "/home",
   "/movie",
   "/series",

@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: `Terms of Service · ${SITE_NAME}` };
 export default function TermsPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-16 sm:px-8">
-      <Link href="/home" className="inline-flex items-center gap-2">
+      <Link href="/" className="inline-flex items-center gap-2">
         <Image
           src="/brand/gayflix-icon.png"
           alt="Gayflix"
