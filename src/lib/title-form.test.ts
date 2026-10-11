@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { imageHosts } from "@/lib/image-hosts.mjs";
+import { imageHosts, uploadHost } from "@/lib/image-hosts.mjs";
 import {
   emptyTitleValues,
   episodeDurationMinutes,
@@ -119,14 +119,38 @@ describe("imageUrlProblem", () => {
 
 describe("imageHosts", () => {
   it("adds IMAGE_HOSTS to the sample catalog's hosts", () => {
-    // "" rather than undefined, which reads IMAGE_HOSTS (CI sets it).
-    expect(imageHosts("")).toEqual(["picsum.photos", "fastly.picsum.photos"]);
-    expect(imageHosts(" Image.TMDB.org , https://cdn.example.com/posters, not a host, ")).toEqual([
+    expect(imageHosts({})).toEqual(["picsum.photos", "fastly.picsum.photos"]);
+    expect(imageHosts({ IMAGE_HOSTS: " Image.TMDB.org , https://cdn.example.com/posters, not a host, " })).toEqual([
       "picsum.photos",
       "fastly.picsum.photos",
       "image.tmdb.org",
       "cdn.example.com",
     ]);
+  });
+
+  it("allows the Blob store that uploads go to", () => {
+    expect(imageHosts({ BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_AbC123xyz_s3cret", IMAGE_HOSTS: "image.tmdb.org" })).toEqual([
+      "picsum.photos",
+      "fastly.picsum.photos",
+      "abc123xyz.public.blob.vercel-storage.com",
+      "image.tmdb.org",
+    ]);
+  });
+});
+
+describe("uploadHost", () => {
+  it("is the connected Blob store's public host", () => {
+    expect(uploadHost({ BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_AbC123xyz_s3cret_more" })).toBe(
+      "abc123xyz.public.blob.vercel-storage.com"
+    );
+    expect(uploadHost({ BLOB_STORE_ID: "store_AbC123xyz" })).toBe("abc123xyz.public.blob.vercel-storage.com");
+  });
+
+  it("is undefined without a store, or with a token it can't read", () => {
+    expect(uploadHost({})).toBeUndefined();
+    expect(uploadHost({ BLOB_READ_WRITE_TOKEN: " " })).toBeUndefined();
+    expect(uploadHost({ BLOB_READ_WRITE_TOKEN: "not-a-token" })).toBeUndefined();
+    expect(uploadHost({ BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_evil.example.com/x_s3cret" })).toBeUndefined();
   });
 });
 

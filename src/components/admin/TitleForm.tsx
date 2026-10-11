@@ -11,6 +11,7 @@ import {
   TextAreaField,
   TextField,
 } from "@/components/admin/FormFields";
+import ImageField from "@/components/admin/ImageField";
 import type { MediaType } from "@/lib/media";
 import { FIRST_YEAR, type FormState, type TitleValues } from "@/lib/title-form";
 
@@ -28,6 +29,7 @@ export default function TitleForm({
   initialErrors,
   hiddenFields = {},
   imageHosts,
+  uploadHost,
   lastYear,
   submitLabel,
   cancelHref,
@@ -41,6 +43,8 @@ export default function TitleForm({
   hiddenFields?: Record<string, string>;
   /** Where poster links may point (src/lib/image-hosts.mjs). */
   imageHosts: string[];
+  /** Where uploaded images go, when uploads are on (uploadHost()). */
+  uploadHost?: string;
   lastYear: number;
   submitLabel: string;
   cancelHref?: string;
@@ -51,6 +55,9 @@ export default function TitleForm({
   const errors = state.version === undefined ? (initialErrors ?? {}) : (state.errors ?? {});
   const hasErrors = Object.keys(errors).length > 0;
   const isMovie = type === "movie";
+  const canUpload = Boolean(uploadHost);
+  // The Blob store's long host isn't one to paste links from.
+  const linkHosts = imageHosts.filter((host) => host !== uploadHost).join(", ");
   const formRef = useRef<HTMLFormElement>(null);
 
   // Problems to fix: start at the first one.
@@ -194,23 +201,27 @@ export default function TitleForm({
           className="sm:col-span-2"
         />
 
-        <TextField
-          name="posterUrl"
+        <ImageField
+          kind="poster"
           label="Poster image link"
-          type="url"
-          hint={`A tall (2:3) image on ${imageHosts.join(", ")}.`}
+          hint={
+            canUpload
+              ? `A tall (2:3) image. Upload one, or paste a link to one on ${linkHosts}.`
+              : `A tall (2:3) image on ${linkHosts}.`
+          }
           defaultValue={values.posterUrl}
           error={errors.posterUrl}
+          canUpload={canUpload}
           className="sm:col-span-2"
         />
-        <TextField
-          name="backdropUrl"
+        <ImageField
+          kind="backdrop"
           label="Backdrop image link"
-          type="url"
           optional
           hint="A wide (16:9) image, shown at the top of the home page when the title is featured."
           defaultValue={values.backdropUrl}
           error={errors.backdropUrl}
+          canUpload={canUpload}
           className="sm:col-span-2"
         />
       </div>

@@ -16,6 +16,8 @@ const SOURCE_STUB = "http://127.0.0.1:3101";
  * without it.
  */
 export const REPORT_STUB = "http://127.0.0.1:3102";
+/** e2e/blob-stub.mjs: Vercel Blob, keeping uploaded posters. */
+export const BLOB_STUB = "http://127.0.0.1:3103";
 /** Emails the server "sends" during the run; the tests read codes from it. */
 export const OUTBOX_FILE = ".playwright/outbox.jsonl";
 
@@ -56,6 +58,11 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
     },
     {
+      command: "node e2e/blob-stub.mjs 3103",
+      url: `${BLOB_STUB}/health`,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
       command: `npx next start -p ${PORT}`,
       url: `${BASE_URL}/home`,
       reuseExistingServer: !process.env.CI,
@@ -73,6 +80,10 @@ export default defineConfig({
         // Imported posters' host. The build needs it too for next/image
         // (CI sets it); without it the posters just don't load.
         IMAGE_HOSTS: "image.tmdb.org",
+        // Uploads on, kept by the stand-in store. Its images don't exist,
+        // so they don't load; the tests check what was stored instead.
+        BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_e2estore_e2esecret",
+        VERCEL_BLOB_API_URL: BLOB_STUB,
       },
     },
   ],
