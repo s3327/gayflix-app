@@ -39,5 +39,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   `src/lib/title-form.ts`. Views (`media_view` and
   `viewCount`, which rank Trending) are counted only by
   `src/lib/view-actions.ts`, and never store a raw IP address.
+- **Crash reports** go to Sentry when `NEXT_PUBLIC_SENTRY_DSN` is set,
+  from `src/instrumentation.ts` (server), `src/instrumentation-client.ts`
+  (browser) and the error pages. What they may carry is decided in
+  `src/lib/error-reporting.ts`: never IP addresses, cookies, headers,
+  form fields or query strings.
 - **Before pushing,** run `npm run check` (lint, typecheck, tests, build);
   CI runs the same on every push to `main`.

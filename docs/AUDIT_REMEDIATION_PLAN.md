@@ -623,8 +623,35 @@ through **Prisma ORM**.
     render; Tailwind 3 never scanned `src/lib`, so they were silently
     missing. The e2e and axe suite passes, and `npm audit` lists only the
     ESLint `braces` advisory above.
-- **Monitoring.** Error reporting such as Sentry, wired into `error.tsx`
-  and route handlers.
+- ✅ **Monitoring.** Crash reports go to Sentry (`@sentry/nextjs`) once
+  `NEXT_PUBLIC_SENTRY_DSN` is set (DEPLOYMENT.md, Part 10). Without it,
+  nothing is sent and the site carries none of Sentry's code.
+  - **What's reported:** errors on the server (pages, server functions,
+    route handlers and `src/proxy.ts`, through `onRequestError` in
+    `src/instrumentation.ts`), errors in the browser
+    (`src/instrumentation-client.ts`), and what the error pages catch
+    (`error.tsx`, and a new `global-error.tsx` for when the root layout
+    fails). A server error shown on the error page is reported once, by
+    the server, with its real message. The CSP's `connect-src` allows the
+    DSN's origin.
+  - **What isn't:** IP addresses, cookies, headers, request bodies (form
+    fields, passwords), query strings (password-reset links carry their
+    token there) and the values in the code's variables
+    (`src/lib/error-reporting.ts`). Sentry's defaults collect all of
+    these. Browsers send nothing until something breaks: page views
+    ("sessions") aren't reported.
+  - **Cost:** about 60 KB (compressed) more JavaScript per page with
+    reports on, 4 KB without. Sentry's tracing and debug logging are
+    left out (`next.config.mjs`).
+  - **Verified:** CI builds with reports on, sent to a stand-in Sentry
+    (`e2e/report-stub.mjs`), so every e2e test runs that way; a new test
+    crashes a page while signed in and checks the report has none of the
+    session cookie, the email address or the query string. Deliberate
+    crashes in a server page, an API route and a client component each
+    produced exactly one report, again without them.
+  - **Later:** stack traces are minified. Readable ones need source maps
+    uploaded to Sentry during the build, which needs a Sentry auth token
+    (`withSentryConfig`).
 
 ## Phase 4: before launch
 

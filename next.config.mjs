@@ -19,6 +19,21 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   poweredByHeader: false,
+  // Crash reports (src/lib/error-reporting.ts). Built in as "" when
+  // unset, rather than left to be looked up in the browser, so the code
+  // that checks it can drop Sentry from the site entirely.
+  env: {
+    NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN ?? "",
+  },
+  compiler: {
+    // Sentry's switches for leaving out its debug logging and its
+    // performance tracing, neither of which the site uses (about 25 KB
+    // compressed).
+    define: {
+      __SENTRY_DEBUG__: false,
+      __SENTRY_TRACING__: false,
+    },
+  },
   images: {
     // The sample catalog's placeholder photos, plus the hosts in
     // IMAGE_HOSTS (see src/lib/image-hosts.mjs).

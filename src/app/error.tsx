@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { captureException } from "@sentry/nextjs";
 
 export default function ErrorPage({
   error,
@@ -12,6 +13,11 @@ export default function ErrorPage({
 }) {
   useEffect(() => {
     console.error(error);
+    // An error with a digest happened on the server, which has already
+    // reported it with the real message (src/instrumentation.ts); this
+    // copy only carries a generic one. Checking the DSN here too keeps
+    // Sentry's code out of the site when reports are off.
+    if (process.env.NEXT_PUBLIC_SENTRY_DSN && !error.digest) captureException(error);
   }, [error]);
 
   return (

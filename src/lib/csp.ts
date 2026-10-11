@@ -13,8 +13,15 @@
  *
  * When a real video player arrives, add its embed origin to frame-src
  * (e.g. "frame-src https://player.example.com"), or the embed won't load.
+ *
+ * `reportOrigin` is where the browser sends crash reports, when they're
+ * on (errorReportingOrigin() in src/lib/error-reporting.ts).
  */
-export function buildContentSecurityPolicy(nonce: string, isDev: boolean): string {
+export function buildContentSecurityPolicy(
+  nonce: string,
+  isDev: boolean,
+  reportOrigin?: string
+): string {
   return [
     "default-src 'self'",
     // Dev additionally needs eval (React's dev tooling); prod never does.
@@ -25,7 +32,7 @@ export function buildContentSecurityPolicy(nonce: string, isDev: boolean): strin
     "img-src 'self' data: blob:",
     "font-src 'self'",
     // Dev also needs websockets for hot reload.
-    `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
+    `connect-src 'self'${reportOrigin ? ` ${reportOrigin}` : ""}${isDev ? " ws: wss:" : ""}`,
     "media-src 'self' blob:",
     "frame-src 'none'",
     "frame-ancestors 'none'",
