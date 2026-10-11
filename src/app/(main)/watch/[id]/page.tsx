@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import Image from "next/image";
 import { Star } from "lucide-react";
@@ -6,6 +7,18 @@ import ServerTabs from "@/components/ServerTabs";
 import WatchPlayer from "@/components/WatchPlayer";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import TagList from "@/components/TagList";
+import { countryHref, genreHref, languageHref, searchHref } from "@/lib/browse-href";
+import { watchMetadata } from "@/lib/page-metadata";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const movie = await getTitle((await params).id);
+  // A series redirects to its first episode, which has its own.
+  return movie?.type === "movie" ? watchMetadata(movie) : {};
+}
 
 export default async function WatchPage({
   params,
@@ -85,7 +98,7 @@ export default async function WatchPage({
           <>
             <dt className="text-ink-muted">Genre</dt>
             <dd className="text-ink-primary">
-              <MetaLinkList items={movie.genres} />
+              <MetaLinkList items={movie.genres} href={genreHref} />
             </dd>
           </>
         )}
@@ -94,7 +107,7 @@ export default async function WatchPage({
           <>
             <dt className="text-ink-muted">Director</dt>
             <dd className="text-ink-primary">
-              <MetaLink>{movie.director}</MetaLink>
+              <MetaLink href={searchHref(movie.director)}>{movie.director}</MetaLink>
             </dd>
           </>
         )}
@@ -103,19 +116,19 @@ export default async function WatchPage({
           <>
             <dt className="text-ink-muted">Cast</dt>
             <dd className="text-ink-primary">
-              <MetaLinkList items={movie.cast} />
+              <MetaLinkList items={movie.cast} href={searchHref} />
             </dd>
           </>
         )}
 
         <dt className="text-ink-muted">Country</dt>
         <dd className="text-ink-primary">
-          <MetaLink>{movie.country}</MetaLink>
+          <MetaLink href={countryHref(movie.country)}>{movie.country}</MetaLink>
         </dd>
 
         <dt className="text-ink-muted">Language</dt>
         <dd className="text-ink-primary">
-          <MetaLink>{movie.language}</MetaLink>
+          <MetaLink href={languageHref(movie.language)}>{movie.language}</MetaLink>
         </dd>
 
         {movie.releaseDate && (

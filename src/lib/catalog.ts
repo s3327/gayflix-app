@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import { cache } from "react";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { isMediaId } from "@/lib/library-types";
@@ -372,8 +373,10 @@ export async function listPublishedTitles() {
 // --- Search ------------------------------------------------------------------
 
 /**
- * Titles whose title, synopsis, country or a genre contains the query,
- * plus titles from that year when the query is a year.
+ * Titles whose title, synopsis, director, creator, country, language, or
+ * one of its cast, genres or tags contains the query, plus titles from
+ * that year when the query is a year. A title page's people and tags
+ * link here (src/lib/browse-href.ts).
  */
 function searchCondition(query: string) {
   const pattern = `%${escapeLike(query)}%`;
@@ -381,8 +384,13 @@ function searchCondition(query: string) {
   return Prisma.sql`status = 'published' AND (
     title ILIKE ${pattern}
     OR synopsis ILIKE ${pattern}
+    OR director ILIKE ${pattern}
+    OR creator ILIKE ${pattern}
     OR country ILIKE ${pattern}
+    OR language ILIKE ${pattern}
+    OR EXISTS (SELECT 1 FROM unnest("cast") AS person WHERE person ILIKE ${pattern})
     OR EXISTS (SELECT 1 FROM unnest(genres) AS genre WHERE genre ILIKE ${pattern})
+    OR EXISTS (SELECT 1 FROM unnest(tags) AS tag WHERE tag ILIKE ${pattern})
     ${year === null ? Prisma.empty : Prisma.sql`OR year = ${year}`}
   )`;
 }
@@ -428,8 +436,13 @@ export async function suggestTitles(rawQuery: string): Promise<SearchSuggestion[
 
 // --- Titles and episodes ------------------------------------------------------
 
+/*
+ * A title's page reads it twice, for its <head> (generateMetadata) and
+ * for the page itself; cache() makes that one query per request.
+ */
+
 /** A published title with its episodes, or null. */
-export async function getTitle(id: string): Promise<MediaDetail | null> {
+export const getTitle = cache(async (id: string): Promise<MediaDetail | null> => {
   await connection();
   if (!isMediaId(id)) return null;
   const row = await db.media.findUnique({
@@ -437,21 +450,21 @@ export async function getTitle(id: string): Promise<MediaDetail | null> {
     include: { episodes: { orderBy: EPISODE_ORDER } },
   });
   return row && toDetail(row);
-}
+});
 
 /** An episode of a published series, with the series, or null. */
-export async function getEpisode(
-  id: string
-): Promise<{ episode: Episode; series: MediaDetail } | null> {
-  await connection();
-  if (!isMediaId(id)) return null;
-  const row = await db.episode.findUnique({
-    where: { id },
-    include: { media: { include: { episodes: { orderBy: EPISODE_ORDER } } } },
-  });
-  if (!row || row.media.status !== "published") return null;
-  return { episode: toEpisode(row), series: toDetail(row.media) };
-}
+export const getEpisode = cache(
+  async (id: string): Promise<{ episode: Episode; series: MediaDetail } | null> => {
+    await connection();
+    if (!isMediaId(id)) return null;
+    const row = await db.episode.findUnique({
+      where: { id },
+      include: { media: { include: { episodes: { orderBy: EPISODE_ORDER } } } },
+    });
+    if (!row || row.media.status !== "published") return null;
+    return { episode: toEpisode(row), series: toDetail(row.media) };
+  }
+);
 
 // --- Reports -----------------------------------------------------------------
 

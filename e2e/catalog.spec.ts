@@ -85,6 +85,34 @@ test("the search page matches genres and pages through results", async ({
   await expect(page.getByText(/^Page 2 of \d+$/)).toBeVisible();
 });
 
+test("a title's details and tags lead to the titles that share them", async ({
+  page,
+  consoleProblems,
+}) => {
+  void consoleProblems;
+  const details = page.locator("main dl");
+
+  await page.goto("/movie/chosen-family");
+  await details.getByRole("link", { name: "Drama" }).click();
+  await expect(page).toHaveURL(/\/genre\?genre=Drama$/);
+  await expect(page.getByRole("link", { name: "Drama", exact: true })).toHaveAttribute(
+    "aria-current",
+    "true"
+  );
+
+  // Search matches cast, so a cast member finds their other titles.
+  await page.goto("/movie/chosen-family");
+  await details.getByRole("link", { name: "Jordan Lee" }).click();
+  await expect(page).toHaveURL(/\/search\?q=Jordan\+Lee$/);
+  await expect(page.getByRole("link", { name: /The Brownstone/ })).toBeVisible();
+
+  // And tags.
+  await page.goto("/movie/chosen-family");
+  await page.getByRole("link", { name: "Coming of Age", exact: true }).click();
+  await expect(page).toHaveURL(/\/search\?q=Coming\+of\+Age$/);
+  await expect(page.getByRole("link", { name: /Chosen Family/ }).first()).toBeVisible();
+});
+
 test.describe("admin library", () => {
   test.use({ httpCredentials: ADMIN_CREDENTIALS, storageState: ADMIN_STATE });
 

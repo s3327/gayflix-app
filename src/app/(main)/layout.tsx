@@ -1,16 +1,18 @@
+import type { Metadata } from "next";
 import Header from "@/components/Header";
 import NavMenu from "@/components/NavMenu";
 import Footer from "@/components/Footer";
 import LibraryProviders from "@/components/LibraryProviders";
 import { loadLibrary } from "@/lib/library";
+import { SITE_NAME, SITE_TITLE } from "@/lib/page-metadata";
 import { getSession } from "@/lib/session";
 import { ToastProvider } from "@/lib/toast-context";
 
 /**
- * Shared layout for the "signed-in app" experience — /home, /search, /user,
- * and future routes like /browse, /title/[id]. The marketing landing page
- * at "/" lives outside this group and does NOT get this header/nav/footer,
- * since it will likely want its own (simpler, or fully custom) treatment.
+ * Shared layout for the browsing experience — /home, /search, /browse,
+ * the title pages and the account pages. "/" lives outside this group:
+ * it redirects to /home for now, and a marketing landing page there
+ * would likely want its own (simpler, or fully custom) header.
  *
  * Favorites/Lists/History/Toast providers live here (not higher up) so
  * this stuff only works within the signed-in app — same scope as
@@ -20,6 +22,12 @@ import { ToastProvider } from "@/lib/toast-context";
  * A signed-in user's favorites, lists and history are loaded here, on
  * the server, so pages render with them straight away.
  */
+// Each page names itself in the browser tab ("Browse · Gayflix"); /home,
+// and any page that doesn't, gets the full site title.
+export const metadata: Metadata = {
+  title: { default: SITE_TITLE, template: `%s · ${SITE_NAME}` },
+};
+
 export default async function MainGroupLayout({
   children,
 }: {

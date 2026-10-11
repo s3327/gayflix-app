@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
 import { listTitles } from "@/lib/catalog";
 import { pageParam, type SearchParams } from "@/lib/search-params";
+
+export const metadata: Metadata = { title: "Series" };
 
 /**
  * All published series — same shape as /movie, just type === "series"

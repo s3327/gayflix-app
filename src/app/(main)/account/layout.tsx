@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import AccountSidebar from "@/components/AccountSidebar";
 import RequireLogin from "@/components/RequireLogin";
 import { requireUser } from "@/lib/session";
+
+export const metadata: Metadata = { title: "Account" };
 
 /**
  * Shared layout for /account and its sub-pages (favorite, history,

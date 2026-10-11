@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { AuthProvider } from "@/lib/auth-context";
+import { OPEN_GRAPH, SITE_DESCRIPTION, SITE_TITLE } from "@/lib/page-metadata";
 import { siteUrl } from "@/lib/site-url";
 import { fontVariables } from "./fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: siteUrl(),
-  title: "Gayflix — Love. Stories. Ours.",
-  description: "LGBTQ+ stories, films, and series — picked by our community.",
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  openGraph: OPEN_GRAPH,
 };
 
 export default async function RootLayout({

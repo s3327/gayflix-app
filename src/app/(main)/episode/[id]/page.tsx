@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -7,6 +8,17 @@ import ServerTabs from "@/components/ServerTabs";
 import WatchPlayer from "@/components/WatchPlayer";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import TagList from "@/components/TagList";
+import { countryHref, genreHref, languageHref, searchHref } from "@/lib/browse-href";
+import { episodeMetadata } from "@/lib/page-metadata";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const found = await getEpisode((await params).id);
+  return found ? episodeMetadata(found.episode, found.series) : {};
+}
 
 /**
  * Deliberately the same structure as /watch/[id]: player up top, then
@@ -171,7 +183,7 @@ export default async function EpisodePage({
           <>
             <dt className="text-ink-muted">Genre</dt>
             <dd className="text-ink-primary">
-              <MetaLinkList items={series.genres} />
+              <MetaLinkList items={series.genres} href={genreHref} />
             </dd>
           </>
         )}
@@ -180,7 +192,7 @@ export default async function EpisodePage({
           <>
             <dt className="text-ink-muted">Creator</dt>
             <dd className="text-ink-primary">
-              <MetaLink>{series.creator}</MetaLink>
+              <MetaLink href={searchHref(series.creator)}>{series.creator}</MetaLink>
             </dd>
           </>
         )}
@@ -189,19 +201,19 @@ export default async function EpisodePage({
           <>
             <dt className="text-ink-muted">Cast</dt>
             <dd className="text-ink-primary">
-              <MetaLinkList items={series.cast} />
+              <MetaLinkList items={series.cast} href={searchHref} />
             </dd>
           </>
         )}
 
         <dt className="text-ink-muted">Country</dt>
         <dd className="text-ink-primary">
-          <MetaLink>{series.country}</MetaLink>
+          <MetaLink href={countryHref(series.country)}>{series.country}</MetaLink>
         </dd>
 
         <dt className="text-ink-muted">Language</dt>
         <dd className="text-ink-primary">
-          <MetaLink>{series.language}</MetaLink>
+          <MetaLink href={languageHref(series.language)}>{series.language}</MetaLink>
         </dd>
 
         <dt className="text-ink-muted">Air Date</dt>

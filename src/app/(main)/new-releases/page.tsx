@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
@@ -5,6 +6,8 @@ import Badge from "@/components/Badge";
 import { listTitles } from "@/lib/catalog";
 import { isRecentlyAdded } from "@/lib/is-new";
 import { pageParam, type SearchParams } from "@/lib/search-params";
+
+export const metadata: Metadata = { title: "New Releases" };
 
 export default async function NewReleasesPage({
   searchParams: searchParamsPromise,

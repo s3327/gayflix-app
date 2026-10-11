@@ -37,7 +37,7 @@ export default function Header() {
             Two images swapped via CSS, not JS: icon-only below lg,
             full lockup at lg+. */}
         <Link
-          href="/"
+          href="/home"
           aria-label="Gayflix home"
           className="shrink-0 justify-self-center rounded-xs"
         >

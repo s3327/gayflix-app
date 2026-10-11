@@ -37,6 +37,31 @@ for (const path of PAGES) {
   });
 }
 
+test("the bare domain and the logo open the home page", async ({ page }) => {
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(page.getByRole("link", { name: "Gayflix home" })).toHaveAttribute("href", "/home");
+});
+
+test("pages name themselves in the tab, and title pages carry a link preview", async ({
+  page,
+}) => {
+  await page.goto("/browse");
+  await expect(page).toHaveTitle("Browse · Gayflix");
+
+  await page.goto("/movie/chosen-family");
+  await expect(page).toHaveTitle("Chosen Family (2025) · Gayflix");
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /Provincetown/);
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /^https:\/\//);
+  await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
+    "content",
+    /\/movie\/chosen-family$/
+  );
+
+  await page.goto("/episode/the-brownstone-season-1-episode-1");
+  await expect(page).toHaveTitle("The Brownstone S1 E1: Move-In Day · Gayflix");
+});
+
 test("unknown pages get the branded 404", async ({ page }) => {
   const response = await page.goto("/definitely-not-a-page");
   expect(response?.status()).toBe(404);

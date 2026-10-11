@@ -51,7 +51,7 @@ The first time that account logs in at `/admin/login`, it sets up
 two-factor sign-in with an authenticator app. After that, every admin
 sign-in needs a code, and lasts 12 hours.
 
-- Public site: http://localhost:3000 (the landing page; the app itself starts at `/home`)
+- Public site: http://localhost:3000 (opens `/home`; there's no separate landing page yet)
 - Admin panel: http://localhost:3000/admin (needs an admin account with
   two-factor; also behind an extra password when the optional
   `ADMIN_BASIC_AUTH_*` variables are set)

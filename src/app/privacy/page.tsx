@@ -1,5 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
+import { SITE_NAME } from "@/lib/page-metadata";
+
+export const metadata: Metadata = { title: `Privacy Policy · ${SITE_NAME}` };
 
 /**
  * Placeholder legal copy — same status as /terms: realistic structure,
@@ -9,7 +13,7 @@ import Image from "next/image";
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-16 sm:px-8">
-      <Link href="/" className="inline-flex items-center gap-2">
+      <Link href="/home" className="inline-flex items-center gap-2">
         <Image
           src="/brand/gayflix-icon.png"
           alt="Gayflix"

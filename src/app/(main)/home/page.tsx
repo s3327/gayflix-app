@@ -42,8 +42,12 @@ export default async function HomePage() {
             <p className="mt-2 text-sm text-ink-secondary">
               {[featured.year, featured.genre, featured.duration].filter(Boolean).join(" · ")}
             </p>
+            {/* Cut short so a long synopsis can't push the title up under
+                the header or cover the backdrop; More Info has all of it. */}
             {featured.synopsis && (
-              <p className="mt-4 max-w-lg text-ink-secondary">{featured.synopsis}</p>
+              <p className="mt-4 line-clamp-3 max-w-lg text-ink-secondary sm:line-clamp-4">
+                {featured.synopsis}
+              </p>
             )}
 
             <div className="mt-6 flex flex-wrap items-center gap-3">

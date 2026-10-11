@@ -8,6 +8,7 @@ import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import RecommendationSection from "@/components/RecommendationSection";
 import SeasonTabs from "@/components/SeasonTabs";
 import TagList from "@/components/TagList";
+import { countryHref, genreHref, languageHref, searchHref } from "@/lib/browse-href";
 
 /**
  * A title's own page, /movie/[id] or /series/[id]: poster and the main
@@ -92,7 +93,7 @@ export default function TitleDetail({
                 <>
                   <dt className="text-ink-muted">Genre</dt>
                   <dd className="text-ink-primary">
-                    <MetaLinkList items={title.genres} />
+                    <MetaLinkList items={title.genres} href={genreHref} />
                   </dd>
                 </>
               )}
@@ -101,7 +102,7 @@ export default function TitleDetail({
                 <>
                   <dt className="text-ink-muted">{isSeries ? "Creator" : "Director"}</dt>
                   <dd className="text-ink-primary">
-                    <MetaLink>{credit}</MetaLink>
+                    <MetaLink href={searchHref(credit)}>{credit}</MetaLink>
                   </dd>
                 </>
               )}
@@ -110,19 +111,19 @@ export default function TitleDetail({
                 <>
                   <dt className="text-ink-muted">Cast</dt>
                   <dd className="text-ink-primary">
-                    <MetaLinkList items={title.cast} />
+                    <MetaLinkList items={title.cast} href={searchHref} />
                   </dd>
                 </>
               )}
 
               <dt className="text-ink-muted">Country</dt>
               <dd className="text-ink-primary">
-                <MetaLink>{title.country}</MetaLink>
+                <MetaLink href={countryHref(title.country)}>{title.country}</MetaLink>
               </dd>
 
               <dt className="text-ink-muted">Language</dt>
               <dd className="text-ink-primary">
-                <MetaLink>{title.language}</MetaLink>
+                <MetaLink href={languageHref(title.language)}>{title.language}</MetaLink>
               </dd>
 
               {title.releaseDate && (
