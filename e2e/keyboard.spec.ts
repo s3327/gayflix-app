@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
-import { USER_STATE } from "./accounts";
-import { expect, test } from "./fixtures";
+import { ADMIN_STATE, USER_STATE } from "./accounts";
+import { ADMIN_CREDENTIALS, expect, test } from "./fixtures";
 
 /*
  * The site with only a keyboard: Tab reaches everything, focus never
@@ -122,6 +122,37 @@ test.describe("on a phone", () => {
     await expect(drawer).toBeHidden();
     await expect(page.getByRole("link", { name: "Gayflix home" })).toBeFocused();
     expect(await hiddenRingSides(page)).toEqual([]);
+  });
+
+  test.describe("as an admin", () => {
+    test.use({ httpCredentials: ADMIN_CREDENTIALS, storageState: ADMIN_STATE });
+
+    test("the admin panel fits, and its menu works by keyboard", async ({ page }) => {
+      await page.goto("/admin/library/series");
+      // Nothing scrolls the page sideways: the table scrolls on its own,
+      // with room for the titles.
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      expect((await page.locator("main tbody a").first().boundingBox())!.width).toBeGreaterThan(100);
+
+      const menu = page.getByRole("navigation", { name: "Admin" });
+      const button = page.getByRole("button", { name: "Open menu" });
+      await expect(menu).toBeHidden();
+      await tabTo(page, button);
+      await page.keyboard.press("Enter");
+      await page.keyboard.press("Tab");
+      await expect(menu.getByRole("link", { name: "Dashboard" })).toBeFocused();
+      expect(await hiddenRingSides(page)).toEqual([]);
+      await page.keyboard.press("Escape");
+      await expect(menu).toBeHidden();
+      await expect(button).toBeFocused();
+
+      // A link goes there and closes the menu.
+      await page.keyboard.press("Enter");
+      await tabTo(page, menu.getByRole("link", { name: "Reports" }));
+      await page.keyboard.press("Enter");
+      await expect(page).toHaveURL(/\/admin\/reports$/);
+      await expect(menu).toBeHidden();
+    });
   });
 
   test("a title row by keyboard", async ({ page }) => {

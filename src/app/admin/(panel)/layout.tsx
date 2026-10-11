@@ -3,7 +3,8 @@ import { requireAdmin } from "@/lib/session";
 
 /**
  * Wraps every "real" admin page (dashboard, import, library, upload,
- * users, trash, setting) with the persistent left sidebar. Login and
+ * users, trash, setting) with the persistent left sidebar (a top bar on
+ * phones). Login and
  * forgot-password live outside this group, so they stay full-screen
  * with no sidebar.
  *
@@ -20,7 +21,9 @@ export default async function AdminPanelLayout({
   await requireAdmin();
 
   return (
-    <div className="flex min-h-screen bg-bg-base">
+    // A column on phones (the navigation is a bar across the top), a row
+    // from md up (a sidebar).
+    <div className="flex min-h-screen flex-col bg-bg-base md:flex-row">
       <Sidebar />
       <main className="min-w-0 flex-1">{children}</main>
     </div>
