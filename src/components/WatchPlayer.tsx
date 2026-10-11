@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Flag, Play } from "lucide-react";
 import { useHistory } from "@/lib/history-context";
 import type { FavoriteEntry } from "@/lib/favorites-context";
@@ -31,6 +31,13 @@ export default function WatchPlayer({ media }: { media: FavoriteEntry }) {
   const { recordWatch } = useHistory();
   const [isPlaying, setIsPlaying] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const nowPlayingRef = useRef<HTMLDivElement>(null);
+
+  // Play replaces its own button, so focus follows to what replaced it
+  // rather than dropping to the top of the page.
+  useEffect(() => {
+    if (isPlaying) nowPlayingRef.current?.focus();
+  }, [isPlaying]);
 
   function handlePlay() {
     recordWatch(media);
@@ -41,9 +48,15 @@ export default function WatchPlayer({ media }: { media: FavoriteEntry }) {
 
   return (
     <div>
+      {/* The frame clips anything outside it, so what's inside draws its
+          focus ring inside its edges. */}
       <div className="relative aspect-video w-full overflow-hidden rounded-card border-2 border-border-strong bg-bg-surface">
         {isPlaying ? (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-ink-muted">
+          <div
+            ref={nowPlayingRef}
+            tabIndex={-1}
+            className="absolute inset-0 flex items-center justify-center text-sm text-ink-muted focus-visible:-outline-offset-4"
+          >
             Now playing — video source not wired up yet
           </div>
         ) : (
@@ -51,7 +64,7 @@ export default function WatchPlayer({ media }: { media: FavoriteEntry }) {
             type="button"
             onClick={handlePlay}
             aria-label={`Play ${media.title}`}
-            className="group absolute inset-0 flex items-center justify-center"
+            className="group absolute inset-0 flex items-center justify-center focus-visible:-outline-offset-4"
           >
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-pink text-ink-onBrand transition-transform group-hover:scale-110">
               <Play className="ml-1 h-7 w-7 fill-current" aria-hidden />

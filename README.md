@@ -162,7 +162,7 @@ prisma/                  → schema.prisma and migrations (one of them loads
 scripts/make-admin.mjs   → grant or revoke the admin role
 scripts/vercel-build.sh  → Vercel's build command: migrations, then the build
 vercel.json              → points Vercel at that build command
-e2e/                     → Playwright end-to-end and axe accessibility tests
+e2e/                     → Playwright end-to-end, keyboard and axe accessibility tests
 next.config.mjs          → image hosts (src/lib/image-hosts.mjs) and security
                            headers (HSTS, framing, ...)
 docs/                    → design notes (build log) and the audit plan

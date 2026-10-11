@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { User } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
+import { useDropdown } from "@/lib/use-dropdown";
 
 /**
  * Header's account icon — branches on the real session (see
@@ -15,8 +16,7 @@ import { useToast } from "@/lib/toast-context";
  *
  * Logged-in is where this earns being its own component: the icon
  * becomes a dropdown trigger with two items, My Account and Log Out,
- * same open/outside-click/Escape/route-change-closes pattern as
- * SearchBox.
+ * that closes like SearchBox (see useDropdown) and on route change.
  */
 export default function AccountMenu() {
   const { isLoggedIn, logout } = useAuth();
@@ -24,7 +24,8 @@ export default function AccountMenu() {
   const router = useRouter();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdown = useDropdown(isOpen, setIsOpen, buttonRef);
 
   // Close whenever the route changes. Done during render (React's
   // "adjusting state when a prop changes" pattern) rather than in an
@@ -34,29 +35,6 @@ export default function AccountMenu() {
     setLastPathname(pathname);
     setIsOpen(false);
   }
-
-  useEffect(() => {
-    if (!isOpen) return;
-    function handlePointerDown(event: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setIsOpen(false);
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen]);
 
   async function handleLogout() {
     setIsOpen(false);
@@ -78,8 +56,9 @@ export default function AccountMenu() {
   }
 
   return (
-    <div ref={containerRef} className="relative">
+    <div {...dropdown} className="relative">
       <button
+        ref={buttonRef}
         type="button"
         aria-label="Account menu"
         aria-expanded={isOpen}
@@ -91,16 +70,18 @@ export default function AccountMenu() {
 
       {isOpen && (
         <div className="absolute right-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-card border border-border-subtle bg-bg-surface py-1 shadow-xl">
+          {/* The panel clips anything outside it, so these items draw
+              their focus ring inside their edges instead. */}
           <Link
             href="/account"
-            className="block px-4 py-2.5 text-sm font-semibold text-ink-primary transition-colors hover:bg-bg-elevated"
+            className="block px-4 py-2.5 text-sm font-semibold text-ink-primary transition-colors hover:bg-bg-elevated focus-visible:-outline-offset-2"
           >
             My Account
           </Link>
           <button
             type="button"
             onClick={handleLogout}
-            className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-status-error transition-colors hover:bg-bg-elevated"
+            className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-status-error transition-colors hover:bg-bg-elevated focus-visible:-outline-offset-2"
           >
             Log Out
           </button>

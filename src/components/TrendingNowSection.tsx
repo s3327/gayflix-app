@@ -26,7 +26,7 @@ export default function TrendingNowSection({ media }: { media: Media[] }) {
       </div>
 
       {/* Tablet (sm–lg): swipeable row, ~4 visible of 6 */}
-      <SwipeableRow className="mt-4 hidden gap-4 overflow-x-auto px-8 pb-2 snap-x snap-mandatory scrollbar-none sm:flex lg:hidden">
+      <SwipeableRow className="mt-2 hidden gap-4 overflow-x-auto px-8 py-2 snap-x snap-mandatory scrollbar-none sm:flex lg:hidden">
         {media.map((m) => (
           <div key={m.id} className="shrink-0 basis-1/4 snap-start">
             <PosterCard media={m} />

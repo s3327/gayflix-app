@@ -40,6 +40,7 @@ work with clear exit criteria.
 | N1 | *(found while fixing)* `/search?q=a&q=b` and other repeated params | Low | ✅ |
 | N2 | *(found while fixing)* No cross-tab or cross-component sync of stored state | Low | ✅ |
 | N3 | *(found by axe)* Text below WCAG AA contrast; invalid ARIA on filter links; unlabeled Play button | Medium | ✅ |
+| N4 | *(found by the keyboard pass)* Focus lost or hidden: Play, header dropdowns, title rows, logo, sign-up checkbox | Medium | ✅ (Phase 4) |
 
 ---
 
@@ -639,8 +640,31 @@ through **Prisma ORM**.
   titles from the database on each request. Set `SITE_URL` to the
   production domain (on Vercel it defaults to the project's production
   domain).
-- 🟡 **Accessibility pass.** axe runs in CI (see M5 and N3). Still to do:
-  a keyboard-only walkthrough of the drawer, carousels and the player.
+- ✅ **Accessibility pass.** axe runs in CI (see M5 and N3). A
+  keyboard-only walkthrough of the public pages at phone, tablet and
+  desktop widths found these (N4), all fixed:
+  - **Focus that got lost.** Pressing Play dropped focus to the top of the
+    page; it now moves to the player. So did Escape in the search box,
+    account menu and phone menu drawer; focus now goes back to the button
+    that opened them. Tabbing out of those three now closes them instead
+    of leaving them open over the page (`src/lib/use-dropdown.ts`).
+  - **Focus that couldn't be seen.** The logo and the sign-up terms
+    checkbox had their focus ring switched off. The rings on the Play
+    button, the account menu, search suggestions, the drawer's first link
+    and, on phones, the account page's links were cut off by the box
+    around them; they're now drawn inside it or given room. A focused
+    poster no longer grows, since the bigger poster hid most of its ring
+    (hover still grows it).
+  - **Title rows** (Trending Now on tablets, You Might Also Like): a
+    focused card could sit cut off at the edge or under the edge fade;
+    the row now scrolls it clear. The scroll arrows were Tab stops that
+    did nothing useful and dropped focus at the row's start; they're for
+    mouse users now, since Tab already moves through every card. On
+    phones the account page's sideways list now scrolls a focused link
+    fully into view.
+  - **Verified:** `e2e/keyboard.spec.ts` does all of this with the
+    keyboard, checking where focus lands and that its whole ring shows,
+    and that a focused card is clear of its row's edges.
 
 ## How to verify locally
 

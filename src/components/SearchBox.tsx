@@ -7,6 +7,7 @@ import Image from "next/image";
 import { Search, X } from "lucide-react";
 import type { SearchSuggestion } from "@/lib/search";
 import { titleHref } from "@/lib/title-href";
+import { useDropdown } from "@/lib/use-dropdown";
 
 const DEBOUNCE_MS = 150;
 
@@ -14,15 +15,16 @@ type SuggestionResult = { query: string; items: SearchSuggestion[] };
 
 /**
  * Search icon in the header that expands into a live suggestion
- * dropdown. Client Component by necessity (open/query state, outside-
- * click + Escape handling) — everything else in Header stays a plain
- * server-rendered link.
+ * dropdown. Client Component by necessity (open/query state, closing on
+ * outside click, Escape or focus leaving: see useDropdown) — everything
+ * else in Header stays a plain server-rendered link.
  */
 export default function SearchBox() {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dropdown = useDropdown(isOpen, setIsOpen, buttonRef);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -80,29 +82,6 @@ export default function SearchBox() {
     setQuery("");
   }
 
-  useEffect(() => {
-    if (!isOpen) return;
-    function handlePointerDown(event: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setIsOpen(false);
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen]);
-
   function openSearch() {
     setIsOpen(true);
     // Wait a frame so the input has actually mounted before focusing it.
@@ -110,8 +89,9 @@ export default function SearchBox() {
   }
 
   return (
-    <div ref={containerRef} className="relative">
+    <div {...dropdown} className="relative">
       <button
+        ref={buttonRef}
         type="button"
         aria-label={isOpen ? "Close search" : "Search"}
         aria-expanded={isOpen}
@@ -148,9 +128,11 @@ export default function SearchBox() {
               ) : suggestions.length > 0 ? (
                 suggestions.map((item) => (
                   <li key={item.id}>
+                    {/* Focus ring inside the edges: the panel clips
+                        anything outside it. */}
                     <Link
                       href={titleHref(item)}
-                      className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-bg-elevated"
+                      className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-bg-elevated focus-visible:-outline-offset-2"
                     >
                       <div className="relative h-14 w-10 shrink-0 overflow-hidden rounded-xs bg-bg-elevated">
                         <Image

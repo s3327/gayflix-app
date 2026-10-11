@@ -8,8 +8,10 @@
 > the database (read through `src/lib/catalog.ts`), the footer, poster
 > cards and Watch Now all link to real pages now, the library's
 > buttons and the Upload and Trash pages work (the admin title editor,
-> `src/lib/admin-catalog-actions.ts`), and Trending and Continue Watching
-> use real views and watch history (no progress bars yet). For setup and
+> `src/lib/admin-catalog-actions.ts`), Trending and Continue Watching
+> use real views and watch history (no progress bars yet), and the
+> swipeable rows' arrows are for mouse users only, since Tab moves through
+> the cards (see the accessibility pass in the audit plan). For setup and
 > current architecture, see the [README](../README.md). For the security
 > audit and its fixes, see
 > [AUDIT_REMEDIATION_PLAN.md](AUDIT_REMEDIATION_PLAN.md).

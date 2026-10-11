@@ -20,6 +20,13 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
  *    trackpad, no touchscreen) otherwise has no way to scroll a row like
  *    this at all, so this makes it usable — and testable — without
  *    needing DevTools' touch-emulation mode.
+ * 4. Keyboard users Tab through the cards themselves, and the row
+ *    scrolls each focused card clear of the fades. So the arrows are for
+ *    pointers only: out of the Tab order and hidden from screen readers,
+ *    which reach every card anyway.
+ *
+ * The row needs vertical padding for a focused card's ring and a
+ * hovered card's scale-up, which it would otherwise cut off.
  */
 export default function SwipeableRow({
   children,
@@ -31,6 +38,8 @@ export default function SwipeableRow({
   scrollPaddingClassName?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const leftFadeRef = useRef<HTMLDivElement>(null);
+  const rightFadeRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -86,6 +95,35 @@ export default function SwipeableRow({
     scrollRef.current?.releasePointerCapture(e.pointerId);
   };
 
+  // The browser scrolls a focused card into view, but snapping can pull
+  // the row back so the card is still cut off or under a fade. Once it's
+  // done, move to the nearest snap position that shows the card clear of
+  // both fades. Mouse focus (a drag that starts on a card) is left alone.
+  const handleFocus = (e: React.FocusEvent<HTMLDivElement>) => {
+    const target = e.target;
+    if (!target.matches(":focus-visible")) return;
+    requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      const card = el && [...el.children].find((child) => child.contains(target));
+      if (!el || !card) return;
+      const view = el.getBoundingClientRect();
+      const box = card.getBoundingClientRect();
+      const pastRight = box.right - (view.right - (rightFadeRef.current?.offsetWidth ?? 0));
+      const pastLeft = view.left + (leftFadeRef.current?.offsetWidth ?? 0) - box.left;
+      if (pastRight <= 0 && pastLeft <= 0) return;
+      // Each card's snap position: its left edge at the scroll padding.
+      const padding = parseFloat(getComputedStyle(el).scrollPaddingLeft) || 0;
+      const snaps = [...el.children].map(
+        (child) => el.scrollLeft + child.getBoundingClientRect().left - view.left - padding
+      );
+      const left =
+        pastRight > 0
+          ? (snaps.find((snap) => snap >= el.scrollLeft + pastRight) ?? snaps[snaps.length - 1])
+          : (snaps.findLast((snap) => snap <= el.scrollLeft - pastLeft) ?? snaps[0]);
+      el.scrollTo({ left, behavior: "smooth" });
+    });
+  };
+
   // Swallow the click that would otherwise fire on a card right after a
   // drag — without this, dragging past a poster would also "click" it.
   const handleClickCapture = (e: React.MouseEvent) => {
@@ -108,15 +146,21 @@ export default function SwipeableRow({
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         onClickCapture={handleClickCapture}
+        onFocus={handleFocus}
       >
         {children}
       </div>
 
       {canScrollLeft && (
         <>
-          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-linear-to-r from-bg-base to-transparent sm:w-16" />
+          <div
+            ref={leftFadeRef}
+            className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-linear-to-r from-bg-base to-transparent sm:w-16"
+          />
           <button
             type="button"
+            tabIndex={-1}
+            aria-hidden
             onClick={() => scrollByPage(-1)}
             aria-label="Scroll left"
             className="absolute left-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-bg-elevated/90 text-ink-primary shadow-lg backdrop-blur-sm transition-all hover:scale-110 hover:bg-brand-pink hover:text-ink-onBrand"
@@ -128,9 +172,14 @@ export default function SwipeableRow({
 
       {canScrollRight && (
         <>
-          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-linear-to-l from-bg-base to-transparent sm:w-16" />
+          <div
+            ref={rightFadeRef}
+            className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-linear-to-l from-bg-base to-transparent sm:w-16"
+          />
           <button
             type="button"
+            tabIndex={-1}
+            aria-hidden
             onClick={() => scrollByPage(1)}
             aria-label="Scroll right"
             className="absolute right-2 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-bg-elevated/90 text-ink-primary shadow-lg backdrop-blur-sm transition-all hover:scale-110 hover:bg-brand-pink hover:text-ink-onBrand"
