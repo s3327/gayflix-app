@@ -27,7 +27,7 @@ export default function PosterCard({ media }: { media: Media }) {
         {media.title}
       </p>
       <p className="mt-0.5 truncate text-xs text-ink-secondary">
-        {media.year} · {media.duration}
+        {[media.year, media.duration].filter(Boolean).join(" · ")}
       </p>
     </Link>
   );

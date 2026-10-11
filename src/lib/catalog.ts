@@ -24,8 +24,9 @@ import { requireAdmin } from "@/lib/session";
  * The catalog: every read of titles and episodes goes through here.
  * Server code only.
  *
- * - The public site only ever gets published titles. Drafts show up in
- *   the admin library alone (listLibrary, which checks for an admin).
+ * - The public site only ever gets published titles. Drafts and trashed
+ *   titles show up only in the admin panel's reads (listLibrary and the
+ *   editor's, at the end), which check for an admin themselves.
  * - Every function first waits for a request (connection()), so nothing
  *   reads the catalog at build time: CI builds before its database is
  *   migrated, and preview deploys may have no database at all.
@@ -430,7 +431,8 @@ export type LibraryRow = {
 
 /**
  * The admin library: one page of movies or series, drafts included,
- * newest first. Only for admins (checked here too).
+ * newest first. Titles in the trash are listed by listTrash instead.
+ * Only for admins (checked here too).
  */
 export async function listLibrary({
   type,
@@ -450,6 +452,7 @@ export async function listLibrary({
   const where: Prisma.MediaWhereInput = {
     type,
     status,
+    trashedAt: null,
     title: search ? { contains: escapeLike(search), mode: "insensitive" } : undefined,
   };
   const total = await db.media.count({ where });
@@ -485,5 +488,100 @@ export async function listLibrary({
       ? { ...row, seasons: seasons.get(row.id), episodes: _count.episodes }
       : row
   );
+  return { items, page, totalPages, total };
+}
+
+// --- Admin editor ---------------------------------------------------------------
+// Everything here includes drafts and trashed titles, so each one checks
+// for an admin itself.
+
+/** A title with its episodes, for its edit page. */
+export async function getTitleForEdit(id: string) {
+  await requireAdmin();
+  await connection();
+  if (!isMediaId(id)) return null;
+  return db.media.findUnique({
+    where: { id },
+    include: { episodes: { orderBy: EPISODE_ORDER } },
+  });
+}
+
+/** The series an episode can be added to (not trashed), A to Z. */
+export async function listSeriesChoices() {
+  await requireAdmin();
+  await connection();
+  return db.media.findMany({
+    where: { type: "series", trashedAt: null },
+    orderBy: [{ title: "asc" }, { id: "asc" }],
+    select: { id: true, title: true },
+  });
+}
+
+/** A series' last episode (highest season, then episode), or null. */
+export async function getLastEpisode(seriesId: string) {
+  await requireAdmin();
+  await connection();
+  return db.episode.findFirst({
+    where: { mediaId: seriesId },
+    orderBy: [{ seasonNumber: "desc" }, { episodeNumber: "desc" }],
+    select: { seasonNumber: true, episodeNumber: true },
+  });
+}
+
+/** /admin/library/episodes: one page of episodes, of one series or all. */
+export async function listEpisodes({
+  seriesId,
+  page: requestedPage,
+}: {
+  seriesId?: string;
+  page: number;
+}) {
+  await requireAdmin();
+  await connection();
+  const where: Prisma.EpisodeWhereInput = { mediaId: seriesId, media: { trashedAt: null } };
+  const total = await db.episode.count({ where });
+  const { page, totalPages, skip } = pageWindow(total, requestedPage, LIBRARY_PAGE_SIZE);
+  const items = await db.episode.findMany({
+    where,
+    orderBy: [{ media: { title: "asc" } }, { mediaId: "asc" }, ...EPISODE_ORDER],
+    skip,
+    take: LIBRARY_PAGE_SIZE,
+    include: { media: { select: { title: true } } },
+  });
+  return { items, page, totalPages, total };
+}
+
+/** An episode with its series, for its edit page. */
+export async function getEpisodeForEdit(id: string) {
+  await requireAdmin();
+  await connection();
+  if (!isMediaId(id)) return null;
+  return db.episode.findUnique({
+    where: { id },
+    include: { media: { select: { id: true, title: true, trashedAt: true } } },
+  });
+}
+
+/** /admin/trash: titles moved to the trash, most recent first. */
+export async function listTrash({ page: requestedPage }: { page: number }) {
+  await requireAdmin();
+  await connection();
+  const where: Prisma.MediaWhereInput = { trashedAt: { not: null } };
+  const total = await db.media.count({ where });
+  const { page, totalPages, skip } = pageWindow(total, requestedPage, LIBRARY_PAGE_SIZE);
+  const items = await db.media.findMany({
+    where,
+    orderBy: [{ trashedAt: "desc" }, { id: "asc" }],
+    skip,
+    take: LIBRARY_PAGE_SIZE,
+    select: {
+      id: true,
+      type: true,
+      title: true,
+      year: true,
+      trashedAt: true,
+      _count: { select: { episodes: true } },
+    },
+  });
   return { items, page, totalPages, total };
 }

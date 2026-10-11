@@ -1,3 +1,5 @@
+import { imageHosts } from "./src/lib/image-hosts.mjs";
+
 // The Content-Security-Policy is set per request (it carries a nonce) by
 // src/proxy.ts — see src/lib/csp.ts. These are the static headers.
 const securityHeaders = [
@@ -18,15 +20,9 @@ const securityHeaders = [
 const nextConfig = {
   poweredByHeader: false,
   images: {
-    remotePatterns: [
-      // Placeholder posters for the sample catalog (the
-      // *_catalog_sample_data migration) and Continue Watching. Remove once
-      // real uploaded/imported artwork replaces these.
-      { protocol: "https", hostname: "picsum.photos" },
-      { protocol: "https", hostname: "fastly.picsum.photos" },
-      // add real poster/thumbnail CDN domains here once you have them, e.g.:
-      // { protocol: 'https', hostname: 'your-cdn.example.com' },
-    ],
+    // The sample catalog's placeholder photos, plus the hosts in
+    // IMAGE_HOSTS (see src/lib/image-hosts.mjs).
+    remotePatterns: imageHosts().map((hostname) => ({ protocol: "https", hostname })),
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

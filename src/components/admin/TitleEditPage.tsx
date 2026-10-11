@@ -1,0 +1,171 @@
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { ArrowLeft, Plus } from "lucide-react";
+import Badge from "@/components/Badge";
+import MediaCoverThumb from "@/components/MediaCoverThumb";
+import { BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY } from "@/components/admin/FormFields";
+import TitleForm from "@/components/admin/TitleForm";
+import { restoreTitle, trashTitle, updateTitle } from "@/lib/admin-catalog-actions";
+import { getTitleForEdit } from "@/lib/catalog";
+import { imageHosts } from "@/lib/image-hosts.mjs";
+import type { MediaType } from "@/lib/media";
+import { imageUrlProblem, libraryPath, titleValues } from "@/lib/title-form";
+import { titleHref } from "@/lib/title-href";
+
+/**
+ * /admin/library/movies/[id] and /admin/library/series/[id]: a title's
+ * edit page, with its episodes for a series. A title in the trash can
+ * only be restored. Admins only (getTitleForEdit checks too).
+ */
+export default async function TitleEditPage({
+  type,
+  id,
+  added,
+}: {
+  type: MediaType;
+  id: string;
+  /** Just added: createTitle opens the page with ?added=1. */
+  added: boolean;
+}) {
+  const row = await getTitleForEdit(id);
+  if (!row) notFound();
+  // A series opened under /movies (or the other way round).
+  if (row.type !== type) redirect(`${libraryPath(row.type)}/${row.id}`);
+
+  const isSeries = row.type === "series";
+  const isTrashed = row.trashedAt !== null;
+  const isPublished = row.status === "published";
+  const hosts = imageHosts();
+  // next/image refuses hosts that aren't allowed (any more): show the
+  // gradient instead.
+  const posterUrl = imageUrlProblem(row.posterUrl, hosts) ? undefined : row.posterUrl;
+
+  return (
+    <div className="px-6 py-10 sm:px-10">
+      <Link
+        href={libraryPath(row.type)}
+        className="inline-flex items-center gap-1.5 text-sm text-ink-secondary transition-colors hover:text-ink-primary"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        {isSeries ? "Series" : "Movies"}
+      </Link>
+
+      <div className="mt-6 flex flex-wrap items-start gap-6">
+        <div className="w-24 shrink-0">
+          <MediaCoverThumb
+            entry={{ title: row.title, posterUrl, gradient: row.gradient ?? undefined }}
+            sizes="96px"
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h1 className="break-words font-display text-2xl font-bold">{row.title}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <Badge tone={isPublished && !isTrashed ? "success" : "neutral"}>
+              {isTrashed ? "In the trash" : isPublished ? "Published" : "Draft"}
+            </Badge>
+            <span className="text-sm text-ink-muted">{titleHref(row)}</span>
+          </div>
+          {!isTrashed && (
+            <div className="mt-4 flex flex-wrap gap-3">
+              {isPublished && (
+                <Link href={titleHref(row)} className={BUTTON_SECONDARY}>
+                  View on the site
+                </Link>
+              )}
+              <form action={trashTitle.bind(null, row.id)}>
+                <button type="submit" className={BUTTON_DANGER}>
+                  Move to trash
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {added && !isTrashed && (
+        <p role="status" className="mt-8 max-w-3xl text-sm font-medium text-status-success">
+          {isPublished
+            ? "Added and published."
+            : "Added as a draft. Set its status to Published when it's ready."}
+          {isSeries && " Next, add its episodes below."}
+        </p>
+      )}
+
+      <div className="mt-8">
+        {isTrashed ? (
+          <div className="max-w-xl rounded-card border border-border-subtle bg-bg-surface p-5">
+            <p className="text-sm text-ink-secondary">
+              This title is in the trash, so it&apos;s off the site. Restore it to edit it. It
+              comes back as a draft.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <form action={restoreTitle.bind(null, row.id)}>
+                <button type="submit" className={BUTTON_PRIMARY}>
+                  Restore
+                </button>
+              </form>
+              <Link href="/admin/trash" className={BUTTON_SECONDARY}>
+                Open the trash
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <TitleForm
+            type={row.type}
+            action={updateTitle.bind(null, row.id)}
+            initialValues={titleValues(row)}
+            imageHosts={hosts}
+            lastYear={new Date().getUTCFullYear() + 5}
+            submitLabel="Save changes"
+          />
+        )}
+      </div>
+
+      {isSeries && (
+        <section aria-labelledby="episodes-heading" className="mt-12 max-w-3xl">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <h2 id="episodes-heading" className="font-display text-xl font-bold">
+              Episodes
+            </h2>
+            {!isTrashed && (
+              <Link
+                href={`/admin/upload/episodes?series=${row.id}`}
+                className={`flex items-center gap-2 ${BUTTON_SECONDARY}`}
+              >
+                <Plus className="h-4 w-4" />
+                Add an episode
+              </Link>
+            )}
+          </div>
+          {row.episodes.length === 0 ? (
+            <p className="mt-4 text-sm text-ink-secondary">No episodes yet.</p>
+          ) : (
+            <ul className="mt-4 divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-bg-surface">
+              {row.episodes.map((episode) => (
+                <li key={episode.id}>
+                  <Link
+                    href={`/admin/library/episodes/${episode.id}`}
+                    className="flex items-center gap-4 px-4 py-3 text-sm transition-colors hover:bg-bg-elevated"
+                  >
+                    <span className="w-24 shrink-0 text-ink-muted">
+                      <span aria-hidden="true">
+                        S{episode.seasonNumber} · E{episode.episodeNumber}
+                      </span>
+                      <span className="sr-only">
+                        Season {episode.seasonNumber}, episode {episode.episodeNumber}:
+                      </span>
+                    </span>
+                    <span className="min-w-0 flex-1 truncate font-medium text-ink-primary">
+                      {episode.title}
+                    </span>
+                    <span className="shrink-0 text-ink-muted">{episode.duration}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}

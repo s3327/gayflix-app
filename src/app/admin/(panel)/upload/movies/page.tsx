@@ -1,10 +1,7 @@
-import AdminPagePlaceholder from "@/components/admin/PagePlaceholder";
+import AddTitlePage from "@/components/admin/AddTitlePage";
+import { requireAdmin } from "@/lib/session";
 
-export default function UploadMoviesPage() {
-  return (
-    <AdminPagePlaceholder
-      title="Upload — Movies"
-      description="Movie upload flow goes here."
-    />
-  );
+export default async function UploadMoviesPage() {
+  await requireAdmin();
+  return <AddTitlePage type="movie" />;
 }

@@ -128,6 +128,8 @@ model Media {
   title          String
   year           Int
   /// As cards show it: "1h 52m" for a movie, "3 Seasons" for a series.
+  /// The admin editor sets it from a movie's runtime, and from the seasons
+  /// a series has episodes in.
   duration       String
   /// The first one is the main genre, the one cards show.
   genres         String[]
@@ -152,9 +154,13 @@ model Media {
   /// Tailwind gradient stops shown behind the poster.
   gradient       String?
   /// The home page hero shows the most recently updated featured title.
+  /// The admin editor keeps it to one.
   featured       Boolean     @default(false)
   /// Ranks Trending.
   viewCount      Int         @default(0)
+  /// Set while the title is in the admin panel's trash. Trashing also
+  /// makes it a draft, so the public site never shows a trashed title.
+  trashedAt      DateTime?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   episodes       Episode[]

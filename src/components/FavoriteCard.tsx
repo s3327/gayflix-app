@@ -30,7 +30,7 @@ export default function FavoriteCard({ entry }: { entry: FavoriteEntry }) {
           {entry.title}
         </p>
         <p className="mt-0.5 truncate text-xs text-ink-secondary">
-          {entry.year} · {entry.duration}
+          {[entry.year, entry.duration].filter(Boolean).join(" · ")}
         </p>
       </Link>
 

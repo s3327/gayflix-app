@@ -46,7 +46,18 @@ test.describe("account", () => {
 
 test.describe("admin", () => {
   test.use({ httpCredentials: ADMIN_CREDENTIALS, storageState: ADMIN_STATE });
-  for (const path of ["/admin/login", "/admin/library/movies", "/admin/setting", "/admin/reports"]) {
+  for (const path of [
+    "/admin/login",
+    "/admin/library/movies",
+    "/admin/library/series/the-brownstone",
+    "/admin/library/episodes",
+    "/admin/library/episodes/the-brownstone-season-1-episode-1",
+    "/admin/upload/movies",
+    "/admin/upload/episodes?series=the-brownstone",
+    "/admin/trash",
+    "/admin/setting",
+    "/admin/reports",
+  ]) {
     test(`${path} has no serious accessibility violations`, async ({ page }) => {
       await page.goto(path, { waitUntil: "networkidle" });
       expect(await seriousViolations(page)).toEqual([]);

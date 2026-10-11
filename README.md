@@ -7,8 +7,8 @@ the public site and the admin panel, deployed as one Next.js app.
 with an emailed code, login, password reset, Google sign-in, admin
 roles), and favorites, lists, watch history and reports are stored in
 the database. So is the catalog, which starts out as a sample catalog of
-placeholder titles; the admin library lists it, drafts included, but
-can't edit titles yet. See
+placeholder titles; admins add, edit, publish and remove titles and
+episodes in the admin panel. See
 [docs/AUDIT_REMEDIATION_PLAN.md](docs/AUDIT_REMEDIATION_PLAN.md) for what
 has to change before launch.
 
@@ -86,6 +86,7 @@ on every pull request. Dependabot opens weekly dependency update PRs.
 | `RESEND_API_KEY`, `EMAIL_FROM` | **Required in production.** Sends verification codes and reset links through Resend. In development, emails print to the server console. |
 | `ADMIN_BASIC_AUTH_USER`, `ADMIN_BASIC_AUTH_PASSWORD` | Optional extra password in front of `/admin`. Admin pages always need an admin account with two-factor; set both of these for a second lock, or neither. Setting only one disables the panel (503). |
 | `SITE_URL` | Public origin for `sitemap.xml`, `robots.txt` and metadata URLs, read at build time. Optional on Vercel, which defaults to the production domain. |
+| `IMAGE_HOSTS` | Optional. Hosts that posters and backdrops may come from besides `picsum.photos`, comma-separated (`images.example.com,cdn.example.org`). Read at build time, so redeploy after changing it. |
 
 ## Deploying to Vercel
 
@@ -132,7 +133,8 @@ src/
       list/[id]/         → a shared list: anyone with the link can view it
     admin/               → admin panel (noindex; password gate re-checked in layout.tsx)
       (panel)/           → pages with the sidebar; admin role + two-factor required
-                           (reports/ is the queue of "Report an issue" submissions)
+                           (library/, upload/ and trash/ are the title editor;
+                           reports/ is the queue of "Report an issue" submissions)
       setup-2fa/         → where a new admin turns on two-factor
     api/auth/            → Better Auth (sign-up, sign-in, codes, reset, sessions)
     api/search/          → header search suggestions (catalog stays server-side)
@@ -142,6 +144,8 @@ src/
   lib/                   → contexts, hooks and helpers
     catalog.ts           → every read of titles and episodes (server only;
                            the public site only ever gets published titles)
+    admin-catalog-actions.ts → the title editor's server functions; title-form.ts
+                           checks their fields
     auth.ts              → Better Auth config (server only)
     auth-client.ts       → browser auth calls
     session.ts           → getSession / requireUser / requireAdmin (server only)
@@ -157,7 +161,8 @@ scripts/make-admin.mjs   → grant or revoke the admin role
 scripts/vercel-build.sh  → Vercel's build command: migrations, then the build
 vercel.json              → points Vercel at that build command
 e2e/                     → Playwright end-to-end and axe accessibility tests
-next.config.mjs          → image hosts and security headers (HSTS, framing, ...)
+next.config.mjs          → image hosts (src/lib/image-hosts.mjs) and security
+                           headers (HSTS, framing, ...)
 docs/                    → design notes (build log) and the audit plan
 ```
 
@@ -172,8 +177,10 @@ docs/                    → design notes (build log) and the audit plan
   `firstParam`), because a repeated key arrives as an array.
 - **Drafts are never public.** Pages and routes read titles through
   `src/lib/catalog.ts`, which only returns published titles to the public
-  site; drafts appear in the admin library alone. Each catalog read waits
-  for a request (`connection()`), so a build never queries the database.
+  site; drafts appear in the admin panel alone. Moving a title to the
+  trash also makes it a draft, so public reads don't need to know about
+  the trash. Each catalog read waits for a request (`connection()`), so a
+  build never queries the database.
 - **Title gradients** are stored in the database, where Tailwind can't
   see them, so `src/app/globals.css` generates every gradient stop in the
   brand and pride colors. A gradient in a new color needs adding there.
@@ -194,8 +201,10 @@ docs/                    → design notes (build log) and the audit plan
   (Prisma 7 no longer generates on migrate). After changing Better Auth
   plugins, regenerate its models first:
   `npx auth@1.7.7 generate --config src/lib/auth.ts`.
-- **Third-party origins** (CDNs, video embeds) need adding both to
-  `images.remotePatterns` and to the CSP in `src/lib/csp.ts`.
+- **Third-party origins.** Images load through `next/image`, so a new
+  image host only needs adding to `IMAGE_HOSTS` (`src/lib/image-hosts.mjs`).
+  Anything the browser loads directly, such as a video embed, needs adding
+  to the CSP in `src/lib/csp.ts`.
 - **Contrast.** Muted text uses `text-ink-muted` and pink text uses
   `text-ink-brand`; both clear WCAG AA on every background. The e2e axe
   checks fail the build on contrast regressions.

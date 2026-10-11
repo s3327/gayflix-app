@@ -136,12 +136,14 @@ function NavItem({
       {!collapsed && open && (
         <div className="ml-[22px] mt-1 flex flex-col gap-0.5 border-l border-border-subtle pl-4">
           {entry.children.map((child) => {
-            const isActive = pathname === child.href;
+            const isCurrent = pathname === child.href;
+            // An edit page (/admin/library/movies/<id>) highlights its list.
+            const isActive = isCurrent || pathname.startsWith(`${child.href}/`);
             return (
               <Link
                 key={child.href}
                 href={child.href}
-                aria-current={isActive ? "page" : undefined}
+                aria-current={isCurrent ? "page" : undefined}
                 className={`rounded-md px-3 py-2 text-sm transition-colors ${
                   isActive
                     ? "bg-brand-pink/10 font-semibold text-ink-brand"

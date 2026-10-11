@@ -29,9 +29,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   check ownership. Title snapshots go through `parseEntry()`.
 - **Catalog:** titles live in the `media` and `episode` tables and are
   read only through `src/lib/catalog.ts`. Its public reads return
-  published titles only; drafts appear only in the admin library, which
-  calls `requireAdmin()`. Every read awaits `connection()` first, because
-  nothing may query the database at build time (CI builds before it
-  migrates, and previews have no database).
+  published titles only; drafts and trashed titles appear only in its
+  admin reads, which call `requireAdmin()`. Every read awaits
+  `connection()` first, because nothing may query the database at build
+  time (CI builds before it migrates, and previews have no database).
+  Titles change only through `src/lib/admin-catalog-actions.ts`, whose
+  field checks are in `src/lib/title-form.ts`.
 - **Before pushing,** run `npm run check` (lint, typecheck, tests, build);
   CI runs the same on every push to `main`.

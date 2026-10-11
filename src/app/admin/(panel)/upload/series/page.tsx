@@ -1,10 +1,7 @@
-import AdminPagePlaceholder from "@/components/admin/PagePlaceholder";
+import AddTitlePage from "@/components/admin/AddTitlePage";
+import { requireAdmin } from "@/lib/session";
 
-export default function UploadSeriesPage() {
-  return (
-    <AdminPagePlaceholder
-      title="Upload — Series"
-      description="Series upload flow goes here."
-    />
-  );
+export default async function UploadSeriesPage() {
+  await requireAdmin();
+  return <AddTitlePage type="series" />;
 }
