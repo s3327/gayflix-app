@@ -169,7 +169,8 @@ turned off and says so.
 | `SITE_URL` | Part 7 | | |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Part 8 (optional) | | |
 | `ADMIN_BASIC_AUTH_USER`, `ADMIN_BASIC_AUTH_PASSWORD` | Optional, both or neither | | |
-| `IMAGE_HOSTS` | Optional, for posters on your own image host (see [Managing titles](#managing-titles)) | | |
+| `IMAGE_HOSTS` | Optional, for posters on your own image host (see [Managing titles](#managing-titles)) and for imports (see [Importing titles](#importing-titles)) | | |
+| `TMDB_API_KEY`, `OMDB_API_KEY` | Optional, for the Import page (see [Importing titles](#importing-titles)) | | |
 
 `BETTER_AUTH_URL` isn't needed. It follows `SITE_URL`, or Vercel's
 production address when `SITE_URL` isn't set.
@@ -476,6 +477,57 @@ list's 50 rows a page. Set them back to `'published'` to undo it:
 ```sql
 UPDATE "media" SET "status" = 'draft';
 ```
+
+### Importing titles
+
+**Import** in the admin panel finds movies and series on
+[TMDB](https://www.themoviedb.org/), checks each one against IMDb
+through [OMDb](https://www.omdbapi.com/), and adds it as a draft with its
+details filled in. Both sources are free for a non-commercial site, with
+the credit that's in the site's footer. To turn it on:
+
+1. **TMDB key:** sign up at themoviedb.org, open **Settings → API**, and
+   request a key for non-commercial use. Copy the **API Read Access
+   Token** (the long one). The shorter **API Key** works too.
+2. **OMDb key:** request a free key at
+   [omdbapi.com/apikey.aspx](https://www.omdbapi.com/apikey.aspx) and
+   activate it from the email. A free key allows 1,000 requests a day,
+   and an import uses one or two.
+3. In Vercel, open **Settings → Environment Variables** and add these
+   for Production. Mark the two keys **Sensitive**:
+
+   | Variable | Value |
+   |---|---|
+   | `TMDB_API_KEY` | The token from step 1 |
+   | `OMDB_API_KEY` | The key from step 2 |
+   | `IMAGE_HOSTS` | `image.tmdb.org,m.media-amazon.com`, after any hosts you already have, separated by commas |
+
+4. Redeploy (**Deployments**, the latest one's **⋯** menu, **Redeploy**):
+   the site reads `IMAGE_HOSTS` when it's built.
+
+Without `TMDB_API_KEY`, the Import page says the setting is missing.
+Without `OMDB_API_KEY`, imports still work but aren't checked against
+IMDb.
+
+**Search** by title (pick **Movie** or **Series**) or by IMDb ID (such as
+`tt0133093`, or a link to the IMDb page). Results come 40 to a page. A
+title imported before shows **In library** or **In trash** instead of
+**Import**, and links to it. **Import**:
+
+- saves the draft and opens it when TMDB and IMDb agree and nothing is
+  missing. Fields TMDB leaves empty, such as a runtime, are filled from
+  IMDb.
+- opens the **Add a movie** or **Add a series** form, filled in, when
+  IMDb's title or year doesn't match TMDB's, or when neither has a field
+  the form needs. The problem is shown above the form; save it from
+  there.
+- asks which type to import it as when TMDB and IMDb disagree on movie
+  or series.
+
+Imported titles are drafts, never featured. A title's admin page says it
+came from TMDB, and either which IMDb title it matches or **Not checked
+against IMDb** (OMDb was down, out of requests, or had no match). Series
+arrive without episodes for now; add them as usual.
 
 ### Lost phone or authenticator app
 

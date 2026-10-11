@@ -43,6 +43,8 @@ test.describe("admin", () => {
     "/admin/library/episodes",
     "/admin/library/episodes/the-brownstone-season-1-episode-1",
     "/admin/upload/movies",
+    "/admin/import?q=E2E+Many&by=title&type=movie",
+    "/admin/upload/movies?tmdb=movie%2F990003",
     "/admin/upload/episodes?series=the-brownstone",
     "/admin/trash",
     "/admin/setting",

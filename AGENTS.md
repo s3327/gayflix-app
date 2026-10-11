@@ -33,8 +33,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   admin reads, which call `requireAdmin()`. Every read awaits
   `connection()` first, because nothing may query the database at build
   time (CI builds before it migrates, and previews have no database).
-  Titles change only through `src/lib/admin-catalog-actions.ts`, whose
-  field checks are in `src/lib/title-form.ts`. Views (`media_view` and
+  Titles change only through `src/lib/admin-catalog-actions.ts` and the
+  Import page's `src/lib/admin-import-actions.ts` (both add titles with
+  `src/lib/title-store.ts`), whose field checks are in
+  `src/lib/title-form.ts`. Views (`media_view` and
   `viewCount`, which rank Trending) are counted only by
   `src/lib/view-actions.ts`, and never store a raw IP address.
 - **Before pushing,** run `npm run check` (lint, typecheck, tests, build);

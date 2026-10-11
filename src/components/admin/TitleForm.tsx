@@ -25,6 +25,8 @@ export default function TitleForm({
   type,
   action,
   initialValues,
+  initialErrors,
+  hiddenFields = {},
   imageHosts,
   lastYear,
   submitLabel,
@@ -33,6 +35,10 @@ export default function TitleForm({
   type: MediaType;
   action: Action;
   initialValues: TitleValues;
+  /** Fields to fix before the first save: an import's, say. */
+  initialErrors?: Record<string, string>;
+  /** Sent with every save: where an imported title came from. */
+  hiddenFields?: Record<string, string>;
   /** Where poster links may point (src/lib/image-hosts.mjs). */
   imageHosts: string[];
   lastYear: number;
@@ -41,19 +47,24 @@ export default function TitleForm({
 }) {
   const [state, formAction, pending] = useActionState(action, {});
   const values = { ...initialValues, ...state.values };
-  const errors = state.errors ?? {};
+  // Until the first reply, the problems the page came with.
+  const errors = state.version === undefined ? (initialErrors ?? {}) : (state.errors ?? {});
+  const hasErrors = Object.keys(errors).length > 0;
   const isMovie = type === "movie";
   const formRef = useRef<HTMLFormElement>(null);
 
-  // A reply with problems: start at the first field to fix.
+  // Problems to fix: start at the first one.
   useEffect(() => {
-    if (state.errors) formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
-  }, [state]);
+    if (hasErrors) formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [state, hasErrors]);
 
   return (
     // A new key after each reply re-creates the fields from `values`:
     // React clears a form once it's submitted.
     <form ref={formRef} key={state.version ?? 0} action={formAction} className="flex max-w-3xl flex-col gap-6">
+      {Object.entries(hiddenFields).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
       <div className="grid gap-5 sm:grid-cols-2">
         <SelectField name="status" label="Status" defaultValue={values.status}>
           <option value="draft">Draft (not on the site)</option>

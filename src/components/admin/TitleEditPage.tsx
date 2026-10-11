@@ -21,11 +21,14 @@ export default async function TitleEditPage({
   type,
   id,
   added,
+  imported,
 }: {
   type: MediaType;
   id: string;
   /** Just added: createTitle opens the page with ?added=1. */
   added: boolean;
+  /** Just imported: the Import page opens it with ?imported=1. */
+  imported: boolean;
 }) {
   const row = await getTitleForEdit(id);
   if (!row) notFound();
@@ -65,6 +68,7 @@ export default async function TitleEditPage({
             </Badge>
             <span className="text-sm text-ink-muted">{titleHref(row)}</span>
           </div>
+          {row.tmdbId && <SourceLine tmdbId={row.tmdbId} imdbId={row.imdbId} />}
           {!isTrashed && (
             <div className="mt-4 flex flex-wrap gap-3">
               {isPublished && (
@@ -82,11 +86,15 @@ export default async function TitleEditPage({
         </div>
       </div>
 
-      {added && !isTrashed && (
+      {(added || imported) && !isTrashed && (
         <p role="status" className="mt-8 max-w-3xl text-sm font-medium text-status-success">
-          {isPublished
-            ? "Added and published."
-            : "Added as a draft. Set its status to Published when it's ready."}
+          {imported
+            ? isPublished
+              ? "Imported and published."
+              : "Imported as a draft. Check it, then set its status to Published when it's ready."
+            : isPublished
+              ? "Added and published."
+              : "Added as a draft. Set its status to Published when it's ready."}
           {isSeries && " Next, add its episodes below."}
         </p>
       )}
@@ -167,5 +175,30 @@ export default async function TitleEditPage({
         </section>
       )}
     </div>
+  );
+}
+
+const SOURCE_LINK = "text-ink-secondary underline underline-offset-2 transition-colors hover:text-ink-primary";
+
+/** Where an imported title came from, and whether it matched IMDb. */
+function SourceLine({ tmdbId, imdbId }: { tmdbId: string; imdbId: string | null }) {
+  return (
+    <p className="mt-2 text-sm text-ink-muted">
+      Imported from{" "}
+      <a href={`https://www.themoviedb.org/${tmdbId}`} className={SOURCE_LINK}>
+        TMDB
+      </a>
+      {" · "}
+      {imdbId ? (
+        <>
+          Matches{" "}
+          <a href={`https://www.imdb.com/title/${imdbId}/`} className={SOURCE_LINK}>
+            IMDb {imdbId}
+          </a>
+        </>
+      ) : (
+        "Not checked against IMDb"
+      )}
+    </p>
   );
 }

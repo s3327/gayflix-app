@@ -301,6 +301,11 @@ export function libraryPath(type: MediaType) {
   return `/admin/library/${type === "movie" ? "movies" : "series"}`;
 }
 
+/** The form that adds a movie or a series. */
+export function uploadPath(type: MediaType) {
+  return `/admin/upload/${type === "movie" ? "movies" : "series"}`;
+}
+
 /** /episode/[id]: "the-brownstone-season-1-episode-2". */
 export function episodeId(seriesId: string, season: number, episode: number) {
   return `${seriesId}-season-${season}-episode-${episode}`;
