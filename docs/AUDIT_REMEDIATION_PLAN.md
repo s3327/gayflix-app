@@ -469,8 +469,8 @@ Migration: `prisma/migrations/*_media_trash` (a `trashedAt` column).
   itself and checks every field (`src/lib/title-form.ts`) and every id
   the page bound to it. A form with problems comes back with the fields
   marked and what was typed kept, and focus on the first field to fix.
-- **Images are links, not uploads.** They must be `https` and on an
-  allowed host: the sample catalog's `picsum.photos`, plus any listed in
+- **Images are links** (uploads came later; see "Shipped: poster
+  uploads"). They must be `https` and on an allowed host: the sample catalog's `picsum.photos`, plus any listed in
   the `IMAGE_HOSTS` setting (`src/lib/image-hosts.mjs`). The same list
   feeds `next/image`, so a saved image always displays.
 - **Verified:**
@@ -521,9 +521,44 @@ also resets the sample catalog's made-up view counts to zero).
   - unit tests for the day math and the viewer keys; pruning checked by
     hand.
 
+### Shipped: poster uploads ✅
+- **Upload a poster** and **Upload a backdrop** in the title editor, on
+  the add and edit pages, once a Vercel Blob store is connected to the
+  project (DEPLOYMENT.md, Part 11). Without one, the buttons don't show
+  and images stay links only.
+- **How:** the file goes to a server function,
+  `src/lib/admin-image-actions.ts`, as soon as it's picked; it stores the
+  image in Blob under a random name and returns its address, which fills
+  the image link. The form still only sends links, so pasting one keeps
+  working, and saving checks it as before.
+- **Checks:** the server function calls `requireAdmin()` itself and takes
+  JPEG, PNG, WebP or AVIF only, read from the file's bytes rather than
+  its name or the type the browser reports (no SVG, which can carry
+  scripts), up to 4 MB (`src/lib/image-upload.ts`). The browser checks
+  the size first, to save sending a file that would be refused. Server
+  functions now accept up to 4.5 MB (`next.config.mjs`), Vercel's own
+  limit.
+- **Allowed host:** the store's address is worked out from
+  `BLOB_READ_WRITE_TOKEN` (`uploadHost()` in `src/lib/image-hosts.mjs`)
+  and joins the allowed image hosts, so `next/image` serves uploads and
+  the form accepts their links. An upload whose address isn't on it is
+  refused, with a `[uploads]` line in the logs.
+- **Verified:**
+  - new e2e tests against a stand-in Blob store (`e2e/blob-stub.mjs`):
+    upload a poster while adding a movie and a backdrop while editing it,
+    checking what was stored and what was saved; an SVG named `.png` is
+    refused, and so is a file over 4 MB, before it's sent; a link still
+    works after either;
+  - unit tests for reading the type from the bytes and for the store's
+    host;
+  - checked by hand at desktop and phone widths.
+- **Later:** images that are replaced, or uploaded and never saved, stay
+  in the store. Deleting them would need tracking which images titles
+  still use.
+
 ### Still to do
-- **Image uploads:** posters and backdrops are links for now. Uploading
-  files needs a storage service such as Vercel Blob.
+- **Admin panel on phones:** the sidebar doesn't fold away, so on a phone
+  every admin page scrolls sideways (found while checking uploads).
 - **Playback progress:** Continue Watching can't show how far someone got
   until the player has a real video source that reports it.
 

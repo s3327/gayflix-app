@@ -34,9 +34,16 @@ const nextConfig = {
       __SENTRY_TRACING__: false,
     },
   },
+  experimental: {
+    serverActions: {
+      // Room for a 4 MB poster upload (src/lib/image-upload.ts) and the
+      // form's own bytes. Vercel turns away anything over 4.5 MB anyway.
+      bodySizeLimit: "4.5mb",
+    },
+  },
   images: {
-    // The sample catalog's placeholder photos, plus the hosts in
-    // IMAGE_HOSTS (see src/lib/image-hosts.mjs).
+    // The sample catalog's placeholder photos, the Blob store uploads go
+    // to, and the hosts in IMAGE_HOSTS (see src/lib/image-hosts.mjs).
     remotePatterns: imageHosts().map((hostname) => ({ protocol: "https", hostname })),
   },
   async headers() {

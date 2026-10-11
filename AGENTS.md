@@ -36,9 +36,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   Titles change only through `src/lib/admin-catalog-actions.ts` and the
   Import page's `src/lib/admin-import-actions.ts` (both add titles with
   `src/lib/title-store.ts`), whose field checks are in
-  `src/lib/title-form.ts`. Views (`media_view` and
-  `viewCount`, which rank Trending) are counted only by
-  `src/lib/view-actions.ts`, and never store a raw IP address.
+  `src/lib/title-form.ts`. Poster and backdrop uploads go only through
+  `src/lib/admin-image-actions.ts`, which checks the file's bytes.
+  Views (`media_view` and `viewCount`, which rank Trending) are counted
+  only by `src/lib/view-actions.ts`, and never store a raw IP address.
 - **Crash reports** go to Sentry when `NEXT_PUBLIC_SENTRY_DSN` is set,
   from `src/instrumentation.ts` (server), `src/instrumentation-client.ts`
   (browser) and the error pages. What they may carry is decided in
