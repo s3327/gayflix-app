@@ -34,6 +34,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   `connection()` first, because nothing may query the database at build
   time (CI builds before it migrates, and previews have no database).
   Titles change only through `src/lib/admin-catalog-actions.ts`, whose
-  field checks are in `src/lib/title-form.ts`.
+  field checks are in `src/lib/title-form.ts`. Views (`media_view` and
+  `viewCount`, which rank Trending) are counted only by
+  `src/lib/view-actions.ts`, and never store a raw IP address.
 - **Before pushing,** run `npm run check` (lint, typecheck, tests, build);
   CI runs the same on every push to `main`.

@@ -156,7 +156,8 @@ model Media {
   /// The home page hero shows the most recently updated featured title.
   /// The admin editor keeps it to one.
   featured       Boolean     @default(false)
-  /// Ranks Trending.
+  /// Views of all time (see MediaView). Trending ranks by the last 7
+  /// days' views and breaks ties with this.
   viewCount      Int         @default(0)
   /// Set while the title is in the admin panel's trash. Trashing also
   /// makes it a draft, so the public site never shows a trashed title.
@@ -164,10 +165,10 @@ model Media {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   episodes       Episode[]
+  views          MediaView[]
 
   @@index([status, type, updatedAt])
   @@index([status, createdAt])
-  @@index([status, viewCount])
   @@map("media")
 }
 
@@ -185,6 +186,23 @@ model Episode {
 
   @@unique([mediaId, seasonNumber, episodeNumber])
   @@map("episode")
+}
+
+/// One view for Trending: someone pressed Play on a movie, or on an
+/// episode of a series (counted for the series), on that UTC day. Each
+/// viewer counts once per title per day. `viewer` is a keyed hash of the
+/// account or the guest's IP address that changes every day, so rows
+/// can't be traced to a person or linked across days (src/lib/views.ts).
+/// Rows older than Trending's window are deleted.
+model MediaView {
+  mediaId String
+  viewer  String
+  day     DateTime @db.Date
+  media   Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@id([mediaId, viewer, day])
+  @@index([day, mediaId])
+  @@map("media_view")
 }
 
 // --- Library (favorites, history, lists) and reports --------------------
