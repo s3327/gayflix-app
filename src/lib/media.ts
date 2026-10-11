@@ -22,10 +22,26 @@ export type Media = {
   createdAt: string;
 };
 
-/** Trending's ranked list: the most viewed published titles. */
+/** Trending's ranked list: the most viewed published titles of the week. */
 export type TrendingMedia = Media & {
   rank: number;
-  viewCount: number;
+  /** Views in the last 7 days (see src/lib/views.ts). */
+  views: number;
+};
+
+/**
+ * A title on Continue Watching: one the signed-in user played lately. A
+ * series comes with the episode they played last.
+ */
+export type RecentlyWatched = Media & {
+  /** 16:9, when the title has one; cards fall back to the poster. */
+  backdropUrl?: string;
+  episode?: {
+    id: string;
+    seasonNumber: number;
+    episodeNumber: number;
+    title: string;
+  };
 };
 
 /** One episode of a series. */

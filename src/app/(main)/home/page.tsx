@@ -4,12 +4,12 @@ import { Play, Info } from "lucide-react";
 import ContinueWatchingSection from "@/components/ContinueWatchingSection";
 import TrendingNowSection from "@/components/TrendingNowSection";
 import TitleGridSection from "@/components/TitleGridSection";
-import { getHome } from "@/lib/catalog";
-import { continueWatching } from "@/lib/mock-continue-watching";
+import { getHome, listContinueWatching } from "@/lib/catalog";
 import { titleHref } from "@/lib/title-href";
 
 export default async function HomePage() {
-  const { featured, trending, newReleases, movies, series } = await getHome();
+  const [{ featured, trending, newReleases, movies, series }, continueWatching] =
+    await Promise.all([getHome(), listContinueWatching()]);
 
   return (
     <main>

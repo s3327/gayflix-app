@@ -459,6 +459,10 @@ admin panel; changes show on the site right away.
 - **Delete an episode:** on the episode's page. It's deleted for good:
   episodes don't go to the trash.
 
+**Trending** isn't set by hand. It ranks published titles by how many
+people pressed Play on them in the last 7 days, counting each person once
+a day per title, so it starts empty and fills as people watch.
+
 **Posters and backdrops** are links to images, not uploads. A link must
 start with `https://` and point to an allowed image host. At first that's
 only the sample catalog's `picsum.photos`. To use your own, add
@@ -620,13 +624,13 @@ what the screen or the build log says. Never paste a secret.
 
 - **Legal pages.** `/terms` and `/privacy` hold placeholder text. Have
   them written or reviewed by a lawyer, and add a cookie policy if you add
-  analytics or ads.
+  analytics or ads. Tell them what the site stores: account details,
+  favorites, lists and watch history, and a keyed hash of a guest's IP
+  address for reports and for counting views (view rows are deleted
+  after 7 days).
 - **Catalog.** The movies and shows start as a sample catalog with
   placeholder posters. Replace them with your own titles in the admin
-  panel (see [Managing titles](#managing-titles)). Two parts still show
-  sample data: Trending keeps the sample ranking, because views aren't
-  counted yet, and Continue Watching on `/home` shows sample titles to
-  everyone. Both are in the remediation plan.
+  panel (see [Managing titles](#managing-titles)).
 - **Admin panel.** Library, Upload, Trash and Reports work. Dashboard,
   Import, Users and Setting are still placeholders.
 - **Error reporting.** Apart from Vercel's logs, nothing tells you about

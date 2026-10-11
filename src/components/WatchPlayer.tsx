@@ -4,12 +4,14 @@ import { useState } from "react";
 import { Flag, Play } from "lucide-react";
 import { useHistory } from "@/lib/history-context";
 import type { FavoriteEntry } from "@/lib/favorites-context";
+import { recordView } from "@/lib/view-actions";
 import ReportModal from "@/components/ReportModal";
 
 /**
  * Still a placeholder — no real video source or embed exists yet (see
  * ServerTabs). What's real is the Play button and what it does: it
- * records a History entry immediately on click.
+ * records a History entry immediately on click, and counts a view for
+ * Trending (src/lib/view-actions.ts).
  *
  * This is deliberately the observable moment, not deeper playback
  * progress. The Play button lives in this app's own DOM, so its click
@@ -32,6 +34,8 @@ export default function WatchPlayer({ media }: { media: FavoriteEntry }) {
 
   function handlePlay() {
     recordWatch(media);
+    // A view that fails to count isn't worth bothering anyone about.
+    recordView(media.id).catch(() => {});
     setIsPlaying(true);
   }
 

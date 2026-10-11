@@ -1,7 +1,5 @@
 "use server";
 
-import { createHmac } from "node:crypto";
-import { headers } from "next/headers";
 import { findReportTitle } from "@/lib/catalog";
 import { db } from "@/lib/db";
 import {
@@ -12,6 +10,7 @@ import {
   type ReportAllowance,
 } from "@/lib/reports";
 import { getSession } from "@/lib/session";
+import { clientIp, keyedHash } from "@/lib/visitor";
 
 /*
  * Server functions behind the Report modal. Signed-in users get
@@ -22,25 +21,10 @@ import { getSession } from "@/lib/session";
 
 type Reporter = { userId: string | null; ipHash: string | null; limit: number };
 
-// The client IP as the hosting platform reports it. On Vercel both
-// headers are set by the platform, not taken from the visitor.
-async function clientIp(): Promise<string> {
-  const h = await headers();
-  return h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
-}
-
-function hashIp(ip: string): string {
-  const secret = process.env.BETTER_AUTH_SECRET;
-  if (!secret && process.env.NODE_ENV === "production") {
-    throw new Error("BETTER_AUTH_SECRET is not set");
-  }
-  return createHmac("sha256", secret ?? "dev-only-secret").update(ip).digest("hex");
-}
-
 async function currentReporter(): Promise<Reporter> {
   const session = await getSession();
   if (session) return { userId: session.user.id, ipHash: null, limit: LOGGED_IN_REPORT_LIMIT };
-  return { userId: null, ipHash: hashIp(await clientIp()), limit: GUEST_REPORT_LIMIT };
+  return { userId: null, ipHash: keyedHash(await clientIp()), limit: GUEST_REPORT_LIMIT };
 }
 
 function reportsToday(reporter: Reporter) {

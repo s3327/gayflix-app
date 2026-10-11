@@ -3,10 +3,10 @@
  * images from these hosts (next.config.mjs), and the admin title editor
  * only accepts image links on them (src/lib/title-form.ts).
  *
- * The placeholder photos used by the sample catalog and Continue Watching
- * are always allowed. IMAGE_HOSTS adds more: hostnames separated by
- * commas, e.g. "image.tmdb.org,cdn.example.com". It's read when the site
- * is built, so redeploy after changing it.
+ * The placeholder photos used by the sample catalog are always allowed.
+ * IMAGE_HOSTS adds more: hostnames separated by commas, e.g.
+ * "image.tmdb.org,cdn.example.com". It's read when the site is built, so
+ * redeploy after changing it.
  */
 const SAMPLE_HOSTS = ["picsum.photos", "fastly.picsum.photos"];
 

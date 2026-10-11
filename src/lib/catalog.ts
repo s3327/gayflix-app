@@ -8,6 +8,7 @@ import type {
   MediaDetail,
   MediaStatus,
   MediaType,
+  RecentlyWatched,
   TrendingMedia,
 } from "@/lib/media";
 import { PAGE_SIZE, pageWindow } from "@/lib/paginate";
@@ -18,7 +19,8 @@ import {
   queryYear,
   type SearchSuggestion,
 } from "@/lib/search";
-import { requireAdmin } from "@/lib/session";
+import { getSession, requireAdmin } from "@/lib/session";
+import { trendingSince } from "@/lib/views";
 
 /*
  * The catalog: every read of titles and episodes goes through here.
@@ -37,6 +39,7 @@ const PUBLISHED = { status: "published" } as const;
 /** Home rows and "You Might Also Like". */
 const ROW_SIZE = 12;
 const TRENDING_ROW_SIZE = 6;
+const CONTINUE_WATCHING_SIZE = 6;
 /** /trending ranks the 100 most viewed titles. */
 export const TRENDING_SIZE = 100;
 export const LIBRARY_PAGE_SIZE = 50;
@@ -46,8 +49,6 @@ const ORDER = {
   updated: [{ updatedAt: "desc" }, { id: "asc" }],
   /** Recently added first: New Releases and the filter pages. */
   added: [{ createdAt: "desc" }, { id: "asc" }],
-  /** Most viewed first: Trending. */
-  views: [{ viewCount: "desc" }, { id: "asc" }],
   /** A to Z (and back) for Browse. */
   title: [{ title: "asc" }, { id: "asc" }],
   "title-desc": [{ title: "desc" }, { id: "desc" }],
@@ -137,6 +138,24 @@ async function cards(
   return rows.map(toMedia);
 }
 
+/**
+ * Trending: published titles by their views in the last TRENDING_DAYS
+ * days (src/lib/views.ts), most first; ties go to the most viewed of all
+ * time. Titles nobody played in that time aren't trending.
+ */
+async function trendingRows(limit: number) {
+  return db.$queryRaw<(CardRow & { views: number })[]>`
+    SELECT ${CARD_COLUMNS}, views FROM media
+    JOIN (
+      SELECT "mediaId" AS id, count(*)::int AS views FROM media_view
+      WHERE day >= ${trendingSince(new Date())}::date
+      GROUP BY "mediaId"
+    ) recent USING (id)
+    WHERE status = 'published'
+    ORDER BY views DESC, "viewCount" DESC, id
+    LIMIT ${limit}`;
+}
+
 // --- Home ------------------------------------------------------------------
 
 /** The home page hero. */
@@ -156,7 +175,7 @@ export async function getHome() {
       orderBy: ORDER.updated,
       select: heroSelect,
     }),
-    cards({ ...PUBLISHED, viewCount: { gt: 0 } }, ORDER.views, TRENDING_ROW_SIZE),
+    trendingRows(TRENDING_ROW_SIZE),
     cards(PUBLISHED, ORDER.added, ROW_SIZE),
     cards({ ...PUBLISHED, type: "movie" }, ORDER.updated, ROW_SIZE),
     cards({ ...PUBLISHED, type: "series" }, ORDER.updated, ROW_SIZE),
@@ -171,11 +190,64 @@ export async function getHome() {
       synopsis: hero.synopsis,
       backdropUrl: hero.backdropUrl ?? undefined,
     } satisfies Featured),
-    trending,
+    trending: trending.map(toMedia),
     newReleases,
     movies,
     series,
   };
+}
+
+/**
+ * Continue Watching on the home page: the titles the signed-in user
+ * played last, newest first, one card per title (a series at the episode
+ * played last). Empty for guests, whose history stays in their browser
+ * until they sign in.
+ */
+export async function listContinueWatching(): Promise<RecentlyWatched[]> {
+  await connection();
+  const session = await getSession();
+  if (!session) return [];
+  // History holds movie and episode ids; an episode stands for its series.
+  const rows = await db.$queryRaw<
+    (CardRow & {
+      backdropUrl: string | null;
+      episodeId: string | null;
+      seasonNumber: number | null;
+      episodeNumber: number | null;
+      episodeTitle: string | null;
+    })[]
+  >`
+    SELECT ${CARD_COLUMNS}, "backdropUrl", "episodeId", "seasonNumber", "episodeNumber", "episodeTitle"
+    FROM (
+      SELECT DISTINCT ON (COALESCE(e."mediaId", h."mediaId"))
+        COALESCE(e."mediaId", h."mediaId") AS id,
+        e.id AS "episodeId",
+        e."seasonNumber",
+        e."episodeNumber",
+        e.title AS "episodeTitle",
+        h."watchedAt"
+      FROM watch_history h
+      LEFT JOIN episode e ON e.id = h."mediaId"
+      WHERE h."userId" = ${session.user.id}
+      ORDER BY COALESCE(e."mediaId", h."mediaId"), h."watchedAt" DESC
+    ) latest
+    JOIN media USING (id)
+    WHERE status = 'published'
+    ORDER BY "watchedAt" DESC, id
+    LIMIT ${CONTINUE_WATCHING_SIZE}`;
+  return rows.map((row) => ({
+    ...toMedia(row),
+    backdropUrl: row.backdropUrl ?? undefined,
+    episode:
+      row.episodeId === null
+        ? undefined
+        : {
+            id: row.episodeId,
+            seasonNumber: row.seasonNumber!,
+            episodeNumber: row.episodeNumber!,
+            title: row.episodeTitle!,
+          },
+  }));
 }
 
 // --- Listings ----------------------------------------------------------------
@@ -267,20 +339,16 @@ export async function listFilterValues(field: FilterField): Promise<string[]> {
 }
 
 /**
- * The most viewed published titles, ranked from 1. Titles nobody has
- * watched yet aren't trending, so the list can be shorter than 100.
+ * /trending: the most viewed published titles of the last
+ * TRENDING_DAYS days, ranked from 1. Titles nobody played in that time
+ * aren't trending, so the list can be shorter than 100.
  */
 export async function listTrending(): Promise<TrendingMedia[]> {
   await connection();
-  const rows = await db.media.findMany({
-    where: { ...PUBLISHED, viewCount: { gt: 0 } },
-    orderBy: ORDER.views,
-    take: TRENDING_SIZE,
-    select: { ...CARD, viewCount: true },
-  });
+  const rows = await trendingRows(TRENDING_SIZE);
   return rows.map((row, index) => ({
     ...toMedia(row),
-    viewCount: row.viewCount,
+    views: row.views,
     rank: index + 1,
   }));
 }
@@ -414,6 +482,28 @@ export async function findEpisodeIds(ids: string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
   const rows = await db.episode.findMany({ where: { id: { in: ids } }, select: { id: true } });
   return new Set(rows.map((row) => row.id));
+}
+
+// --- Views -------------------------------------------------------------------
+
+/**
+ * The title a Play press counts a view for (src/lib/view-actions.ts):
+ * a published movie, or the published series of an episode. Null for
+ * anything else.
+ */
+export async function findViewTarget(id: string): Promise<string | null> {
+  await connection();
+  if (!isMediaId(id)) return null;
+  const movie = await db.media.findFirst({
+    where: { id, ...PUBLISHED, type: "movie" },
+    select: { id: true },
+  });
+  if (movie) return movie.id;
+  const episode = await db.episode.findUnique({
+    where: { id },
+    select: { media: { select: { id: true, status: true } } },
+  });
+  return episode?.media.status === "published" ? episode.media.id : null;
 }
 
 // --- Admin library -------------------------------------------------------------

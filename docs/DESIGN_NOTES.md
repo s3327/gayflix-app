@@ -6,9 +6,10 @@
 > `middleware.ts` is now `src/proxy.ts`, the admin panel moved from the
 > `admin.` subdomain to `/admin`, the catalog's `mock-*.ts` files are now
 > the database (read through `src/lib/catalog.ts`), the footer, poster
-> cards and Watch Now all link to real pages now, and the library's
+> cards and Watch Now all link to real pages now, the library's
 > buttons and the Upload and Trash pages work (the admin title editor,
-> `src/lib/admin-catalog-actions.ts`). For setup and
+> `src/lib/admin-catalog-actions.ts`), and Trending and Continue Watching
+> use real views and watch history (no progress bars yet). For setup and
 > current architecture, see the [README](../README.md). For the security
 > audit and its fixes, see
 > [AUDIT_REMEDIATION_PLAN.md](AUDIT_REMEDIATION_PLAN.md).
@@ -105,9 +106,10 @@ by:
   (not horizontally scrolling like the rows below it): each breakpoint's
   column count is matched by hiding the extra pre-rendered cards via CSS
   rather than letting the grid wrap, so it can never spill onto a second
-  row. Uses mock data (`src/lib/mock-continue-watching.ts`) — swap for a
-  real query (`ORDER BY last_watched_at DESC LIMIT 6`) once accounts and
-  watch history exist.
+  row. Now reads the signed-in user's watch history
+  (`listContinueWatching()` in `src/lib/catalog.ts`); guests don't get
+  the row, and the progress bar is gone until the player reports
+  progress.
 - **Trending Now** — different layout mechanics per breakpoint, not just a
   scaled-down version of one layout:
   - **Desktop (lg+):** all 6 titles in a single fixed row (`grid-cols-6`),

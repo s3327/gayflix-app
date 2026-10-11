@@ -1,17 +1,13 @@
-import type { ContinueWatchingItem } from "@/lib/mock-continue-watching";
+import type { RecentlyWatched } from "@/lib/media";
 import ContinueWatchingCard from "@/components/ContinueWatchingCard";
 
 const MAX_VISIBLE = 6;
 
-export default function ContinueWatchingSection({
-  items,
-}: {
-  items: ContinueWatchingItem[];
-}) {
+/** The signed-in user's latest titles (listContinueWatching in src/lib/catalog.ts). */
+export default function ContinueWatchingSection({ items }: { items: RecentlyWatched[] }) {
   if (items.length === 0) return null;
 
-  // Only ever consider the 6 most recent, regardless of how large the
-  // user's real history is.
+  // The visibility classes below expect at most 6.
   const visible = items.slice(0, MAX_VISIBLE);
 
   return (

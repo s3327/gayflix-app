@@ -1,6 +1,6 @@
-import type { Browser, Page } from "@playwright/test";
-import { createVerifiedAccount, newAccount, type Account } from "./accounts";
-import { guestPage, test, expect, logIn } from "./fixtures";
+import type { Page } from "@playwright/test";
+import { createVerifiedAccount, newAccount } from "./accounts";
+import { guestPage, signedInPage, test, expect } from "./fixtures";
 
 /*
  * Favorites, lists, history and reports are stored on the server, so
@@ -15,14 +15,6 @@ async function saved(page: Page, action: () => Promise<void>) {
   );
   await action();
   expect((await response).ok()).toBe(true);
-}
-
-async function signedInPage(browser: Browser, account: Account) {
-  const context = await browser.newContext();
-  const page = await context.newPage();
-  await logIn(page, account);
-  await expect(page).not.toHaveURL(/\/login/);
-  return page;
 }
 
 test("favorites and lists follow the account to another device", async ({ browser, request }) => {
