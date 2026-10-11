@@ -31,7 +31,7 @@ export default async function TrendingPage({
       : "all";
   const sortDesc = searchParams.sort !== "asc";
 
-  // The top 100 published titles by views, ranked from #1.
+  // The top 100 published titles by this week's views, ranked from #1.
   const trending = await listTrending();
   const filtered =
     typeFilter === "all" ? trending : trending.filter((item) => item.type === typeFilter);
@@ -48,9 +48,9 @@ export default async function TrendingPage({
     <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 sm:py-14">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="font-display text-3xl font-bold">Trending</h1>
-        {/* Placeholder time-range label — "This Week" is hardcoded for
-            now. The real toggle (This Week / This Month) will live in
-            Admin → Setting → Site, not built yet — see SettingsTabs.tsx. */}
+        {/* Trending counts the last 7 days' views (TRENDING_DAYS in
+            src/lib/views.ts). A This Week / This Month toggle would live
+            in Admin → Setting → Site, not built yet — see SettingsTabs.tsx. */}
         <span className="rounded-pill bg-bg-elevated px-3 py-1 text-xs font-semibold text-ink-secondary">
           This Week
         </span>

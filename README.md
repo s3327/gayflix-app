@@ -154,6 +154,8 @@ src/
     library*.ts          → favorites, lists and history: loading (library.ts),
                            server functions (library-actions.ts), input checks
     report*.ts           → reports and their daily limits
+    view*.ts             → counting views for Trending (once per person per
+                           title per day); visitor.ts hashes IPs and accounts
   generated/prisma/      → Prisma client (generated on npm install; not committed)
 prisma/                  → schema.prisma and migrations (one of them loads
                            the sample catalog)

@@ -484,13 +484,47 @@ Migration: `prisma/migrations/*_media_trash` (a `trashedAt` column).
   - unit tests for the field checks, durations, addresses and image
     hosts.
 
+### Shipped: viewing data ✅
+Migration: `prisma/migrations/*_media_views` (a `media_view` table; it
+also resets the sample catalog's made-up view counts to zero).
+- **Views are counted.** Pressing Play counts a view for the title: the
+  movie, or the series an episode belongs to. Each viewer counts once per
+  title per UTC day, a signed-in user by account and a guest by IP
+  address (`src/lib/views.ts`, `src/lib/view-actions.ts`). Only published
+  titles count, whatever id the browser sends.
+- **Private by design:** a view row holds a keyed hash of the account or
+  IP address that changes every day, never the address itself, so rows
+  can't be traced to a person or linked across days. Rows older than
+  Trending's window are deleted, at most once an hour per server and
+  after the response has been sent.
+- **Trending** (`/trending` and the home page's Trending Now) ranks
+  published titles by their views in the last 7 days, today included;
+  ties go to the most viewed of all time (`viewCount`, now real). Titles
+  nobody played that week aren't listed, so Trending starts empty and
+  fills as people watch.
+- **Continue Watching** on the home page shows the titles a signed-in
+  user played last, newest first, from their watch history: one card per
+  title, with a series at the episode played last, and only titles still
+  published. Guests don't get the row; their history stays in the
+  browser until they sign in, as before. The sample data
+  (`mock-continue-watching.ts`) and the made-up progress bars are gone:
+  the player doesn't report progress yet.
+- **Verified:**
+  - new e2e tests: replaying a title the same day counts once, another
+    IP address counts again, an episode counts for its series, and the
+    rows hold hashes; a title with this week's views tops `/trending` and
+    Trending Now while one with only older views isn't listed; Continue
+    Watching shows nothing for a guest or a new account, then the latest
+    titles in order with one card per series, leaves out an unpublished
+    title, passes an axe check and links back to the episode;
+  - unit tests for the day math and the viewer keys; pruning checked by
+    hand.
+
 ### Still to do
 - **Image uploads:** posters and backdrops are links for now. Uploading
   files needs a storage service such as Vercel Blob.
-- **Trending** ranks titles by `viewCount`, which nothing increments yet,
-  so it keeps the sample numbers.
-- **Continue Watching** on the home page is still sample data, shown to
-  everyone.
+- **Playback progress:** Continue Watching can't show how far someone got
+  until the player has a real video source that reports it.
 
 ### Original plan
 
