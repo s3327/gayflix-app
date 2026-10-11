@@ -562,6 +562,21 @@ export async function getEpisodeForEdit(id: string) {
   });
 }
 
+/**
+ * Titles already imported from these TMDB or IMDb ids (media.tmdbId and
+ * media.imdbId), trashed ones included, so the Import page links to them
+ * instead of bringing in a copy.
+ */
+export async function findImported({ tmdbIds, imdbIds }: { tmdbIds: string[]; imdbIds: string[] }) {
+  await requireAdmin();
+  await connection();
+  if (tmdbIds.length === 0 && imdbIds.length === 0) return [];
+  return db.media.findMany({
+    where: { OR: [{ tmdbId: { in: tmdbIds } }, { imdbId: { in: imdbIds } }] },
+    select: { id: true, type: true, title: true, trashedAt: true, tmdbId: true, imdbId: true },
+  });
+}
+
 /** /admin/trash: titles moved to the trash, most recent first. */
 export async function listTrash({ page: requestedPage }: { page: number }) {
   await requireAdmin();

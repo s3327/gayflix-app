@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Prisma } from "@/generated/prisma/client";
+import { findImported } from "@/lib/catalog";
 import { db } from "@/lib/db";
+import { isImdbId, isTmdbId } from "@/lib/import-mapping";
 import { isMediaId } from "@/lib/library-types";
 import type { MediaStatus, MediaType } from "@/lib/media";
 import { requireAdmin } from "@/lib/session";
@@ -13,16 +14,21 @@ import {
   episodeDuration,
   episodeId,
   formValues,
-  gradientFor,
   libraryPath,
-  movieDuration,
   parseEpisode,
   parseTitle,
   seriesDuration,
-  slugify,
   type FormState,
-  type TitleInput,
 } from "@/lib/title-form";
+import {
+  freeId,
+  insertTitle,
+  isUniqueViolation,
+  titleData,
+  unfeatureOthers,
+  type SourceIds,
+  type Tx,
+} from "@/lib/title-store";
 
 /*
  * Server functions behind the admin title editor. Each one checks for an
@@ -33,8 +39,6 @@ import {
 
 /** A page of the library holds 50 titles; more than this isn't a real selection. */
 const MAX_SELECTED = 100;
-
-type Tx = Prisma.TransactionClient;
 
 function mediaType(value: unknown): MediaType {
   if (value !== "movie" && value !== "series") throw new Error("Invalid type");
@@ -61,57 +65,24 @@ function refreshPages() {
   revalidatePath("/", "layout");
 }
 
-function isUniqueViolation(error: unknown) {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-}
-
-/** The base address, or base-2, base-3...: one no title or episode has. */
-async function freeId(base: string) {
-  for (let n = 1; ; n++) {
-    const id = n === 1 ? base : `${base}-${n}`;
-    const [media, episode] = await Promise.all([
-      db.media.findUnique({ where: { id }, select: { id: true } }),
-      db.episode.findUnique({ where: { id }, select: { id: true } }),
-    ]);
-    if (!media && !episode) return id;
-  }
-}
-
-/** Only one title is featured: the home page's hero. */
-async function unfeatureOthers(tx: Tx, id: string) {
-  // Raw, so the others' updatedAt (and their place in listings) stays.
-  await tx.$executeRaw`UPDATE media SET featured = false WHERE featured AND id <> ${id}`;
-}
-
-function titleData(type: MediaType, input: TitleInput) {
-  return {
-    title: input.title,
-    year: input.year,
-    releaseDate: input.releaseDate,
-    genres: input.genres,
-    country: input.country,
-    language: input.language,
-    synopsis: input.synopsis,
-    tagline: input.tagline,
-    rating: input.rating,
-    director: type === "movie" ? input.credit : null,
-    creator: type === "series" ? input.credit : null,
-    cast: input.cast,
-    tags: input.tags,
-    posterUrl: input.posterUrl,
-    backdropUrl: input.backdropUrl,
-    status: input.status,
-    featured: input.featured,
-    ...(type === "movie" && {
-      runtimeMinutes: input.runtimeMinutes,
-      duration: movieDuration(input.runtimeMinutes!),
-    }),
-  } satisfies Prisma.MediaUpdateInput;
-}
-
 // --- Titles -------------------------------------------------------------------
 
-/** "Add a movie" / "Add a series". Opens the new title's edit page. */
+/**
+ * The hidden fields of a form the Import page filled in: where the title
+ * came from. Empty when it was typed in.
+ */
+function sourceIds(form: FormData): SourceIds {
+  const tmdbId = form.get("tmdbId") || null;
+  const imdbId = form.get("imdbId") || null;
+  if (tmdbId !== null && !isTmdbId(tmdbId)) throw new Error("Invalid TMDB id");
+  if (imdbId !== null && !isImdbId(imdbId)) throw new Error("Invalid IMDb id");
+  return { tmdbId, imdbId };
+}
+
+/**
+ * "Add a movie" / "Add a series", and the Import page's form when an
+ * import needs fixing first. Opens the new title's edit page.
+ */
 export async function createTitle(
   typeArg: unknown,
   _state: FormState,
@@ -119,31 +90,26 @@ export async function createTitle(
 ): Promise<FormState> {
   await requireAdmin();
   const type = mediaType(typeArg);
+  const sources = sourceIds(form);
   const values = formValues(form, TITLE_FIELDS);
   const parsed = parseTitle(type, values);
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
 
-  const id = await freeId(slugify(parsed.data.title) || type);
-  try {
-    await db.$transaction(async (tx) => {
-      if (parsed.data.featured) await unfeatureOthers(tx, id);
-      await tx.media.create({
-        data: {
-          id,
-          type,
-          ...titleData(type, parsed.data),
-          // A series' seasons come from its episodes, and it has none yet.
-          duration: type === "movie" ? movieDuration(parsed.data.runtimeMinutes!) : seriesDuration(0),
-          gradient: gradientFor(id),
-        },
-      });
+  if (sources.tmdbId || sources.imdbId) {
+    const [existing] = await findImported({
+      tmdbIds: sources.tmdbId ? [sources.tmdbId] : [],
+      imdbIds: sources.imdbId ? [sources.imdbId] : [],
     });
-  } catch (error) {
-    if (!isUniqueViolation(error)) throw error;
+    if (existing) {
+      return { message: "This title is already in the library.", values, version: Date.now() };
+    }
+  }
+  const id = await insertTitle(type, parsed.data, sources);
+  if (!id) {
     return { message: "Another title took that address just now. Add it again.", values, version: Date.now() };
   }
   refreshPages();
-  redirect(`${libraryPath(type)}/${id}?added=1`);
+  redirect(`${libraryPath(type)}/${id}?${sources.tmdbId ? "imported" : "added"}=1`);
 }
 
 /** Saves the edit page. A title's type and address don't change. */

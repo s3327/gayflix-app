@@ -34,6 +34,9 @@ jobs:
       DATABASE_URL: postgresql://gayflix:gayflix@localhost:5432/gayflix
       # Only signs sessions in this CI database; not used anywhere else.
       BETTER_AUTH_SECRET: ci-only-secret-for-the-throwaway-test-database
+      # Imported posters' host, built into next/image's allowed hosts. The
+      # e2e tests import from a stand-in TMDB (playwright.config.ts).
+      IMAGE_HOSTS: image.tmdb.org
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

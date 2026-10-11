@@ -77,6 +77,19 @@ export default function Footer() {
           <p>© {new Date().getFullYear()} Gayflix. All rights reserved.</p>
           <p>Made with pride, for the community.</p>
         </div>
+
+        {/* Credits the title sources ask for (TMDB's terms, OMDb's CC BY-NC license). */}
+        <p className="mt-4 text-xs text-ink-muted">
+          Title details and images come from{" "}
+          <a href="https://www.themoviedb.org/" className="underline underline-offset-2 hover:text-ink-secondary">
+            TMDB
+          </a>{" "}
+          and{" "}
+          <a href="https://www.omdbapi.com/" className="underline underline-offset-2 hover:text-ink-secondary">
+            OMDb
+          </a>
+          . This product uses the TMDB API but is not endorsed or certified by TMDB.
+        </p>
       </div>
     </footer>
   );

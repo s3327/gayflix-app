@@ -11,5 +11,12 @@ export default async function EditMoviePage({
 }) {
   await requireAdmin();
   const [{ id }, query] = await Promise.all([params, searchParams]);
-  return <TitleEditPage type="movie" id={id} added={firstParam(query.added) === "1"} />;
+  return (
+    <TitleEditPage
+      type="movie"
+      id={id}
+      added={firstParam(query.added) === "1"}
+      imported={firstParam(query.imported) === "1"}
+    />
+  );
 }

@@ -58,8 +58,14 @@ test.describe("with the admin password", () => {
     test.use({ storageState: USER_STATE });
 
     test("can't reach admin pages", async ({ page }) => {
-      await page.goto("/admin/library/movies");
-      await expect(page).toHaveURL(/\/admin\/login$/);
+      for (const path of [
+        "/admin/library/movies",
+        "/admin/import?q=E2E+Harbor+Lights",
+        "/admin/upload/movies?tmdb=movie%2F990001",
+      ]) {
+        await page.goto(path);
+        await expect(page).toHaveURL(/\/admin\/login$/);
+      }
     });
 
     test("is told the account isn't an admin", async ({ page }) => {

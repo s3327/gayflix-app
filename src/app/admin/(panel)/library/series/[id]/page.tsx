@@ -11,5 +11,12 @@ export default async function EditSeriesPage({
 }) {
   await requireAdmin();
   const [{ id }, query] = await Promise.all([params, searchParams]);
-  return <TitleEditPage type="series" id={id} added={firstParam(query.added) === "1"} />;
+  return (
+    <TitleEditPage
+      type="series"
+      id={id}
+      added={firstParam(query.added) === "1"}
+      imported={firstParam(query.imported) === "1"}
+    />
+  );
 }

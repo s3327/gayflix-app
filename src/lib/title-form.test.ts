@@ -119,7 +119,8 @@ describe("imageUrlProblem", () => {
 
 describe("imageHosts", () => {
   it("adds IMAGE_HOSTS to the sample catalog's hosts", () => {
-    expect(imageHosts(undefined)).toEqual(["picsum.photos", "fastly.picsum.photos"]);
+    // "" rather than undefined, which reads IMAGE_HOSTS (CI sets it).
+    expect(imageHosts("")).toEqual(["picsum.photos", "fastly.picsum.photos"]);
     expect(imageHosts(" Image.TMDB.org , https://cdn.example.com/posters, not a host, ")).toEqual([
       "picsum.photos",
       "fastly.picsum.photos",

@@ -408,28 +408,24 @@ src/components/admin/
   ImportSearchBar.tsx    → search bar for the Import page (see below)
 ```
 
-**Import page (`import/page.tsx`) — in progress:**
-Only the search bar is built so far, per instruction — no result area yet.
+**Import page (`import/page.tsx`):**
+Finds titles on TMDB and imports them as drafts, checked against IMDb
+through OMDb (`src/lib/title-import.ts`; setup in "Importing titles" in
+`docs/DEPLOYMENT.md`).
 
-- Text field (`flex-1` — takes all remaining space, pushes the rest right)
-- **Search by** dropdown — Title (default) / IMDb ID. This is the gate
-  that will later determine how the import process interprets the text
-  field (title search vs. direct ID lookup); for now it just swaps the
-  text field's placeholder between "Search by title" and "Search by ID".
-  This is what made the component a client component (`"use client"`) —
-  everything else here is static markup, but a dynamic placeholder needs
-  actual state.
-- **Media type** dropdown — options Movie (default) / Series
-- **Source** dropdown — currently just `OMDb` (only option); adding TMDb
-  later is one more `<option>`
-- **Search** button — `Search` icon + label, no click handler yet
-- All three dropdowns use native `<select>` with a custom chevron overlay
-  (`appearance-none` + absolutely-positioned `ChevronDown`) rather than a
-  hand-built dropdown component, so they're fully functional/
-  keyboard-accessible without writing open/close state logic for
-  something not wired to real data yet.
-
-Next up: the 10×4 (40-card) result grid with pagination — not started.
+- Search bar (`ImportSearchBar.tsx`): a plain GET form (`?q=&by=&type=`),
+  so searches and their pages are links. **Search by** is Title or IMDb
+  ID; it swaps the placeholder, and IMDb ID hides **Media type** (an id
+  finds its title whatever the type). The old **Source** menu is gone:
+  every search asks TMDB and every import checks with OMDb.
+- Results: 40 cards a page (two TMDB pages), 2 to 10 columns by width,
+  with the shared `Pagination`. Each card has the poster (a gradient
+  when the poster's host isn't in `IMAGE_HOSTS`), title, type and year,
+  and **Import** (`ImportButton.tsx`), or **In library** / **In trash**
+  linking to the title imported before.
+- **Import** either opens the new draft, opens the prefilled Add form
+  (`/admin/upload/movies?tmdb=movie/603`) with the problem shown above it,
+  or, when TMDB and IMDb disagree on the type, asks on the card.
 
 **Sidebar behavior:**
 - Collapse/expand toggle (top of sidebar) shrinks it to icon-only width;
