@@ -89,6 +89,17 @@ const TITLES = [
     imdb: "tt9900007",
     omdb: null,
   },
+  {
+    // Neither TMDB nor IMDb has a poster: imported with the No poster image.
+    kind: "movie",
+    id: 990008,
+    title: "E2E No Poster",
+    date: "2016-06-06",
+    runtime: 92,
+    poster: false,
+    imdb: "tt9900008",
+    omdb: {},
+  },
 ];
 
 /** "E2E Many" finds 50 movies: two pages of the Import page. */
@@ -105,7 +116,7 @@ function searchResult(entry) {
     id: entry.id,
     [movie ? "title" : "name"]: entry.title,
     [movie ? "release_date" : "first_air_date"]: entry.date,
-    poster_path: `/e2e-${entry.id}.jpg`,
+    poster_path: entry.poster === false ? null : `/e2e-${entry.id}.jpg`,
   };
 }
 

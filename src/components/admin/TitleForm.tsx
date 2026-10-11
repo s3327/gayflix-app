@@ -198,7 +198,8 @@ export default function TitleForm({
           name="posterUrl"
           label="Poster image link"
           type="url"
-          hint={`A tall (2:3) image on ${imageHosts.join(", ")}.`}
+          optional
+          hint={`A tall (2:3) image on ${imageHosts.join(", ")}. Left empty, the title shows the “No poster yet” image.`}
           defaultValue={values.posterUrl}
           error={errors.posterUrl}
           className="sm:col-span-2"

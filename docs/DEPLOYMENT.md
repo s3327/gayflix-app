@@ -514,7 +514,9 @@ only the sample catalog's `picsum.photos`. To use your own, add
 `IMAGE_HOSTS` in Vercel (**Settings → Environment Variables**,
 Production) with the host names, separated by commas, such as
 `images.example.com,cdn.example.org`, then redeploy: the site reads the
-list when it's built.
+list when it's built. Leave the poster link empty for a title that has no
+poster yet: it shows the **No poster yet** image (the logo and that text)
+until you add one.
 
 To hide every title at once, a SQL editor (as in 6.2) is quicker than the
 list's 50 rows a page. Set them back to `'published'` to undo it:
@@ -561,7 +563,8 @@ title imported before shows **In library** or **In trash** instead of
 
 - saves the draft and opens it when TMDB and IMDb agree and nothing is
   missing. Fields TMDB leaves empty, such as a runtime, are filled from
-  IMDb.
+  IMDb. When neither has a poster, the title gets the **No poster yet**
+  image.
 - opens the **Add a movie** or **Add a series** form, filled in, when
   IMDb's title or year doesn't match TMDB's, or when neither has a field
   the form needs. The problem is shown above the form; save it from

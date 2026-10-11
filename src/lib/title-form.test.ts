@@ -9,6 +9,7 @@ import {
   imageUrlProblem,
   movieDuration,
   movieDurationMinutes,
+  NO_POSTER,
   parseEpisode,
   parseTitle,
   seriesDuration,
@@ -75,7 +76,7 @@ describe("parseTitle", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(Object.keys(result.errors).sort()).toEqual(
-      ["country", "genres", "language", "posterUrl", "runtime", "title", "year"].sort()
+      ["country", "genres", "language", "runtime", "title", "year"].sort()
     );
   });
 
@@ -103,6 +104,12 @@ describe("parseTitle", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors.posterUrl).toMatch(/^Images can only come from picsum\.photos/);
+  });
+
+  it("gives a title without a poster link the No poster image", () => {
+    const result = parse(movie({ posterUrl: "" }));
+    expect(result.ok && result.data.posterUrl).toBe(NO_POSTER);
+    expect(parse(movie({ posterUrl: NO_POSTER })).ok).toBe(true);
   });
 });
 
@@ -163,6 +170,32 @@ describe("titleValues", () => {
       featured: "",
     });
     expect(parse(values).ok).toBe(true);
+  });
+
+  it("leaves the poster link empty for the No poster image", () => {
+    const row = {
+      type: "series" as const,
+      status: "draft" as const,
+      title: "No Poster",
+      year: 2024,
+      releaseDate: null,
+      runtimeMinutes: null,
+      duration: "1 season",
+      genres: ["Drama"],
+      country: "France",
+      language: "French",
+      director: null,
+      creator: null,
+      cast: [],
+      tags: [],
+      rating: null,
+      tagline: null,
+      synopsis: "",
+      posterUrl: NO_POSTER,
+      backdropUrl: null,
+      featured: false,
+    };
+    expect(titleValues(row).posterUrl).toBe("");
   });
 });
 

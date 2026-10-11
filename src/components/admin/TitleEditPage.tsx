@@ -9,7 +9,7 @@ import { restoreTitle, trashTitle, updateTitle } from "@/lib/admin-catalog-actio
 import { getTitleForEdit } from "@/lib/catalog";
 import { imageHosts } from "@/lib/image-hosts.mjs";
 import type { MediaType } from "@/lib/media";
-import { imageUrlProblem, libraryPath, titleValues } from "@/lib/title-form";
+import { imageUrlProblem, libraryPath, NO_POSTER, titleValues } from "@/lib/title-form";
 import { titleHref } from "@/lib/title-href";
 
 /**
@@ -41,7 +41,8 @@ export default async function TitleEditPage({
   const hosts = imageHosts();
   // next/image refuses hosts that aren't allowed (any more): show the
   // gradient instead.
-  const posterUrl = imageUrlProblem(row.posterUrl, hosts) ? undefined : row.posterUrl;
+  const posterUrl =
+    row.posterUrl === NO_POSTER || !imageUrlProblem(row.posterUrl, hosts) ? row.posterUrl : undefined;
 
   return (
     <div className="px-6 py-10 sm:px-10">

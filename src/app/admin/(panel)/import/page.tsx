@@ -8,7 +8,7 @@ import { omdbConfigured } from "@/lib/omdb";
 import { firstParam, pageParam, type SearchParams } from "@/lib/search-params";
 import { requireAdmin } from "@/lib/session";
 import { tmdbConfigured } from "@/lib/tmdb";
-import { gradientFor, imageUrlProblem } from "@/lib/title-form";
+import { gradientFor, imageUrlProblem, NO_POSTER } from "@/lib/title-form";
 import { searchSources, type ImportCard, type ImportSearch } from "@/lib/title-import";
 
 /**
@@ -96,8 +96,13 @@ async function Results({ search }: { search: ImportSearch }) {
 }
 
 function ResultCard({ card, hosts }: { card: ImportCard; hosts: string[] }) {
-  // next/image refuses hosts that aren't allowed: show the gradient instead.
-  const posterUrl = card.posterUrl && !imageUrlProblem(card.posterUrl, hosts) ? card.posterUrl : undefined;
+  // No poster on TMDB: the "No poster yet" image, as the title gets it
+  // unless IMDb has one. A host next/image refuses: the gradient.
+  const posterUrl = !card.posterUrl
+    ? NO_POSTER
+    : imageUrlProblem(card.posterUrl, hosts)
+      ? undefined
+      : card.posterUrl;
   return (
     <div className="flex h-full flex-col gap-2">
       <MediaCoverThumb
