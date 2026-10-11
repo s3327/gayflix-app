@@ -8,8 +8,10 @@ export default function PosterCard({ media }: { media: Media }) {
 
   return (
     <Link href={href} className="group block w-full text-left">
+      {/* Hover enlarges the poster. Keyboard focus doesn't: the bigger
+          poster would cover most of the focus ring. */}
       <div
-        className={`relative aspect-2/3 w-full overflow-hidden rounded-card bg-linear-to-br ${media.gradient} transition-transform duration-200 ease-out group-hover:z-10 group-hover:scale-105 group-focus-visible:z-10 group-focus-visible:scale-105`}
+        className={`relative aspect-2/3 w-full overflow-hidden rounded-card bg-linear-to-br ${media.gradient} transition-transform duration-200 ease-out group-hover:z-10 group-hover:scale-105`}
       >
         {/* gradient behind the <Image> shows briefly while it loads,
             instead of a flash of empty bg-surface */}

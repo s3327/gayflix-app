@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { primaryNavItems, filterNavItems, type NavMenuItem } from "@/components/nav-menu-items";
+import { useDropdown } from "@/lib/use-dropdown";
 
 function DrawerLink({ item, isActive }: { item: NavMenuItem; isActive: boolean }) {
   return (
@@ -27,13 +28,14 @@ function DrawerLink({ item, isActive }: { item: NavMenuItem; isActive: boolean }
  * clusters, since there's no width to spare for side-by-side at this
  * size.
  *
- * Same open/outside-click/Escape/route-change-closes pattern as
- * SearchBox and AccountMenu.
+ * Closes like SearchBox and AccountMenu (see useDropdown), and on
+ * route change.
  */
 export default function MobileNavMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdown = useDropdown(isOpen, setIsOpen, buttonRef);
 
   // Close whenever the route changes. Done during render (React's
   // "adjusting state when a prop changes" pattern) rather than in an
@@ -44,35 +46,13 @@ export default function MobileNavMenu() {
     setIsOpen(false);
   }
 
-  useEffect(() => {
-    if (!isOpen) return;
-    function handlePointerDown(event: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setIsOpen(false);
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen]);
-
   return (
     // Same "reserve the grid column, don't just display:none the
     // whole thing" placement as before — invisible (not hidden) at
     // sm+ so Header's 3-column grid keeps the logo centered.
-    <div ref={containerRef} className="flex sm:invisible">
+    <div {...dropdown} className="flex sm:invisible">
       <button
+        ref={buttonRef}
         type="button"
         aria-label={isOpen ? "Close menu" : "Open menu"}
         aria-expanded={isOpen}
@@ -88,7 +68,9 @@ export default function MobileNavMenu() {
 
       {isOpen && (
         <div className="fixed inset-x-0 top-16 z-40 max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-border-subtle bg-bg-base shadow-xl sm:hidden">
-          <nav aria-label="Primary" className="flex flex-col px-4">
+          {/* pt-2: room for the first link's focus ring, which the
+              drawer's top edge would otherwise cut off. */}
+          <nav aria-label="Primary" className="flex flex-col px-4 pt-2">
             {primaryNavItems.map((item) => (
               <DrawerLink key={item.href} item={item} isActive={pathname === item.href} />
             ))}

@@ -148,7 +148,7 @@ export default function SignupPage() {
             type="checkbox"
             checked={agreedToTerms}
             onChange={(event) => setAgreedToTerms(event.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-border-strong bg-bg-elevated text-ink-brand accent-brand-pink focus-visible:outline-hidden"
+            className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-border-strong bg-bg-elevated text-ink-brand accent-brand-pink"
           />
           <span>
             I agree to the{" "}

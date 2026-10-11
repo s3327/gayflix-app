@@ -33,7 +33,7 @@ export default function RecommendationSection({ media }: { media: Media[] }) {
       </div>
 
       <div className={CONTAINER}>
-        <SwipeableRow className="mt-4 flex gap-3 overflow-x-auto px-4 pb-2 snap-x snap-mandatory scrollbar-none sm:gap-4 sm:px-8">
+        <SwipeableRow className="mt-2 flex gap-3 overflow-x-auto px-4 py-2 snap-x snap-mandatory scrollbar-none sm:gap-4 sm:px-8">
           {visible.map((m) => (
             <div
               key={m.id}

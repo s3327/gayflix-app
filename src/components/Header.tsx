@@ -39,7 +39,7 @@ export default function Header() {
         <Link
           href="/"
           aria-label="Gayflix home"
-          className="shrink-0 justify-self-center rounded-xs focus-visible:outline-hidden"
+          className="shrink-0 justify-self-center rounded-xs"
         >
           <Image
             src="/brand/gayflix-icon.png"
