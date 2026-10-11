@@ -77,12 +77,14 @@ function NavItem({
   );
 
   if (entry.type === "link") {
-    const isActive = pathname === entry.href;
+    const isCurrent = pathname === entry.href;
+    // A user's page (/admin/users/<id>) highlights Users.
+    const isActive = isCurrent || pathname.startsWith(`${entry.href}/`);
     const Icon = entry.icon;
     return (
       <Link
         href={entry.href}
-        aria-current={isActive ? "page" : undefined}
+        aria-current={isCurrent ? "page" : undefined}
         className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${
           collapsed ? "justify-center" : ""
         } ${

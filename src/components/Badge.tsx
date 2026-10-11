@@ -1,9 +1,10 @@
-type BadgeTone = "brand" | "success" | "neutral";
+type BadgeTone = "brand" | "success" | "danger" | "neutral";
 type BadgeSize = "sm" | "md";
 
 const TONE_CLASSES: Record<BadgeTone, string> = {
   brand: "bg-brand-pink text-ink-onBrand",
   success: "bg-status-success/10 text-status-success",
+  danger: "bg-status-error/10 text-status-error",
   neutral: "bg-bg-elevated text-ink-secondary",
 };
 

@@ -29,6 +29,7 @@ const MESSAGES: Record<string, string> = {
   TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE: "Too many wrong codes. Log in again to get a new try.",
   ACCOUNT_TEMPORARILY_LOCKED: "Too many wrong codes. Two-factor sign-in is locked for 15 minutes.",
   INVALID_TWO_FACTOR_COOKIE: "This sign-in has expired. Log in again.",
+  BANNED_USER: "This account has been banned.",
 };
 
 type AuthError = { code?: string; message?: string; status?: number };
