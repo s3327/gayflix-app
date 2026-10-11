@@ -16,6 +16,13 @@ describe("buildContentSecurityPolicy", () => {
     expect(csp).toContain("'unsafe-eval'");
     expect(csp).toContain("connect-src 'self' ws: wss:");
   });
+
+  it("lets the browser send crash reports when they're on", () => {
+    expect(buildContentSecurityPolicy("abc123", false)).toContain("connect-src 'self';");
+    expect(buildContentSecurityPolicy("abc123", false, "https://o1.ingest.sentry.io")).toContain(
+      "connect-src 'self' https://o1.ingest.sentry.io;"
+    );
+  });
 });
 
 describe("createNonce", () => {

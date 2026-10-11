@@ -9,6 +9,13 @@ const PORT = 3100;
 export const BASE_URL = `http://localhost:${PORT}`;
 /** e2e/source-stub.mjs: TMDB and OMDb as the Import page's tests need them. */
 const SOURCE_STUB = "http://127.0.0.1:3101";
+/**
+ * e2e/report-stub.mjs: Sentry, receiving crash reports. The DSN is fixed
+ * at build time, so CI builds with NEXT_PUBLIC_SENTRY_DSN pointing here
+ * (http://e2e@127.0.0.1:3102/1); error-reporting.spec.ts is skipped
+ * without it.
+ */
+export const REPORT_STUB = "http://127.0.0.1:3102";
 /** Emails the server "sends" during the run; the tests read codes from it. */
 export const OUTBOX_FILE = ".playwright/outbox.jsonl";
 
@@ -41,6 +48,11 @@ export default defineConfig({
     {
       command: "node e2e/source-stub.mjs 3101",
       url: `${SOURCE_STUB}/health`,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: "node e2e/report-stub.mjs 3102",
+      url: `${REPORT_STUB}/health`,
       reuseExistingServer: !process.env.CI,
     },
     {

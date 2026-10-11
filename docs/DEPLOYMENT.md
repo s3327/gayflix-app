@@ -30,6 +30,7 @@ before you move on.
 - [ ] [Part 7: Use your own domain and email address](#part-7-use-your-own-domain-and-email-address)
 - [ ] [Part 8 (optional): Turn on Google sign-in](#part-8-optional-turn-on-google-sign-in)
 - [ ] [Part 9: Check that everything works](#part-9-check-that-everything-works)
+- [ ] [Part 10 (optional): Turn on crash reports](#part-10-optional-turn-on-crash-reports)
 
 Then keep [Running the site](#running-the-site),
 [Troubleshooting](#troubleshooting) and
@@ -171,6 +172,7 @@ turned off and says so.
 | `ADMIN_BASIC_AUTH_USER`, `ADMIN_BASIC_AUTH_PASSWORD` | Optional, both or neither | | |
 | `IMAGE_HOSTS` | Optional, for posters on your own image host (see [Managing titles](#managing-titles)) and for imports (see [Importing titles](#importing-titles)) | | |
 | `TMDB_API_KEY`, `OMDB_API_KEY` | Optional, for the Import page (see [Importing titles](#importing-titles)) | | |
+| `NEXT_PUBLIC_SENTRY_DSN` | Part 10 (optional) | | |
 
 `BETTER_AUTH_URL` isn't needed. It follows `SITE_URL`, or Vercel's
 production address when `SITE_URL` isn't set.
@@ -392,6 +394,49 @@ Use a private browser window for the guest checks.
       Pages with titles show an error page there and signing in fails,
       which is expected (see [How deploys work](#how-deploys-work)).
 
+## Part 10 (optional): Turn on crash reports
+
+When something breaks, Sentry emails you the error and where in the code
+it happened, so you don't have to hear it from a visitor. Until you do
+this part, the site sends nothing anywhere and carries none of Sentry's
+code.
+
+1. Sign up at [sentry.io](https://sentry.io). The free plan is enough to
+   start.
+2. Create a project with the platform **Next.js**. Keep the default alert
+   setting, so Sentry emails you about new errors (change it later under
+   **Alerts**). Skip the setup wizard and the code Sentry shows: the site
+   already has it.
+3. Copy the project's DSN, an address like
+   `https://abc123@o123456.ingest.us.sentry.io/1234567`. It's also under
+   **Settings → Projects → (your project) → Client Keys (DSN)**.
+4. In the same project settings, under **Security & Privacy**, turn on
+   **Prevent Storing of IP Addresses**. The site already leaves them out;
+   this makes sure.
+5. In Vercel, add `NEXT_PUBLIC_SENTRY_DSN` with the DSN for
+   **Production** only. Previews show error pages by design (they have no
+   database), which would only fill Sentry with noise. The DSN isn't a
+   secret, since it ends up in the site's JavaScript, so it doesn't need
+   Sensitive.
+6. Redeploy. The DSN is built into the site, so it only takes effect with
+   a new build.
+
+**You should see** a test report arrive. Open your site, open the
+browser's developer console (F12 → Console) and run:
+
+```js
+setTimeout(() => { throw new Error("Testing crash reports") })
+```
+
+Within a minute, **Issues** in Sentry lists "Testing crash reports".
+Resolve it there.
+
+A report holds the error, where in the code it happened, the page's
+address without anything after the `?`, and the browser and system.
+Never the visitor's IP address, cookies, anything they typed, or which
+account they use. Some visitors' ad blockers stop their browser's
+reports; errors on the server always get through.
+
 ## Running the site
 
 ### How deploys work
@@ -561,6 +606,9 @@ Keep backups private: they hold everyone's account data.
   the message". On the Hobby plan, logs are kept only for a short time.
 - **Resend → Emails** lists every email sent and whether it was delivered
   or bounced.
+- **Sentry → Issues** (once you've done Part 10) lists the errors from the
+  server and from visitors' browsers, grouped, with how often each one
+  happens.
 
 ### Dependency updates
 
@@ -627,14 +675,16 @@ what the screen or the build log says. Never paste a secret.
   analytics or ads. Tell them what the site stores: account details,
   favorites, lists and watch history, and a keyed hash of a guest's IP
   address for reports and for counting views (view rows are deleted
-  after 7 days).
+  after 7 days). With crash reports on (Part 10), errors also go to
+  Sentry, without IP addresses, cookies or account details.
 - **Catalog.** The movies and shows start as a sample catalog with
   placeholder posters. Replace them with your own titles in the admin
   panel (see [Managing titles](#managing-titles)).
 - **Admin panel.** Library, Upload, Trash and Reports work. Dashboard,
   Import, Users and Setting are still placeholders.
-- **Error reporting.** Apart from Vercel's logs, nothing tells you about
-  server errors yet. Error reporting such as Sentry is in the remediation
-  plan (Phase 3).
+- **Crash reports.** Optional, but without them only Vercel's logs show
+  what went wrong, and nothing tells you about errors in visitors'
+  browsers. Turn them on with
+  [Part 10](#part-10-optional-turn-on-crash-reports).
 - **Plans and limits.** Check Vercel (Hobby is non-commercial only),
   Prisma Postgres and Resend against the traffic you expect.
