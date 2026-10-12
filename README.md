@@ -136,7 +136,8 @@ src/
     admin/               → admin panel (noindex; password gate re-checked in layout.tsx)
       (panel)/           → pages with the sidebar; admin role + two-factor required
                            (library/, upload/ and trash/ are the title editor;
-                           reports/ is the queue of "Report an issue" submissions)
+                           reports/ is the queue of "Report an issue" submissions;
+                           users/ finds accounts, sets admins, bans and signs out)
       setup-2fa/         → where a new admin turns on two-factor
     api/auth/            → Better Auth (sign-up, sign-in, codes, reset, sessions)
     api/search/          → header search suggestions (catalog stays server-side)
@@ -148,6 +149,9 @@ src/
                            the public site only ever gets published titles)
     admin-catalog-actions.ts → the title editor's server functions; title-form.ts
                            checks their fields
+    admin-user*.ts       → the Users page's reads (admin-users.ts) and server
+                           functions (admin-user-actions.ts); user-admin.ts
+                           holds the rules (nobody changes their own account)
     auth.ts              → Better Auth config (server only)
     auth-client.ts       → browser auth calls
     session.ts           → getSession / requireUser / requireAdmin (server only)

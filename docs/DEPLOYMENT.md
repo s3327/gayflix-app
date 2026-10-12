@@ -502,11 +502,26 @@ back past a change that altered the database, ask in the project thread.
 
 ### Adding and removing admins
 
-- **Add:** the person signs up (6.1), you make them an admin (6.2), and
-  they set up two-factor on their first admin login (6.3).
-- **Remove:** set their `role` back to `user` in Studio, or run
-  `npm run make-admin -- them@example.com --revoke`. It applies right
-  away.
+- **Add:** the person signs up (6.1). In the admin panel, open **Users**,
+  find their account and choose **Make admin** (only the first admin
+  needs 6.2). They set up two-factor on their first admin login (6.3).
+  An account has to confirm its email before it can be made an admin.
+- **Remove:** **Users** → their account → **Remove admin access**. It
+  applies right away. Setting their `role` back to `user` in Studio, or
+  `npm run make-admin -- them@example.com --revoke`, still works too.
+- Nobody can change their own account on the Users page, so the panel
+  always keeps at least one admin.
+
+### Banning accounts
+
+On an account's page under **Users**:
+
+- **Ban** signs the account out everywhere and stops it signing in, until
+  you unban it or for 1, 7 or 30 days. The reason you give is only shown
+  to admins. An admin has to lose admin access before a ban.
+- **Unban** lets it sign in again.
+- **Sign out everywhere** ends every session the account has without
+  banning it, for example after a lost phone.
 
 ### Managing titles
 
@@ -726,8 +741,8 @@ what the screen or the build log says. Never paste a secret.
 - **Catalog.** The movies and shows start as a sample catalog with
   placeholder posters. Replace them with your own titles in the admin
   panel (see [Managing titles](#managing-titles)).
-- **Admin panel.** Library, Upload, Import, Trash and Reports work.
-  Dashboard, Users and Setting are still placeholders.
+- **Admin panel.** Library, Upload, Import, Trash, Reports and Users
+  work. Dashboard and Setting are still placeholders.
 - **Crash reports.** Optional, but without them only Vercel's logs show
   what went wrong, and nothing tells you about errors in visitors'
   browsers. Turn them on with
