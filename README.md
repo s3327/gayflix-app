@@ -135,7 +135,9 @@ src/
       list/[id]/         → a shared list: anyone with the link can view it
     admin/               → admin panel (noindex; password gate re-checked in layout.tsx)
       (panel)/           → pages with the sidebar; admin role + two-factor required
-                           (library/, upload/ and trash/ are the title editor;
+                           (dashboard/ is the panel's front page: counts,
+                           most played and recently added titles;
+                           library/, upload/ and trash/ are the title editor;
                            reports/ is the queue of "Report an issue" submissions;
                            users/ finds accounts, sets admins, bans and signs out)
       setup-2fa/         → where a new admin turns on two-factor

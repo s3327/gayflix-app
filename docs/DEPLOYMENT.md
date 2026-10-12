@@ -741,8 +741,8 @@ what the screen or the build log says. Never paste a secret.
 - **Catalog.** The movies and shows start as a sample catalog with
   placeholder posters. Replace them with your own titles in the admin
   panel (see [Managing titles](#managing-titles)).
-- **Admin panel.** Library, Upload, Import, Trash, Reports and Users
-  work. Dashboard and Setting are still placeholders.
+- **Admin panel.** Dashboard, Library, Upload, Import, Trash, Reports
+  and Users work. Setting is still a placeholder.
 - **Crash reports.** Optional, but without them only Vercel's logs show
   what went wrong, and nothing tells you about errors in visitors'
   browsers. Turn them on with

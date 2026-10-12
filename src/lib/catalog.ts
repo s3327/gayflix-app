@@ -703,3 +703,37 @@ export async function listTrash({ page: requestedPage }: { page: number }) {
   });
   return { items, page, totalPages, total };
 }
+
+/** How many titles the dashboard lists under Most played and Recently added. */
+const DASHBOARD_LIST_SIZE = 5;
+
+/**
+ * /admin/dashboard: the catalog at a glance. Titles by type and status
+ * (not counting the trash), plays in Trending's window and the titles
+ * played most in it, and the titles added last, drafts included.
+ */
+export async function getCatalogOverview() {
+  await requireAdmin();
+  await connection();
+  const live: Prisma.MediaWhereInput = { trashedAt: null };
+  const [groups, plays, mostPlayed, recentlyAdded] = await Promise.all([
+    db.media.groupBy({ by: ["type", "status"], where: live, _count: { _all: true } }),
+    db.mediaView.count({ where: { day: { gte: new Date(trendingSince(new Date())) } } }),
+    trendingRows(DASHBOARD_LIST_SIZE),
+    db.media.findMany({
+      where: live,
+      orderBy: ORDER.added,
+      take: DASHBOARD_LIST_SIZE,
+      select: { id: true, type: true, title: true, status: true, createdAt: true },
+    }),
+  ]);
+  const count = (type: MediaType, status: MediaStatus) =>
+    groups.find((group) => group.type === type && group.status === status)?._count._all ?? 0;
+  return {
+    published: { movie: count("movie", "published"), series: count("series", "published") },
+    drafts: { movie: count("movie", "draft"), series: count("series", "draft") },
+    plays,
+    mostPlayed: mostPlayed.map(({ id, type, title, views }) => ({ id, type, title, plays: views })),
+    recentlyAdded,
+  };
+}
