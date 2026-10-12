@@ -87,6 +87,7 @@ on every pull request. Dependabot opens weekly dependency update PRs.
 | `ADMIN_BASIC_AUTH_USER`, `ADMIN_BASIC_AUTH_PASSWORD` | Optional extra password in front of `/admin`. Admin pages always need an admin account with two-factor; set both of these for a second lock, or neither. Setting only one disables the panel (503). |
 | `SITE_URL` | Public origin for `sitemap.xml`, `robots.txt` and metadata URLs, read at build time. Optional on Vercel, which defaults to the production domain. |
 | `IMAGE_HOSTS` | Optional. Hosts that posters and backdrops may come from besides `picsum.photos`, comma-separated (`images.example.com,cdn.example.org`). Read at build time, so redeploy after changing it. |
+| `BLOB_READ_WRITE_TOKEN` | Optional. Turns on poster and backdrop uploads in the title editor, kept in this Vercel Blob store (`src/lib/admin-image-actions.ts`). Vercel sets it when a Blob store is connected to the project; redeploy after connecting one. |
 | `NEXT_PUBLIC_SENTRY_DSN` | Optional. Sends crash reports from the server and browsers to this Sentry project, without IP addresses, cookies or form data (`src/lib/error-reporting.ts`). Read at build time; unset, the site has none of Sentry's code. |
 
 ## Deploying to Vercel

@@ -31,6 +31,7 @@ before you move on.
 - [ ] [Part 8 (optional): Turn on Google sign-in](#part-8-optional-turn-on-google-sign-in)
 - [ ] [Part 9: Check that everything works](#part-9-check-that-everything-works)
 - [ ] [Part 10 (optional): Turn on crash reports](#part-10-optional-turn-on-crash-reports)
+- [ ] [Part 11 (optional): Turn on poster uploads](#part-11-optional-turn-on-poster-uploads)
 
 Then keep [Running the site](#running-the-site),
 [Troubleshooting](#troubleshooting) and
@@ -173,6 +174,7 @@ turned off and says so.
 | `IMAGE_HOSTS` | Optional, for posters on your own image host (see [Managing titles](#managing-titles)) and for imports (see [Importing titles](#importing-titles)) | | |
 | `TMDB_API_KEY`, `OMDB_API_KEY` | Optional, for the Import page (see [Importing titles](#importing-titles)) | | |
 | `NEXT_PUBLIC_SENTRY_DSN` | Part 10 (optional) | | |
+| `BLOB_READ_WRITE_TOKEN` | Part 11 (optional), added by Vercel | | |
 
 `BETTER_AUTH_URL` isn't needed. It follows `SITE_URL`, or Vercel's
 production address when `SITE_URL` isn't set.
@@ -437,6 +439,41 @@ Never the visitor's IP address, cookies, anything they typed, or which
 account they use. Some visitors' ad blockers stop their browser's
 reports; errors on the server always get through.
 
+## Part 11 (optional): Turn on poster uploads
+
+Without this part, posters and backdrops are links to images hosted
+elsewhere. With it, the title editor gets **Upload a poster** and
+**Upload a backdrop** buttons, and the images are kept in a Vercel Blob
+store that belongs to your Vercel project.
+
+1. In your Vercel project, open the **Storage** tab.
+2. Click **Create Database** and choose **Blob**.
+3. Follow the prompts:
+   - **Name:** for example `gayflix-images`.
+   - **Region**, if it asks: the same as the database's (Part 3).
+   - If it asks whether the store is **public** or **private**, choose
+     **Public**: posters are shown to every visitor.
+4. When Vercel asks which environments to connect the store to, choose
+   **Production** only, as for the database: the title editor needs the
+   database, so previews can't use uploads anyway.
+5. Open **Settings → Environment Variables**. **You should see**
+   `BLOB_READ_WRITE_TOKEN` listed for Production. Vercel added it, so
+   there's nothing to copy.
+6. Redeploy (**Deployments**, the latest one's **⋯** menu, **Redeploy**):
+   the site works out the store's address when it's built.
+
+**You should see** the buttons under the image links on **Upload →
+Movies**. Upload a poster, a JPEG, PNG, WebP or AVIF image up to 4 MB:
+the button's line says "Uploaded. Save to use it." and the link fills
+with an address ending in `.public.blob.vercel-storage.com`. Add the
+title, and its edit page shows the poster. The file is also listed in
+the store's **Browser** on the Storage tab.
+
+Uploaded images are public, like any poster, under a random name. An
+image you replace, or upload and never save, stays in the store; delete
+ones you don't need in the store's **Browser** if they pile up. Links
+keep working alongside uploads.
+
 ## Running the site
 
 ### How deploys work
@@ -508,15 +545,18 @@ admin panel; changes show on the site right away.
 people pressed Play on them in the last 7 days, counting each person once
 a day per title, so it starts empty and fills as people watch.
 
-**Posters and backdrops** are links to images, not uploads. A link must
-start with `https://` and point to an allowed image host. At first that's
-only the sample catalog's `picsum.photos`. To use your own, add
-`IMAGE_HOSTS` in Vercel (**Settings → Environment Variables**,
-Production) with the host names, separated by commas, such as
-`images.example.com,cdn.example.org`, then redeploy: the site reads the
-list when it's built. Leave the poster link empty for a title that has no
-poster yet: it shows the **No poster yet** image (the logo and that text)
-until you add one.
+**Posters and backdrops** are uploaded or linked. With uploads on
+([Part 11](#part-11-optional-turn-on-poster-uploads)), **Upload a poster**
+and **Upload a backdrop** take a JPEG, PNG, WebP or AVIF image up to 4 MB
+and fill in the link to it; save the title to use it. A link must start
+with `https://` and point to an allowed image host. At first that's only
+the sample catalog's `picsum.photos`, and your Blob store once uploads
+are on. To use your own, add `IMAGE_HOSTS` in Vercel (**Settings →
+Environment Variables**, Production) with the host names, separated by
+commas, such as `images.example.com,cdn.example.org`, then redeploy: the
+site reads the list when it's built. Leave the poster link empty for a
+title that has no poster yet: it shows the **No poster yet** image (the
+logo and that text) until you add one.
 
 To hide every title at once, a SQL editor (as in 6.2) is quicker than the
 list's 50 rows a page. Set them back to `'published'` to undo it:
@@ -660,6 +700,9 @@ Only change the production `BETTER_AUTH_SECRET` if it leaked. Afterwards:
 | Pages with titles show an error page on a preview address | Previews have no database | Expected; see [How deploys work](#how-deploys-work) |
 | The title form says "Images can only come from …" | The image's host isn't allowed | Add it to `IMAGE_HOSTS` and redeploy (see [Managing titles](#managing-titles)) |
 | A title's poster is a broken image | The image was moved or deleted on its host, or its host was taken out of `IMAGE_HOSTS` | Edit the title and use a working link on an allowed host |
+| The title form has no Upload buttons | No Blob store is connected for Production, or the site wasn't redeployed after connecting one | Part 11 |
+| An upload says "The upload didn't go through" | The store refused it, for instance after it was deleted or disconnected | Check **Logs** for a line starting `[uploads]`; reconnect the store (Part 11) and redeploy |
+| An upload says "this site can't show it" | The store gave the image an address the site didn't expect | Ask in the project thread with the `[uploads]` line from **Logs** |
 | `/admin/login` says "Confirm this account's email first" | The email was never confirmed | Log in on the main site to get a code |
 | The app's codes are always wrong | The phone's clock is off | Turn on automatic date and time on the phone |
 | "Two-factor sign-in is locked for 15 minutes." | 10 wrong codes in a row | Wait 15 minutes |
@@ -683,11 +726,12 @@ what the screen or the build log says. Never paste a secret.
 - **Catalog.** The movies and shows start as a sample catalog with
   placeholder posters. Replace them with your own titles in the admin
   panel (see [Managing titles](#managing-titles)).
-- **Admin panel.** Library, Upload, Trash and Reports work. Dashboard,
-  Import, Users and Setting are still placeholders.
+- **Admin panel.** Library, Upload, Import, Trash and Reports work.
+  Dashboard, Users and Setting are still placeholders.
 - **Crash reports.** Optional, but without them only Vercel's logs show
   what went wrong, and nothing tells you about errors in visitors'
   browsers. Turn them on with
   [Part 10](#part-10-optional-turn-on-crash-reports).
 - **Plans and limits.** Check Vercel (Hobby is non-commercial only),
-  Prisma Postgres and Resend against the traffic you expect.
+  Prisma Postgres, Resend and, with uploads on, Vercel Blob's storage and
+  transfer against the traffic you expect.

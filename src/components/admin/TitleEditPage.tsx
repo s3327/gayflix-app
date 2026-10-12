@@ -7,7 +7,7 @@ import { BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY } from "@/components/ad
 import TitleForm from "@/components/admin/TitleForm";
 import { restoreTitle, trashTitle, updateTitle } from "@/lib/admin-catalog-actions";
 import { getTitleForEdit } from "@/lib/catalog";
-import { imageHosts } from "@/lib/image-hosts.mjs";
+import { imageHosts, uploadHost } from "@/lib/image-hosts.mjs";
 import type { MediaType } from "@/lib/media";
 import { imageUrlProblem, libraryPath, NO_POSTER, titleValues } from "@/lib/title-form";
 import { titleHref } from "@/lib/title-href";
@@ -124,6 +124,7 @@ export default async function TitleEditPage({
             action={updateTitle.bind(null, row.id)}
             initialValues={titleValues(row)}
             imageHosts={hosts}
+            uploadHost={uploadHost()}
             lastYear={new Date().getUTCFullYear() + 5}
             submitLabel="Save changes"
           />

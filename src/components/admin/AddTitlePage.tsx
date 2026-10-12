@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BUTTON_SECONDARY } from "@/components/admin/FormFields";
 import TitleForm from "@/components/admin/TitleForm";
 import { createTitle } from "@/lib/admin-catalog-actions";
-import { imageHosts } from "@/lib/image-hosts.mjs";
+import { imageHosts, uploadHost } from "@/lib/image-hosts.mjs";
 import { parseTmdbRef } from "@/lib/import-mapping";
 import type { MediaType } from "@/lib/media";
 import { emptyTitleValues, libraryPath } from "@/lib/title-form";
@@ -78,6 +78,7 @@ export default async function AddTitlePage({ type, tmdbId }: { type: MediaType; 
           initialErrors={ready?.errors}
           hiddenFields={sources ?? undefined}
           imageHosts={imageHosts()}
+          uploadHost={uploadHost()}
           lastYear={new Date().getUTCFullYear() + 5}
           submitLabel={isMovie ? "Add movie" : "Add series"}
           cancelHref={ready ? "/admin/import" : libraryPath(type)}
