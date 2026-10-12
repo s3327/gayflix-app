@@ -1,3 +1,4 @@
+import { USER_STATE } from "./accounts";
 import { test, expect } from "./fixtures";
 
 const PAGES = [
@@ -36,6 +37,50 @@ for (const path of PAGES) {
     await expect(page.locator("h1").first()).toBeVisible();
   });
 }
+
+test("the landing page leads into the site, and the logo leads back to it", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Love. Stories. Ours.");
+  await expect(page.getByRole("link", { name: "Start Browsing" }).first()).toHaveAttribute(
+    "href",
+    "/home"
+  );
+  await expect(page.getByRole("link", { name: "Sign Up" })).toHaveAttribute("href", "/signup");
+  await page.getByRole("link", { name: "Drama", exact: true }).click();
+  await expect(page).toHaveURL(/\/genre\?genre=Drama$/);
+  await expect(page.getByRole("link", { name: "Gayflix home" })).toHaveAttribute("href", "/");
+});
+
+test.describe("signed in", () => {
+  test.use({ storageState: USER_STATE });
+
+  test("the landing page sends members home instead of to sign up", async ({ page }) => {
+    await page.goto("/");
+    await expect(
+      page.getByRole("navigation", { name: "Account" }).getByRole("link", { name: "Go to Home" })
+    ).toHaveAttribute("href", "/home");
+    await expect(page.getByRole("link", { name: "Sign Up" })).toHaveCount(0);
+  });
+});
+
+test("pages name themselves in the tab, and title pages carry a link preview", async ({
+  page,
+}) => {
+  await page.goto("/browse");
+  await expect(page).toHaveTitle("Browse · Gayflix");
+
+  await page.goto("/movie/chosen-family");
+  await expect(page).toHaveTitle("Chosen Family (2025) · Gayflix");
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /Provincetown/);
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /^https:\/\//);
+  await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
+    "content",
+    /\/movie\/chosen-family$/
+  );
+
+  await page.goto("/episode/the-brownstone-season-1-episode-1");
+  await expect(page).toHaveTitle("The Brownstone S1 E1: Move-In Day · Gayflix");
+});
 
 test("unknown pages get the branded 404", async ({ page }) => {
   const response = await page.goto("/definitely-not-a-page");

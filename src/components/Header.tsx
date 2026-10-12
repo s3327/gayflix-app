@@ -12,11 +12,12 @@ import MobileNavMenu from "@/components/MobileNavMenu";
  *
  * Responsive behavior:
  * - Desktop (lg+): full "gayflix" tagline lockup, centered
- * - Tablet (sm–lg): icon-only logo, centered — NavMenu's links remain
+ * - Tablet (md–lg): icon-only logo, centered — NavMenu's links remain
  *   visible below at a smaller size (see NavMenu.tsx)
- * - Mobile (<sm): icon-only logo stays centered; the reserved left slot
- *   is MobileNavMenu's hamburger button, which opens a drawer with every
- *   nav link — NavMenu hides its links entirely at this size
+ * - Phones and small tablets (<md): icon-only logo stays centered; the
+ *   reserved left slot is MobileNavMenu's hamburger button, which opens
+ *   a drawer with every nav link — NavMenu hides its links at this size,
+ *   where they wouldn't fit on one line
  * - Search/account icons are icon-only at every size — no label text,
  *   by design, not just at narrower widths
  */
@@ -24,10 +25,10 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-border-subtle bg-bg-base/95 backdrop-blur-sm">
       <div className="mx-auto grid h-16 max-w-[1440px] grid-cols-[1fr_auto_1fr] items-center px-4 sm:h-20 sm:px-8">
-        {/* Left: hamburger menu, mobile only — opens MobileNavMenu's
+        {/* Left: hamburger menu, below md only — opens MobileNavMenu's
             drawer. invisible (not hidden) on purpose: this is a grid
             item in the 3-column layout below. display:none would
-            remove it from grid placement entirely at sm+, collapsing
+            remove it from grid placement entirely at md+, collapsing
             3 columns down to 2 and shoving the logo left instead of
             keeping it centered. visibility:hidden keeps its column's
             space reserved while just not rendering it visually. */}

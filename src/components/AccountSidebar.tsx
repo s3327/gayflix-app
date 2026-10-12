@@ -31,28 +31,19 @@ export default function AccountSidebar() {
       aria-label="Account"
       className="w-full shrink-0 rounded-card border border-border-subtle bg-bg-surface p-3 md:w-56"
     >
-      <ul
-        // On mobile the list scrolls sideways, and Chrome leaves a
-        // keyboard-focused item that's partly out of view where it is.
-        // Bring it fully in. (Not on a click: the item would move away
-        // from under the pointer.)
-        onFocus={(event) => {
-          if (event.target.matches(":focus-visible")) {
-            event.target.scrollIntoView({ block: "nearest", inline: "nearest" });
-          }
-        }}
-        className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible"
-      >
+      {/* Below md, four equal tabs (icon over label) across the top,
+          so all of them fit on a phone without scrolling sideways; from
+          md, a column beside the content. */}
+      <ul className="grid grid-cols-4 gap-1 md:flex md:flex-col">
         {ACCOUNT_NAV_ITEMS.map(({ label, href, icon: Icon }) => {
           const isActive = pathname === href;
           return (
-            <li key={href} className="shrink-0 md:shrink">
-              {/* Focus ring inside the edges: on mobile the list scrolls
-                  sideways and clips anything outside it. */}
+            <li key={href}>
+              {/* Focus ring inside the edges, clear of the box around it. */}
               <Link
                 href={href}
                 aria-current={isActive ? "page" : undefined}
-                className={`flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-semibold transition-colors focus-visible:-outline-offset-2 ${
+                className={`flex flex-col items-center gap-1 rounded-md px-1 py-2 text-xs font-semibold transition-colors focus-visible:-outline-offset-2 md:flex-row md:gap-2.5 md:px-3 md:py-2.5 md:text-sm ${
                   isActive
                     ? "bg-brand-pink text-ink-onBrand"
                     : "text-ink-secondary hover:bg-bg-elevated hover:text-ink-primary"

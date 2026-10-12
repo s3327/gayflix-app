@@ -1,18 +1,28 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
+import { searchHref } from "@/lib/browse-href";
 import { searchTitles } from "@/lib/catalog";
 import { normalizeQuery } from "@/lib/search";
 import { firstParam, pageParam, type SearchParams } from "@/lib/search-params";
 
 const QUICK_SEARCHES = ["Drama", "Romance", "Comedy", "2026", "Documentary", "Coming of Age"];
 
-function searchHref(query: string, page: number) {
-  const qs = new URLSearchParams({ q: query });
-  if (page !== 1) qs.set("page", String(page));
-  return `/search?${qs}`;
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}): Promise<Metadata> {
+  const query = normalizeQuery(firstParam((await searchParams).q) ?? "");
+  return {
+    title: query ? `Results for “${query}”` : "Search",
+    // Result pages for every possible query aren't worth indexing, but
+    // the titles they link to are.
+    robots: { index: false, follow: true },
+  };
 }
 
 export default async function SearchPage({
@@ -22,8 +32,9 @@ export default async function SearchPage({
 }) {
   const searchParams = await searchParamsPromise;
   const query = normalizeQuery(firstParam(searchParams.q) ?? "");
-  // Published titles whose title, synopsis, country or a genre contains
-  // the query, or from that year; title matches first.
+  // Published titles whose title, synopsis, people, tags, genres,
+  // country or language contain the query, or from that year; title
+  // matches first.
   const { items: results, total, page, totalPages } = await searchTitles(
     query,
     pageParam(searchParams.page)
@@ -34,7 +45,7 @@ export default async function SearchPage({
       <div className="mx-auto max-w-2xl text-center">
         <h1 className="font-display text-3xl font-bold sm:text-4xl">Search Gayflix</h1>
         <p className="mt-2 text-sm text-ink-muted">
-          Find movies, series, genres, or release years across our collection.
+          Find movies and series by title, genre, cast, director, or release year.
         </p>
 
         {/* Search input form on the page */}
@@ -45,7 +56,7 @@ export default async function SearchPage({
               type="text"
               name="q"
               defaultValue={query}
-              placeholder="Search by title, genre, year..."
+              placeholder="Search by title, cast, genre, year..."
               className="w-full rounded-card border border-border-subtle bg-bg-surface py-3.5 pl-12 pr-4 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
             />
           </div>
@@ -63,7 +74,7 @@ export default async function SearchPage({
           {QUICK_SEARCHES.map((term) => (
             <Link
               key={term}
-              href={`/search?q=${encodeURIComponent(term)}`}
+              href={searchHref(term)}
               className="rounded-pill border border-border-subtle bg-bg-surface px-3 py-1 font-medium text-ink-secondary transition-colors hover:border-brand-pink hover:text-ink-brand"
             >
               {term}

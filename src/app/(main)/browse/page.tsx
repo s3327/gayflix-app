@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowDownAZ, ArrowDown, ArrowUp } from "lucide-react";
 import MediaCard from "@/components/MediaCard";
@@ -17,6 +18,8 @@ function buildHref(params: { type: TypeFilter; sortAsc: boolean; page: number })
   const query = qs.toString();
   return query ? `/browse?${query}` : "/browse";
 }
+
+export const metadata: Metadata = { title: "Browse" };
 
 export default async function BrowsePage({
   searchParams: searchParamsPromise,

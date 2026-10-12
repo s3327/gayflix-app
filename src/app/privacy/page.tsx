@@ -1,5 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
+import { SITE_NAME } from "@/lib/page-metadata";
+
+export const metadata: Metadata = { title: `Privacy Policy · ${SITE_NAME}` };
 
 /**
  * Placeholder legal copy — same status as /terms: realistic structure,

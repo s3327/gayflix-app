@@ -1,7 +1,18 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import TitleDetail from "@/components/TitleDetail";
 import { getTitle, listRecommendations } from "@/lib/catalog";
+import { titleMetadata } from "@/lib/page-metadata";
 import { titleHref } from "@/lib/title-href";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const title = await getTitle((await params).id);
+  return title ? titleMetadata(title) : {};
+}
 
 export default async function MoviePage({
   params,

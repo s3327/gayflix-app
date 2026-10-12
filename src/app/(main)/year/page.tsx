@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import CatalogFilterPage from "@/components/CatalogFilterPage";
 import { type SearchParams } from "@/lib/search-params";
+
+export const metadata: Metadata = { title: "Year" };
 
 export default async function YearPage({
   searchParams: searchParamsPromise,

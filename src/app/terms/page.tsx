@@ -1,5 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
+import { SITE_NAME } from "@/lib/page-metadata";
+
+export const metadata: Metadata = { title: `Terms of Service · ${SITE_NAME}` };
 
 /**
  * Placeholder legal copy — linked from the sign-up checkbox and (once

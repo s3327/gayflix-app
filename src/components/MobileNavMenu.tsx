@@ -49,8 +49,9 @@ export default function MobileNavMenu() {
   return (
     // Same "reserve the grid column, don't just display:none the
     // whole thing" placement as before — invisible (not hidden) at
-    // sm+ so Header's 3-column grid keeps the logo centered.
-    <div {...dropdown} className="flex sm:invisible">
+    // md+, where NavMenu's links show, so Header's 3-column grid keeps
+    // the logo centered.
+    <div {...dropdown} className="flex md:invisible">
       <button
         ref={buttonRef}
         type="button"
@@ -67,7 +68,8 @@ export default function MobileNavMenu() {
       </button>
 
       {isOpen && (
-        <div className="fixed inset-x-0 top-16 z-40 max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-border-subtle bg-bg-base shadow-xl sm:hidden">
+        // Opens right under the header, which is taller from sm.
+        <div className="fixed inset-x-0 top-16 z-40 max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-border-subtle bg-bg-base shadow-xl sm:top-20 sm:max-h-[calc(100vh-5rem)] md:hidden">
           {/* pt-2: room for the first link's focus ring, which the
               drawer's top edge would otherwise cut off. */}
           <nav aria-label="Primary" className="flex flex-col px-4 pt-2">

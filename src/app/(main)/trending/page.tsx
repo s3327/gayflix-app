@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import MediaCard from "@/components/MediaCard";
@@ -18,6 +19,8 @@ function buildHref(params: { type: TypeFilter; sortDesc: boolean; page: number }
   const query = qs.toString();
   return query ? `/trending?${query}` : "/trending";
 }
+
+export const metadata: Metadata = { title: "Trending" };
 
 export default async function TrendingPage({
   searchParams: searchParamsPromise,
