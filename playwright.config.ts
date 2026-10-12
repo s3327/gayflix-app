@@ -27,7 +27,8 @@ export const OUTBOX_FILE = ".playwright/outbox.jsonl";
  *
  * The "setup" project creates a verified user and an admin through the
  * real sign-up flow and saves their sessions; the other tests reuse them.
- * The admin password below only exists for this test server.
+ * It also gives the seed titles the tests play a video source. The admin
+ * password below only exists for this test server.
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -39,7 +40,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    { name: "setup", testMatch: /accounts\.setup\.ts/ },
+    { name: "setup", testMatch: /\.setup\.ts$/ },
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
@@ -80,7 +81,8 @@ export default defineConfig({
         // Imported posters' host. The build needs it too for next/image
         // (CI sets it); without it the posters just don't load.
         IMAGE_HOSTS: "image.tmdb.org",
-        // Where e2e/admin-video.spec.ts's sources may come from.
+        // Where video sources may come from (e2e/admin-video.spec.ts,
+        // e2e/catalog.setup.ts and e2e/player.spec.ts).
         VIDEO_HOSTS: "player.e2e.example,*.cdn.e2e.example",
         // Uploads on, kept by the stand-in store. Its images don't exist,
         // so they don't load; the tests check what was stored instead.

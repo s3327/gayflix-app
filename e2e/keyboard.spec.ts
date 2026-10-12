@@ -220,8 +220,9 @@ test("Play keeps focus on the player", async ({ page }) => {
   await tabTo(page, page.getByRole("button", { name: "Play Chosen Family" }));
   expect(await hiddenRingSides(page)).toEqual([]);
   await page.keyboard.press("Enter");
-  await expect(page.getByText("Now playing")).toBeFocused();
-  expect(await hiddenRingSides(page)).toEqual([]);
+  // Its server is an embed: focus moves into the provider's player, whose
+  // controls Tab reaches next and which draws its own focus.
+  await expect(page.getByTitle("Chosen Family (Server 1)")).toBeFocused();
 });
 
 test("the sign-up terms checkbox shows focus", async ({ page }) => {

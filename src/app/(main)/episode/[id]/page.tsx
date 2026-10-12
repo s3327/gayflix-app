@@ -3,8 +3,7 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getEpisode } from "@/lib/catalog";
-import ServerTabs from "@/components/ServerTabs";
+import { getEpisode, getVideoSources } from "@/lib/catalog";
 import WatchPlayer from "@/components/WatchPlayer";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import TagList from "@/components/TagList";
@@ -21,9 +20,9 @@ export async function generateMetadata({
 }
 
 /**
- * Deliberately the same structure as /watch/[id]: player up top, then
- * server tabs, then a mini-poster + title/tags header, then synopsis +
- * meta list. The two adaptations from the movie version, since an
+ * Deliberately the same structure as /watch/[id]: player (with its
+ * server tabs) up top, then a mini-poster + title/tags header, then
+ * synopsis + meta list. The two adaptations from the movie version, since an
  * episode isn't a movie:
  *   1. No per-episode rating/tagline exists in the data model (only the
  *      series as a whole has one) — the header shows a "SX · EY" badge
@@ -41,7 +40,7 @@ export default async function EpisodePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const found = await getEpisode(id);
+  const [found, sources] = await Promise.all([getEpisode(id), getVideoSources({ episodeId: id })]);
   if (!found) notFound();
   const { episode, series } = found;
 
@@ -53,9 +52,11 @@ export default async function EpisodePage({
 
   return (
     <main className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
-      {/* Player — placeholder, no real video source yet. Play button
-          (inside WatchPlayer) is real: it records a History entry. */}
+      {/* Player and its server tabs. Play (inside WatchPlayer) records a
+          History entry. Keyed so the next episode starts on its own
+          first server, not playing. */}
       <WatchPlayer
+        key={episode.id}
         media={{
           id: episode.id,
           title: `${series.title}: ${episode.title}`,
@@ -67,6 +68,8 @@ export default async function EpisodePage({
           gradient: series.gradient,
           posterUrl: series.posterUrl,
         }}
+        sources={sources}
+        backdropUrl={series.backdropUrl}
       />
 
       {/* Previous / Next episode — label on top so it's clear at a
@@ -124,12 +127,6 @@ export default async function EpisodePage({
             <ChevronRight className="h-4 w-4" />
           </span>
         )}
-      </div>
-
-      {/* Server tabs — which sources exist per title will be configured
-          on the (future) admin edit page */}
-      <div className="mt-4">
-        <ServerTabs />
       </div>
 
       {/* Mini poster + title/season-episode badge/tags */}
