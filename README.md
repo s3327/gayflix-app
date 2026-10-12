@@ -4,8 +4,8 @@ LGBTQ+ films and series, picked by the community. This is the web app:
 the public site and the admin panel, deployed as one Next.js app.
 
 **Status:** accounts are real (Better Auth on Prisma Postgres: sign-up
-with an emailed code, login, password reset, Google sign-in, admin
-roles), and favorites, lists, watch history and reports are stored in
+with an emailed code, login, password reset, Google sign-in, signing
+out other devices, deleting the account, admin roles), and favorites, lists, watch history and reports are stored in
 the database. So is the catalog, which starts out as a sample catalog of
 placeholder titles; admins add, edit, publish and remove titles and
 episodes in the admin panel. See

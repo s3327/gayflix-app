@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
-import { authClient } from "@/lib/auth-client";
+import { authClient, authErrorMessage } from "@/lib/auth-client";
 
 type AuthUser = {
   id: string;
@@ -16,9 +16,14 @@ type AuthContextValue = {
   /** True until the first session check finishes (always on the server render). */
   isPending: boolean;
   user: AuthUser | null;
-  /** True from logout() until the next sign-in, so pages can tell "logged out on purpose" from "session ended". */
+  /** True from logout() (or a successful deleteAccount()) until the next sign-in, so pages can tell "logged out on purpose" from "session ended". */
   isLoggingOut: boolean;
   logout: () => Promise<void>;
+  /**
+   * Deletes the account and ends the session, like logout(). Resolves
+   * with an error message, or "" once the account is gone.
+   */
+  deleteAccount: (password?: string) => Promise<string>;
   /** Re-reads the session, after changing the user's name or email. */
   refresh: () => Promise<void>;
 };
@@ -54,6 +59,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await authClient.signOut();
   }, []);
 
+  const deleteAccount = useCallback(async (password?: string) => {
+    setIsLoggingOut(true);
+    const { error } = await authClient.deleteUser(password ? { password } : {});
+    if (error) setIsLoggingOut(false);
+    return authErrorMessage(error);
+  }, []);
+
   const refresh = useCallback(async () => {
     await refetch();
   }, [refetch]);
@@ -65,9 +77,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user: data?.user ?? null,
       isLoggingOut,
       logout,
+      deleteAccount,
       refresh,
     }),
-    [data, isPending, isLoggingOut, logout, refresh]
+    [data, isPending, isLoggingOut, logout, deleteAccount, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
