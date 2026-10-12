@@ -4,14 +4,15 @@ import { ArrowLeft } from "lucide-react";
 import ConfirmSubmitButton from "@/components/admin/ConfirmSubmitButton";
 import EpisodeForm from "@/components/admin/EpisodeForm";
 import { BUTTON_DANGER, BUTTON_SECONDARY } from "@/components/admin/FormFields";
+import VideoSources from "@/components/admin/VideoSources";
 import { deleteEpisode, updateEpisode } from "@/lib/admin-catalog-actions";
 import { getEpisodeForEdit } from "@/lib/catalog";
 import { requireAdmin } from "@/lib/session";
 import { episodeValues } from "@/lib/title-form";
 
 /**
- * An episode's edit page. Episodes don't go to the trash: deleting one is
- * for good, after a confirmation.
+ * An episode's edit page, with its video. Episodes don't go to the trash:
+ * deleting one is for good, after a confirmation.
  */
 export default async function EditEpisodePage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
@@ -52,6 +53,8 @@ export default async function EditEpisodePage({ params }: { params: Promise<{ id
               submitLabel="Save changes"
             />
           </div>
+
+          <VideoSources owner="episode" ownerId={row.id} sources={row.videoSources} />
 
           <section
             aria-labelledby="delete-heading"

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_AUTH_REALM, checkAdminAccess } from "@/lib/admin-auth";
 import { buildContentSecurityPolicy, createNonce } from "@/lib/csp";
 import { errorReportingOrigin } from "@/lib/error-reporting";
+import { videoHostSources, videoHosts } from "@/lib/video-hosts";
 
 function isAdminPath(pathname: string) {
   return pathname === "/admin" || pathname.startsWith("/admin/");
@@ -50,11 +51,11 @@ export function proxy(request: NextRequest) {
   }
 
   const nonce = createNonce();
-  const csp = buildContentSecurityPolicy(
-    nonce,
-    process.env.NODE_ENV === "development",
-    errorReportingOrigin()
-  );
+  const csp = buildContentSecurityPolicy(nonce, {
+    dev: process.env.NODE_ENV === "development",
+    reportOrigin: errorReportingOrigin(),
+    videoSources: videoHostSources(videoHosts()),
+  });
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);

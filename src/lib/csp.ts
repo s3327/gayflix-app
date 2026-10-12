@@ -11,30 +11,38 @@
  * attributes, which nonces can't cover, and style injection is far less
  * dangerous than script injection.
  *
- * When a real video player arrives, add its embed origin to frame-src
- * (e.g. "frame-src https://player.example.com"), or the embed won't load.
- *
- * `reportOrigin` is where the browser sends crash reports, when they're
- * on (errorReportingOrigin() in src/lib/error-reporting.ts).
+ * - `dev` adds what development needs: eval and hot reload's websockets.
+ * - `reportOrigin` is where the browser sends crash reports, when they're
+ *   on (errorReportingOrigin() in src/lib/error-reporting.ts).
+ * - `videoSources` are the video hosts (videoHostSources() in
+ *   src/lib/video-hosts.ts): embeds load in frames from them, video files
+ *   play from them, and HLS players fetch playlists and segments from
+ *   them. Without any, nothing may be framed.
  */
 export function buildContentSecurityPolicy(
   nonce: string,
-  isDev: boolean,
-  reportOrigin?: string
+  {
+    dev = false,
+    reportOrigin,
+    videoSources = [],
+  }: { dev?: boolean; reportOrigin?: string; videoSources?: string[] } = {}
 ): string {
+  const video = videoSources.map((source) => ` ${source}`).join("");
   return [
     "default-src 'self'",
     // Dev additionally needs eval (React's dev tooling); prod never does.
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${dev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     // Posters go through next/image (/_next/image on this origin), so no
     // third-party image host needs to be listed here.
     "img-src 'self' data: blob:",
     "font-src 'self'",
     // Dev also needs websockets for hot reload.
-    `connect-src 'self'${reportOrigin ? ` ${reportOrigin}` : ""}${isDev ? " ws: wss:" : ""}`,
-    "media-src 'self' blob:",
-    "frame-src 'none'",
+    `connect-src 'self'${reportOrigin ? ` ${reportOrigin}` : ""}${video}${dev ? " ws: wss:" : ""}`,
+    `media-src 'self' blob:${video}`,
+    // HLS players parse streams in a worker they start from a blob.
+    "worker-src 'self' blob:",
+    video ? `frame-src${video}` : "frame-src 'none'",
     "frame-ancestors 'none'",
     "object-src 'none'",
     "base-uri 'self'",
