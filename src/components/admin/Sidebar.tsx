@@ -1,65 +1,128 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { ChevronDown, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChevronDown, Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { adminNav, type NavEntry } from "@/components/admin/nav-config";
+import { useDropdown } from "@/lib/use-dropdown";
 
+/**
+ * The admin panel's navigation: a sidebar on tablets and up, and on
+ * phones, where a sidebar would leave the page no room, a bar across the
+ * top with the same links in a menu.
+ */
 export default function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <aside
-      className={`sticky top-0 flex h-screen shrink-0 flex-col border-r border-border-subtle bg-bg-surface transition-[width] duration-200 ${
-        collapsed ? "w-24" : "w-64"
-      }`}
-    >
-      {/* Logo + collapse toggle, same row */}
-      <div className="flex h-16 shrink-0 items-center justify-between gap-2 px-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Image
-            src="/brand/gayflix-icon.png"
-            alt="Gayflix"
-            width={500}
-            height={500}
-            className="h-8 w-8 shrink-0"
-          />
-          {!collapsed && (
-            <span className="truncate font-display text-lg font-bold">
-              gayflix
-            </span>
-          )}
+    <>
+      <PhoneBar pathname={pathname} />
+      <aside
+        className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r border-border-subtle bg-bg-surface transition-[width] duration-200 md:flex ${
+          collapsed ? "w-24" : "w-64"
+        }`}
+      >
+        {/* Logo + collapse toggle, same row */}
+        <div className="flex h-16 shrink-0 items-center justify-between gap-2 px-3">
+          <Brand showName={!collapsed} />
+
+          <button
+            type="button"
+            onClick={() => setCollapsed((v) => !v)}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary"
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+          </button>
         </div>
 
+        {/* Nav */}
+        <nav aria-label="Admin" className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
+          {adminNav.map((entry) => (
+            <NavItem
+              key={entry.label}
+              entry={entry}
+              pathname={pathname}
+              collapsed={collapsed}
+            />
+          ))}
+        </nav>
+      </aside>
+    </>
+  );
+}
+
+function Brand({ showName }: { showName: boolean }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <Image
+        src="/brand/gayflix-icon.png"
+        alt="Gayflix"
+        width={500}
+        height={500}
+        className="h-8 w-8 shrink-0"
+      />
+      {showName && (
+        <span className="truncate font-display text-lg font-bold">
+          gayflix
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The phone layout's top bar. Its menu closes like the site header's
+ * (see useDropdown), and on route change.
+ */
+function PhoneBar({ pathname }: { pathname: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdown = useDropdown(isOpen, setIsOpen, buttonRef);
+
+  // Close whenever the route changes, during render rather than in an
+  // effect, as MobileNavMenu does.
+  const [lastPathname, setLastPathname] = useState(pathname);
+  if (pathname !== lastPathname) {
+    setLastPathname(pathname);
+    setIsOpen(false);
+  }
+
+  return (
+    <div {...dropdown} className="sticky top-0 z-40 md:hidden">
+      <div className="flex h-14 items-center justify-between gap-2 border-b border-border-subtle bg-bg-surface px-3">
+        <Brand showName />
         <button
+          ref={buttonRef}
           type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary"
+          aria-label={isOpen ? "Close menu" : "Open menu"}
+          aria-expanded={isOpen}
+          onClick={() => setIsOpen((open) => !open)}
+          className="flex h-10 w-10 items-center justify-center rounded-md text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary"
         >
-          {collapsed ? (
-            <PanelLeftOpen className="h-4 w-4" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4" />
-          )}
+          {isOpen ? <X className="h-5 w-5" strokeWidth={2} /> : <Menu className="h-5 w-5" strokeWidth={2} />}
         </button>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
-        {adminNav.map((entry) => (
-          <NavItem
-            key={entry.label}
-            entry={entry}
-            pathname={pathname}
-            collapsed={collapsed}
-          />
-        ))}
-      </nav>
-    </aside>
+      {isOpen && (
+        // pt-2: room for the first link's focus ring.
+        <nav
+          aria-label="Admin"
+          className="absolute inset-x-0 top-14 max-h-[calc(100vh-3.5rem)] space-y-1 overflow-y-auto border-b border-border-subtle bg-bg-surface px-3 pb-4 pt-2 shadow-xl"
+        >
+          {adminNav.map((entry) => (
+            <NavItem key={entry.label} entry={entry} pathname={pathname} collapsed={false} />
+          ))}
+        </nav>
+      )}
+    </div>
   );
 }
 

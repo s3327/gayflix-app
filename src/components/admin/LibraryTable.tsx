@@ -35,11 +35,13 @@ export default function LibraryTable({
         <BulkButton formAction={trashSelected}>Move to trash</BulkButton>
       </div>
 
-      <div className="mx-6 overflow-hidden rounded-card border border-border-subtle sm:mx-10">
+      {/* On a narrow screen the table scrolls sideways on its own, as the
+          episodes list does, rather than squeezing Title out. */}
+      <div className="mx-6 overflow-x-auto rounded-card border border-border-subtle sm:mx-10">
         {/* table-fixed makes the browser actually respect the widths below
             instead of treating them as hints — Title (no width set) then
             gets 100% of whatever space is left over. */}
-        <table className="w-full table-fixed text-sm">
+        <table className={`w-full table-fixed text-sm ${showEpisodes ? "min-w-[760px]" : "min-w-[560px]"}`}>
           <thead>
             <tr className="border-b border-border-subtle bg-bg-surface text-xs font-semibold uppercase tracking-wide text-ink-muted">
               <th className="w-10 px-4 py-3 text-left">

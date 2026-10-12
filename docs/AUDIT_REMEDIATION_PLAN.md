@@ -556,9 +556,25 @@ also resets the sample catalog's made-up view counts to zero).
   in the store. Deleting them would need tracking which images titles
   still use.
 
+### Shipped: the admin panel on phones ✅
+Found while checking uploads: the sidebar took 256 of a phone's 375
+pixels, so every admin page scrolled sideways and the library squeezed
+its titles out.
+- **Below tablet width** (`md`, 768 pixels) the sidebar gives way to a
+  bar across the top with a menu button. The menu holds the same links
+  and closes like the site's own phone menu: on Escape (focus goes back
+  to the button), a click outside, focus moving out of it, or going to
+  another page (`src/components/admin/Sidebar.tsx`). Tablets and up keep
+  the sidebar.
+- **Library tables** (Movies, Series) scroll sideways on their own when
+  the screen is narrow, as the Episodes list already did, rather than
+  shrinking the Title column to nothing.
+- **Verified:** every admin page at 375 and 768 pixels wide has nothing
+  wider than the screen; a new e2e test opens the menu by keyboard,
+  checks its focus ring shows in full, closes it with Escape and follows
+  a link, and checks the table leaves room for titles.
+
 ### Still to do
-- **Admin panel on phones:** the sidebar doesn't fold away, so on a phone
-  every admin page scrolls sideways (found while checking uploads).
 - **Playback progress:** Continue Watching can't show how far someone got
   until the player has a real video source that reports it.
 
