@@ -116,3 +116,15 @@ export async function getUserForAdmin(id: string) {
     lastActive: sessions._max.updatedAt,
   };
 }
+
+/** /admin/dashboard: how many accounts there are, and how many joined in the last 7 days. */
+export async function getUserOverview() {
+  await requireAdmin();
+  await connection();
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const [total, joinedThisWeek] = await Promise.all([
+    db.user.count(),
+    db.user.count({ where: { createdAt: { gte: weekAgo } } }),
+  ]);
+  return { total, joinedThisWeek };
+}
