@@ -210,6 +210,10 @@ export async function prepareImport(ref: TmdbRef, as: MediaType | null): Promise
   } else {
     notices.push(`Not checked against IMDb: ${imdb.reason}`);
   }
+  if (!values.posterUrl) {
+    const sources = imdb.found ? "Neither TMDB nor IMDb has" : "TMDB doesn't have";
+    notices.push(`${sources} a poster, so the title shows the “No poster yet” image until you add one.`);
+  }
 
   const parsed = parseTitle(type, values);
   return {

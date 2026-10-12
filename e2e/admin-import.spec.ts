@@ -168,6 +168,25 @@ test.describe("import", () => {
     }
   });
 
+  test("gives a title neither source has a poster for the No poster image", async ({ page }) => {
+    const main = page.locator("main");
+    const tmdbId = "movie/990008";
+    try {
+      await search(page, "E2E No Poster");
+      const result = card(page, "E2E No Poster");
+      await expect(result.getByRole("img", { name: "E2E No Poster" })).toHaveAttribute("src", /no-poster\.jpg/);
+      await result.getByRole("button", { name: /^Import E2E/ }).click();
+      await expect(page).toHaveURL(/\?imported=1$/);
+      await expect(main.getByRole("img", { name: "E2E No Poster" })).toHaveAttribute("src", /no-poster\.jpg/);
+      await expect(main.getByLabel("Poster image link")).toHaveValue("");
+      expect(await sql(`SELECT "posterUrl" FROM media WHERE "tmdbId" = $1`, [tmdbId])).toEqual([
+        { posterUrl: "/brand/no-poster.jpg" },
+      ]);
+    } finally {
+      await cleanUp(tmdbId);
+    }
+  });
+
   test("finds a title by its IMDb ID, whatever its type", async ({ page }) => {
     const main = page.locator("main");
     await page.goto("/admin/import");

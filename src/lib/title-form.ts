@@ -85,6 +85,13 @@ export type TitleInput = {
 export const FIRST_YEAR = 1888;
 
 /**
+ * The poster of a title that has none: the logo and "No poster yet"
+ * (public/brand/no-poster.jpg). A title saved with the poster link left
+ * empty gets this, and its form shows the link empty again.
+ */
+export const NO_POSTER = "/brand/no-poster.jpg";
+
+/**
  * Checks a title form. `hosts` are the image hosts posters may use
  * (imageHosts() unless a test passes its own).
  */
@@ -143,8 +150,8 @@ export function parseTitle(
   check("tagline", optionalText(values.tagline, 200));
   check("synopsis", optionalText(values.synopsis, 5000));
 
-  if (!values.posterUrl) errors.posterUrl = "Enter a link to the poster image.";
-  else check("posterUrl", imageUrlProblem(values.posterUrl, hosts));
+  const posterUrl = values.posterUrl || NO_POSTER;
+  if (posterUrl !== NO_POSTER) check("posterUrl", imageUrlProblem(posterUrl, hosts));
   if (values.backdropUrl) check("backdropUrl", imageUrlProblem(values.backdropUrl, hosts));
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
@@ -164,7 +171,7 @@ export function parseTitle(
       rating,
       tagline: values.tagline || null,
       synopsis: values.synopsis,
-      posterUrl: values.posterUrl,
+      posterUrl,
       backdropUrl: values.backdropUrl || null,
       status: values.status === "published" ? "published" : "draft",
       featured: values.featured === "on",
@@ -218,7 +225,7 @@ export function titleValues(row: {
     rating: row.rating === null ? "" : String(row.rating),
     tagline: row.tagline ?? "",
     synopsis: row.synopsis,
-    posterUrl: row.posterUrl,
+    posterUrl: row.posterUrl === NO_POSTER ? "" : row.posterUrl,
     backdropUrl: row.backdropUrl ?? "",
     status: row.status,
     featured: row.featured ? "on" : "",

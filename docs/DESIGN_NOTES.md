@@ -342,6 +342,13 @@ files (`Header.tsx` ×2, `Footer.tsx`, `admin/Sidebar.tsx`,
 `admin/login/page.tsx`) were updated to match the new actual file
 dimensions.
 
+`no-poster.jpg` (800×1200, 46KB) is the poster of a title that has none
+(`NO_POSTER` in `src/lib/title-form.ts`): the full lockup over a dark
+pink-to-purple glow, then **No poster yet** in Baloo 2 and "There's no
+poster available for this title right now." in Inter, with a pride
+stripe along the bottom. It was rendered from HTML in Chromium, so
+changing the text means rendering it again.
+
 ## Next steps
 
 - Share the UI design (Figma / screenshots) for: home/browse, title detail,
@@ -423,8 +430,9 @@ through OMDb (`src/lib/title-import.ts`; setup in "Importing titles" in
   finds its title whatever the type). The old **Source** menu is gone:
   every search asks TMDB and every import checks with OMDb.
 - Results: 40 cards a page (two TMDB pages), 2 to 10 columns by width,
-  with the shared `Pagination`. Each card has the poster (a gradient
-  when the poster's host isn't in `IMAGE_HOSTS`), title, type and year,
+  with the shared `Pagination`. Each card has the poster (the **No
+  poster yet** image when TMDB has none, a gradient when the poster's
+  host isn't in `IMAGE_HOSTS`), title, type and year,
   and **Import** (`ImportButton.tsx`), or **In library** / **In trash**
   linking to the title imported before.
 - **Import** either opens the new draft, opens the prefilled Add form

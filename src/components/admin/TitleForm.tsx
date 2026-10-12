@@ -204,10 +204,11 @@ export default function TitleForm({
         <ImageField
           kind="poster"
           label="Poster image link"
+          optional
           hint={
             canUpload
-              ? `A tall (2:3) image. Upload one, or paste a link to one on ${linkHosts}.`
-              : `A tall (2:3) image on ${linkHosts}.`
+              ? `A tall (2:3) image. Upload one, or paste a link to one on ${linkHosts}. Left empty, the title shows the “No poster yet” image.`
+              : `A tall (2:3) image on ${linkHosts}. Left empty, the title shows the “No poster yet” image.`
           }
           defaultValue={values.posterUrl}
           error={errors.posterUrl}
