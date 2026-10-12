@@ -4,6 +4,7 @@ import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/a
 import { nextCookies } from "better-auth/next-js";
 import { admin, emailOTP, twoFactor } from "better-auth/plugins";
 import { after } from "next/server";
+import { accountDeletionProblem } from "@/lib/account-deletion";
 import { adminAccess } from "@/lib/admin-access";
 import { db } from "@/lib/db";
 import { sendEmail, type Email } from "@/lib/email";
@@ -61,6 +62,9 @@ const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
  *   Admins must turn it on, and the admin panel only accepts a session
  *   that passed it in the last 12 hours (src/lib/admin-access.ts). Each
  *   session records whether it did (`twoFactorVerified`).
+ * - Members can delete their own account from /account/setting, with
+ *   their password (src/lib/account-deletion.ts says who may). Their
+ *   favorites, lists and history go with it.
  * - Rate limits are stored in the database so they hold across
  *   serverless instances.
  */
@@ -85,6 +89,7 @@ export const auth = betterAuth({
     sendOnSignIn: true,
     autoSignInAfterVerification: true,
   },
+  user: { deleteUser: { enabled: true } },
   socialProviders:
     googleClientId && googleClientSecret
       ? { google: { clientId: googleClientId, clientSecret: googleClientSecret } }
@@ -106,9 +111,22 @@ export const auth = betterAuth({
     },
   },
   hooks: {
-    // The admin plugin's own endpoints (/api/auth/admin/*: list users,
-    // set roles, impersonate, ...) get the same check as the admin panel.
     before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path === "/delete-user") {
+        const session = await getSessionFromCtx(ctx);
+        if (!session) return; // the endpoint turns it away itself
+        const credential = await ctx.context.internalAdapter.findCredentialAccount(session.user.id);
+        const problem = accountDeletionProblem({
+          role: session.user.role,
+          impersonating: Boolean(session.session.impersonatedBy),
+          hasPassword: Boolean(credential?.password),
+          passwordGiven: Boolean(ctx.body?.password),
+        });
+        if (problem) throw new APIError("BAD_REQUEST", { message: problem });
+        return;
+      }
+      // The admin plugin's own endpoints (/api/auth/admin/*: list users,
+      // set roles, impersonate, ...) get the same check as the admin panel.
       // Stopping impersonation runs as the impersonated user, so it's exempt.
       if (!ctx.path.startsWith("/admin/") || ctx.path === "/admin/stop-impersonating") return;
       const session = await getSessionFromCtx(ctx);

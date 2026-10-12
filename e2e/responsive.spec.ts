@@ -58,7 +58,7 @@ for (const [name, viewport] of Object.entries(SCREENS)) {
       test.use({ storageState: USER_STATE });
 
       test("account pages fit the screen", async ({ page }) => {
-        for (const path of ["/account", "/account/favorite", "/account/history"]) {
+        for (const path of ["/account", "/account/favorite", "/account/history", "/account/setting"]) {
           await page.goto(path);
           expect(await overflow(page), path).toEqual({ page: 0, nav: 0 });
           // Every account tab is on screen, none scrolled out of view.

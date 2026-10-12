@@ -27,7 +27,7 @@ for (const path of PUBLIC_PAGES) {
 
 test.describe("account", () => {
   test.use({ storageState: USER_STATE });
-  for (const path of ["/account", "/account/history"]) {
+  for (const path of ["/account", "/account/history", "/account/setting"]) {
     test(`${path} has no serious accessibility violations`, async ({ page }) => {
       await page.goto(path, { waitUntil: "networkidle" });
       expect(await seriousViolations(page)).toEqual([]);
