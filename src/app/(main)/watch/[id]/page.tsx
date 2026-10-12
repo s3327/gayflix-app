@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import Image from "next/image";
 import { Star } from "lucide-react";
-import { getTitle } from "@/lib/catalog";
-import ServerTabs from "@/components/ServerTabs";
+import { getTitle, getVideoSources } from "@/lib/catalog";
 import WatchPlayer from "@/components/WatchPlayer";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import TagList from "@/components/TagList";
@@ -26,7 +25,7 @@ export default async function WatchPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const movie = await getTitle(id);
+  const [movie, sources] = await Promise.all([getTitle(id), getVideoSources({ mediaId: id })]);
   if (!movie) notFound();
   // A series has no single video: play its first episode instead.
   if (movie.type === "series") {
@@ -36,7 +35,7 @@ export default async function WatchPage({
 
   return (
     <main className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
-      {/* Player — records watch history on play click */}
+      {/* Player and its server tabs — records watch history on play click */}
       <WatchPlayer
         media={{
           id: movie.id,
@@ -48,13 +47,9 @@ export default async function WatchPage({
           gradient: movie.gradient,
           posterUrl: movie.posterUrl,
         }}
+        sources={sources}
+        backdropUrl={movie.backdropUrl}
       />
-
-      {/* Server tabs — which sources exist per title will be configured
-          on the (future) admin edit page */}
-      <div className="mt-4">
-        <ServerTabs />
-      </div>
 
       {/* Mini poster + title/rating/tagline/tags */}
       <div className="mt-8 flex gap-4 sm:gap-6">

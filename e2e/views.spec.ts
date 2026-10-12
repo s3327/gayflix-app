@@ -26,6 +26,15 @@ async function addTitle(id: string, title: string, type: "movie" | "series" = "m
   );
 }
 
+/** A video source, so the title (or the episode) has a Play button. */
+async function addSource(column: "mediaId" | "episodeId", id: string) {
+  await sql(
+    `INSERT INTO video_source (id, "${column}", label, kind, url, position, "updatedAt")
+     VALUES ($1, $2, 'Server 1', 'embed', $3, 1, now())`,
+    [`${id}-source`, id, `https://player.e2e.example/embed/${id}`]
+  );
+}
+
 /** Presses Play as a guest and waits for the view to be counted. */
 async function play(page: Page, title: string) {
   // A guest's history stays in the browser, so this is the only server call.
@@ -58,6 +67,8 @@ test("a view counts once per person per title per day", async ({ browser }) => {
      VALUES ($1, $2, 1, 1, 'Pilot', '42 min')`,
     [episode, series.id]
   );
+  await addSource("mediaId", movie.id);
+  await addSource("episodeId", episode);
   try {
     const guest = await guestPage(browser, "203.0.113.10");
     await guest.goto(`/watch/${movie.id}`, { waitUntil: "networkidle" });
