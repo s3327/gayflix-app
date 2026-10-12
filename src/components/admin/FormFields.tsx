@@ -3,7 +3,9 @@ import type { FormState } from "@/lib/title-form";
 
 /*
  * Labelled fields for the admin forms. A field's hint and error are tied
- * to it with aria-describedby, and an error marks it aria-invalid.
+ * to it with aria-describedby, and an error marks it aria-invalid. A
+ * field's id is "field-<name>"; pass `id` when a page has several forms
+ * with the same fields.
  */
 
 const CONTROL =
@@ -69,9 +71,10 @@ export function TextField({
   error,
   optional,
   className,
+  id: givenId,
   ...input
 }: Common & Omit<InputHTMLAttributes<HTMLInputElement>, "name">) {
-  const id = `field-${name}`;
+  const id = givenId ?? `field-${name}`;
   return (
     <Shell id={id} label={label} hint={hint} error={error} optional={optional} className={className}>
       <input
@@ -119,9 +122,10 @@ export function SelectField({
   error,
   className,
   children,
+  id: givenId,
   ...select
 }: Omit<Common, "optional"> & Omit<SelectHTMLAttributes<HTMLSelectElement>, "name">) {
-  const id = `field-${name}`;
+  const id = givenId ?? `field-${name}`;
   return (
     <Shell id={id} label={label} hint={hint} error={error} className={className}>
       <select

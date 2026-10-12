@@ -122,9 +122,9 @@ enum MediaStatus {
 
 /// A movie or a series. `id` is the slug in /movie/[id] and /series/[id].
 model Media {
-  id             String      @id
+  id             String        @id
   type           MediaType
-  status         MediaStatus @default(draft)
+  status         MediaStatus   @default(draft)
   title          String
   year           Int
   /// As cards show it: "1h 52m" for a movie, "3 Seasons" for a series.
@@ -135,7 +135,7 @@ model Media {
   genres         String[]
   country        String
   language       String
-  synopsis       String      @default("")
+  synopsis       String        @default("")
   tagline        String?
   /// 0 to 5.
   rating         Float?
@@ -145,7 +145,7 @@ model Media {
   creator        String?
   cast           String[]
   tags           String[]
-  releaseDate    DateTime?   @db.Date
+  releaseDate    DateTime?     @db.Date
   /// Movies only.
   runtimeMinutes Int?
   posterUrl      String
@@ -155,24 +155,26 @@ model Media {
   gradient       String?
   /// The home page hero shows the most recently updated featured title.
   /// The admin editor keeps it to one.
-  featured       Boolean     @default(false)
+  featured       Boolean       @default(false)
   /// Views of all time (see MediaView). Trending ranks by the last 7
   /// days' views and breaks ties with this.
-  viewCount      Int         @default(0)
+  viewCount      Int           @default(0)
   /// Set when the title was imported from TMDB: its address there,
   /// "movie/603" or "tv/1399" (TMDB numbers movies and series apart).
   /// Kept in the trash too, so the Import page never brings in a copy.
-  tmdbId         String?     @unique
+  tmdbId         String?       @unique
   /// "tt0133093". Set when an import matched the title on IMDb (through
   /// OMDb); an import that couldn't be checked has none.
-  imdbId         String?     @unique
+  imdbId         String?       @unique
   /// Set while the title is in the admin panel's trash. Trashing also
   /// makes it a draft, so the public site never shows a trashed title.
   trashedAt      DateTime?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
   episodes       Episode[]
   views          MediaView[]
+  /// Movies only: a series' video is on its episodes.
+  videoSources   VideoSource[]
 
   @@index([status, type, updatedAt])
   @@index([status, createdAt])
@@ -181,18 +183,56 @@ model Media {
 
 /// One episode of a series. `id` is the slug in /episode/[id].
 model Episode {
-  id            String    @id
+  id            String        @id
   mediaId       String
   seasonNumber  Int
   episodeNumber Int
   title         String
   /// As shown: "42 min".
   duration      String
-  airDate       DateTime? @db.Date
-  media         Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  airDate       DateTime?     @db.Date
+  media         Media         @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  videoSources  VideoSource[]
 
   @@unique([mediaId, seasonNumber, episodeNumber])
   @@map("episode")
+}
+
+enum VideoSourceKind {
+  /// A player page shown in an iframe.
+  embed
+  /// An HLS stream: an .m3u8 playlist.
+  hls
+  /// A video file played as it is, such as .mp4 or .webm.
+  file
+
+  @@map("video_source_kind")
+}
+
+/// Where a movie or an episode plays from. Each source is one of the
+/// player's server tabs, in `position` order; the watch pages only show
+/// the ones that are on. The link's host must be in VIDEO_HOSTS
+/// (src/lib/video-hosts.ts). Exactly one of mediaId (a movie) and
+/// episodeId is set, which the migration's CHECK constraint enforces.
+/// Changed only through src/lib/admin-video-actions.ts.
+model VideoSource {
+  id        String          @id @default(cuid())
+  mediaId   String?
+  episodeId String?
+  /// The server tab's name: "Server 1", or the provider's.
+  label     String
+  kind      VideoSourceKind
+  url       String
+  position  Int
+  enabled   Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  media     Media?          @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  episode   Episode?        @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([mediaId, position])
+  @@index([episodeId, position])
+  @@map("video_source")
 }
 
 /// One view for Trending: someone pressed Play on a movie, or on an

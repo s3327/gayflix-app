@@ -21,6 +21,8 @@ import {
   type SearchSuggestion,
 } from "@/lib/search";
 import { getSession, requireAdmin } from "@/lib/session";
+import { videoHosts, videoUrlAllowed } from "@/lib/video-hosts";
+import type { VideoSourceEntry } from "@/lib/video-source";
 import { trendingSince } from "@/lib/views";
 
 /*
@@ -61,6 +63,12 @@ const EPISODE_ORDER = [
   { seasonNumber: "asc" },
   { episodeNumber: "asc" },
 ] satisfies Prisma.EpisodeOrderByWithRelationInput[];
+
+/** A movie's or an episode's video sources: the player's tab order. */
+const VIDEO_ORDER = [
+  { position: "asc" },
+  { id: "asc" },
+] satisfies Prisma.VideoSourceOrderByWithRelationInput[];
 
 /** What a card needs (see Media). */
 const CARD = {
@@ -519,6 +527,34 @@ export async function findViewTarget(id: string): Promise<string | null> {
   return episode?.media.status === "published" ? episode.media.id : null;
 }
 
+// --- Video ----------------------------------------------------------------------
+
+/**
+ * What a published movie or episode plays from, for the watch and
+ * episode pages: its sources that are on, in tab order. Sources whose
+ * host was taken out of VIDEO_HOSTS are left out, since the
+ * Content-Security-Policy would block them. Empty for anything else,
+ * drafts and trashed titles included.
+ */
+export async function getVideoSources(
+  target: { mediaId: string } | { episodeId: string }
+): Promise<VideoSourceEntry[]> {
+  await connection();
+  const id = "mediaId" in target ? target.mediaId : target.episodeId;
+  if (!isMediaId(id)) return [];
+  const published = { ...PUBLISHED, trashedAt: null };
+  const rows = await db.videoSource.findMany({
+    where:
+      "mediaId" in target
+        ? { mediaId: id, enabled: true, media: { ...published, type: "movie" } }
+        : { episodeId: id, enabled: true, episode: { media: published } },
+    orderBy: VIDEO_ORDER,
+    select: { id: true, label: true, kind: true, url: true },
+  });
+  const hosts = videoHosts();
+  return rows.filter((row) => videoUrlAllowed(row.url, hosts));
+}
+
 // --- Admin library -------------------------------------------------------------
 
 export type LibraryRow = {
@@ -598,14 +634,14 @@ export async function listLibrary({
 // Everything here includes drafts and trashed titles, so each one checks
 // for an admin itself.
 
-/** A title with its episodes, for its edit page. */
+/** A title with its episodes and a movie's video sources, for its edit page. */
 export async function getTitleForEdit(id: string) {
   await requireAdmin();
   await connection();
   if (!isMediaId(id)) return null;
   return db.media.findUnique({
     where: { id },
-    include: { episodes: { orderBy: EPISODE_ORDER } },
+    include: { episodes: { orderBy: EPISODE_ORDER }, videoSources: { orderBy: VIDEO_ORDER } },
   });
 }
 
@@ -654,14 +690,17 @@ export async function listEpisodes({
   return { items, page, totalPages, total };
 }
 
-/** An episode with its series, for its edit page. */
+/** An episode with its series and video sources, for its edit page. */
 export async function getEpisodeForEdit(id: string) {
   await requireAdmin();
   await connection();
   if (!isMediaId(id)) return null;
   return db.episode.findUnique({
     where: { id },
-    include: { media: { select: { id: true, title: true, trashedAt: true } } },
+    include: {
+      media: { select: { id: true, title: true, trashedAt: true } },
+      videoSources: { orderBy: VIDEO_ORDER },
+    },
   });
 }
 

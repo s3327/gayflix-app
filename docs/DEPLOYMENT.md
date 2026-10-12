@@ -173,6 +173,7 @@ turned off and says so.
 | `ADMIN_BASIC_AUTH_USER`, `ADMIN_BASIC_AUTH_PASSWORD` | Optional, both or neither | | |
 | `IMAGE_HOSTS` | Optional, for posters on your own image host (see [Managing titles](#managing-titles)) and for imports (see [Importing titles](#importing-titles)) | | |
 | `TMDB_API_KEY`, `OMDB_API_KEY` | Optional, for the Import page (see [Importing titles](#importing-titles)) | | |
+| `VIDEO_HOSTS` | For video: the hosts sources may come from (see [Video](#video)) | | |
 | `NEXT_PUBLIC_SENTRY_DSN` | Part 10 (optional) | | |
 | `BLOB_READ_WRITE_TOKEN` | Part 11 (optional), added by Vercel | | |
 
@@ -541,6 +542,9 @@ admin panel; changes show on the site right away.
   card shows how many seasons it has episodes in.
 - **Edit a title or an episode:** click it in **Library → Movies**,
   **Series** or **Episodes**.
+- **Add a video:** in the **Video** section of a movie's page or an
+  episode's page (a series' video is on its episodes). See
+  [Video](#video) below.
 - **Hide or show titles:** the eye button on a title's row, or tick
   several rows and use **Publish** or **Unpublish** above the list. A
   hidden title's page, its episodes and its place in listings, search and
@@ -572,6 +576,35 @@ commas, such as `images.example.com,cdn.example.org`, then redeploy: the
 site reads the list when it's built. Leave the poster link empty for a
 title that has no poster yet: it shows the **No poster yet** image (the
 logo and that text) until you add one.
+
+#### Video
+
+Each movie and each episode can have up to 10 video sources. Each source
+is one of the player's server tabs, in the order the **Video** section
+lists them (the arrow buttons move one up or down). A source is one of:
+
+- **Embed:** a player page from your video provider, shown in a frame.
+  Paste its link, or the whole `<iframe …>` code the provider gives you:
+  the link is taken out of it.
+- **HLS stream:** an `.m3u8` playlist.
+- **Video file:** an `.mp4` or `.webm` file played as it is.
+
+**Type** can stay on **Work it out from the link**: `.m3u8` links are
+streams, `.mp4`, `.m4v` and `.webm` links are files, and anything else is
+an embed. Choose the type yourself for a stream or file whose link doesn't
+end that way. **Turn off** hides a source from the player but keeps it;
+**Delete** removes it for good.
+
+Video links must start with `https://` and be on a host listed in
+`VIDEO_HOSTS` (Vercel: **Settings → Environment Variables**,
+Production), separated by commas, then redeploy. `*.` allows every
+subdomain of a host, which suits providers that give each library its own
+subdomain: `player.example.com,*.b-cdn.net`. An HLS stream needs the host
+of its playlist and the hosts its segments come from. The site's
+Content-Security-Policy lets browsers load video from exactly these hosts,
+so a source whose host is taken out of the list stops playing; the
+**Video** section marks it. Until the new player is in, the watch pages
+still show a placeholder.
 
 To hide every title at once, a SQL editor (as in 6.2) is quicker than the
 list's 50 rows a page. Set them back to `'published'` to undo it:

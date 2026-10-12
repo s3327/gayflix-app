@@ -5,6 +5,7 @@ import Badge from "@/components/Badge";
 import MediaCoverThumb from "@/components/MediaCoverThumb";
 import { BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY } from "@/components/admin/FormFields";
 import TitleForm from "@/components/admin/TitleForm";
+import VideoSources from "@/components/admin/VideoSources";
 import { restoreTitle, trashTitle, updateTitle } from "@/lib/admin-catalog-actions";
 import { getTitleForEdit } from "@/lib/catalog";
 import { imageHosts, uploadHost } from "@/lib/image-hosts.mjs";
@@ -14,8 +15,9 @@ import { titleHref } from "@/lib/title-href";
 
 /**
  * /admin/library/movies/[id] and /admin/library/series/[id]: a title's
- * edit page, with its episodes for a series. A title in the trash can
- * only be restored. Admins only (getTitleForEdit checks too).
+ * edit page, with its video for a movie and its episodes for a series. A
+ * title in the trash can only be restored. Admins only (getTitleForEdit
+ * checks too).
  */
 export default async function TitleEditPage({
   type,
@@ -130,6 +132,10 @@ export default async function TitleEditPage({
           />
         )}
       </div>
+
+      {!isSeries && !isTrashed && (
+        <VideoSources owner="movie" ownerId={row.id} sources={row.videoSources} />
+      )}
 
       {isSeries && (
         <section aria-labelledby="episodes-heading" className="mt-12 max-w-3xl">

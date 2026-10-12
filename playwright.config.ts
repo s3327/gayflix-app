@@ -80,6 +80,8 @@ export default defineConfig({
         // Imported posters' host. The build needs it too for next/image
         // (CI sets it); without it the posters just don't load.
         IMAGE_HOSTS: "image.tmdb.org",
+        // Where e2e/admin-video.spec.ts's sources may come from.
+        VIDEO_HOSTS: "player.e2e.example,*.cdn.e2e.example",
         // Uploads on, kept by the stand-in store. Its images don't exist,
         // so they don't load; the tests check what was stored instead.
         BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_e2estore_e2esecret",

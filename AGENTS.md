@@ -40,6 +40,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   `src/lib/admin-image-actions.ts`, which checks the file's bytes.
   Views (`media_view` and `viewCount`, which rank Trending) are counted
   only by `src/lib/view-actions.ts`, and never store a raw IP address.
+  Video sources (`video_source`, a movie's or an episode's server tabs)
+  change only through `src/lib/admin-video-actions.ts`, with links on
+  `VIDEO_HOSTS` only (`src/lib/video-hosts.ts`, which also feeds the
+  Content-Security-Policy in `src/lib/csp.ts`); the watch pages read them
+  with `getVideoSources()`.
 - **Crash reports** go to Sentry when `NEXT_PUBLIC_SENTRY_DSN` is set,
   from `src/instrumentation.ts` (server), `src/instrumentation-client.ts`
   (browser) and the error pages. What they may carry is decided in
