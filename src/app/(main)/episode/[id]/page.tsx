@@ -1,10 +1,12 @@
+/* eslint-disable @next/next/no-img-element */
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getEpisode, getVideoSources } from "@/lib/catalog";
+import { getEpisode, getVideoSources, resolveEpisodeRedirect } from "@/lib/catalog";
 import WatchPlayer from "@/components/WatchPlayer";
+import EpisodeSelectorDrawer from "@/components/watch/EpisodeSelectorDrawer";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import TagList from "@/components/TagList";
 import { countryHref, genreHref, languageHref, searchHref } from "@/lib/browse-href";
@@ -15,8 +17,16 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
-  const found = await getEpisode((await params).id);
-  return found ? episodeMetadata(found.episode, found.series) : {};
+  const { id } = await params;
+  const found = await getEpisode(id);
+  if (!found) {
+    const targetSlug = await resolveEpisodeRedirect(id);
+    if (targetSlug) {
+      permanentRedirect(`/episode/${targetSlug}`);
+    }
+    return {};
+  }
+  return episodeMetadata(found.episode, found.series);
 }
 
 /**
@@ -41,7 +51,13 @@ export default async function EpisodePage({
 }) {
   const { id } = await params;
   const [found, sources] = await Promise.all([getEpisode(id), getVideoSources({ episodeId: id })]);
-  if (!found) notFound();
+  if (!found) {
+    const targetSlug = await resolveEpisodeRedirect(id);
+    if (targetSlug) {
+      permanentRedirect(`/episode/${targetSlug}`);
+    }
+    notFound();
+  }
   const { episode, series } = found;
 
   // Already in season and episode order.
@@ -72,18 +88,19 @@ export default async function EpisodePage({
         backdropUrl={series.backdropUrl}
       />
 
-      {/* Previous / Next episode — label on top so it's clear at a
-          glance this is navigation, not just a title link; season/
-          episode number included since "Next" alone doesn't say which
-          one. At the first or last episode, the missing one shrinks to
-          its label so the other has room for its title on phones. */}
-      <div className="mt-4 flex items-stretch justify-between gap-3">
+      {/* Previous / Next episode & episode selector */}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         {previous ? (
           <Link
             href={`/episode/${previous.id}`}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-card border border-border-strong px-4 py-2.5 transition-colors hover:bg-bg-elevated sm:flex-none sm:max-w-[45%]"
+            className="flex min-w-0 flex-1 items-center gap-3 rounded-card border border-border-strong px-4 py-2.5 transition-colors hover:bg-bg-elevated sm:flex-none sm:max-w-[42%]"
           >
             <ChevronLeft className="h-4 w-4 shrink-0 text-ink-secondary" />
+            <img
+              src={previous.stillUrl || series.posterUrl}
+              alt=""
+              className="h-10 w-16 rounded object-cover shrink-0 bg-bg-surface"
+            />
             <span className="min-w-0 text-left">
               <span className="block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
                 Previous
@@ -96,17 +113,23 @@ export default async function EpisodePage({
         ) : (
           <span
             aria-disabled="true"
-            className="flex shrink-0 items-center gap-2 rounded-card border border-border-subtle px-4 py-2.5 text-sm font-semibold text-ink-disabled"
+            className="flex shrink-0 items-center gap-2 rounded-card border border-border-subtle px-4 py-2.5 text-sm font-semibold text-ink-disabled opacity-50"
           >
             <ChevronLeft className="h-4 w-4" />
             Previous
           </span>
         )}
 
+        <EpisodeSelectorDrawer
+          seriesTitle={series.title}
+          episodes={series.episodes}
+          currentEpisodeId={episode.id}
+        />
+
         {next ? (
           <Link
             href={`/episode/${next.id}`}
-            className="flex min-w-0 flex-1 items-center justify-end gap-2 rounded-card border border-border-strong px-4 py-2.5 transition-colors hover:bg-bg-elevated sm:flex-none sm:max-w-[45%]"
+            className="flex min-w-0 flex-1 items-center justify-end gap-3 rounded-card border border-border-strong px-4 py-2.5 transition-colors hover:bg-bg-elevated sm:flex-none sm:max-w-[42%]"
           >
             <span className="min-w-0 text-right">
               <span className="block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
@@ -116,12 +139,17 @@ export default async function EpisodePage({
                 S{next.seasonNumber} · E{next.episodeNumber} — {next.title}
               </span>
             </span>
+            <img
+              src={next.stillUrl || series.posterUrl}
+              alt=""
+              className="h-10 w-16 rounded object-cover shrink-0 bg-bg-surface"
+            />
             <ChevronRight className="h-4 w-4 shrink-0 text-ink-secondary" />
           </Link>
         ) : (
           <span
             aria-disabled="true"
-            className="flex shrink-0 items-center justify-end gap-2 rounded-card border border-border-subtle px-4 py-2.5 text-sm font-semibold text-ink-disabled"
+            className="flex shrink-0 items-center justify-end gap-2 rounded-card border border-border-subtle px-4 py-2.5 text-sm font-semibold text-ink-disabled opacity-50"
           >
             Next
             <ChevronRight className="h-4 w-4" />

@@ -20,6 +20,8 @@ export type Media = {
   gradient?: string;
   /** When the title was added to the catalog (ISO string). */
   createdAt: string;
+  /** When the title was first published (ISO string). */
+  publishedAt?: string;
 };
 
 /** Trending's ranked list: the most viewed published titles of the week. */
@@ -54,6 +56,8 @@ export type Episode = {
   duration: string;
   /** Display string, e.g. "June 20, 2025". */
   airDate?: string;
+  /** 16:9 still thumbnail image URL */
+  stillUrl?: string | null;
 };
 
 /**

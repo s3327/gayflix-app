@@ -49,9 +49,9 @@ export const LIBRARY_PAGE_SIZE = 50;
 
 const ORDER = {
   /** Recently edited first: /movie, /series and their home rows. */
-  updated: [{ updatedAt: "desc" }, { id: "asc" }],
+  updated: [{ publishedAt: "desc" }, { id: "desc" }],
   /** Recently added first: New Releases and the filter pages. */
-  added: [{ createdAt: "desc" }, { id: "asc" }],
+  added: [{ publishedAt: "desc" }, { id: "desc" }],
   /** A to Z (and back) for Browse. */
   title: [{ title: "asc" }, { id: "asc" }],
   "title-desc": [{ title: "desc" }, { id: "desc" }],
@@ -81,12 +81,13 @@ const CARD = {
   posterUrl: true,
   gradient: true,
   createdAt: true,
+  publishedAt: true,
 } satisfies Prisma.MediaSelect;
 
 type CardRow = Prisma.MediaGetPayload<{ select: typeof CARD }>;
 
 /** CARD for raw queries, which get the same row shape back. */
-const CARD_COLUMNS = Prisma.sql`id, type::text AS type, title, year, duration, genres, "posterUrl", gradient, "createdAt"`;
+const CARD_COLUMNS = Prisma.sql`id, type::text AS type, title, year, duration, genres, "posterUrl", gradient, "createdAt", "publishedAt"`;
 
 // Dates are stored as calendar days (UTC midnight), so they're shown in UTC.
 const longDate = new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeZone: "UTC" });
@@ -102,6 +103,7 @@ function toMedia(row: CardRow): Media {
     posterUrl: row.posterUrl,
     gradient: row.gradient ?? undefined,
     createdAt: row.createdAt.toISOString(),
+    publishedAt: row.publishedAt ? row.publishedAt.toISOString() : undefined,
   };
 }
 
@@ -113,6 +115,7 @@ function toEpisode(row: Prisma.EpisodeModel): Episode {
     episodeNumber: row.episodeNumber,
     duration: row.duration,
     airDate: row.airDate ? longDate.format(row.airDate) : undefined,
+    stillUrl: row.stillUrl ?? undefined,
   };
 }
 
@@ -160,7 +163,7 @@ async function trendingRows(limit: number) {
       WHERE day >= ${trendingSince(new Date())}::date
       GROUP BY "mediaId"
     ) recent USING (id)
-    WHERE status = 'published'
+    WHERE status = 'published' AND "trashedAt" IS NULL
     ORDER BY views DESC, "viewCount" DESC, id
     LIMIT ${limit}`;
 }
@@ -683,14 +686,21 @@ export async function getLastEpisode(seriesId: string) {
 /** /admin/library/episodes: one page of episodes, of one series or all. */
 export async function listEpisodes({
   seriesId,
+  query = "",
   page: requestedPage,
 }: {
   seriesId?: string;
+  query?: string;
   page: number;
 }) {
   await requireAdmin();
   await connection();
-  const where: Prisma.EpisodeWhereInput = { mediaId: seriesId, media: { trashedAt: null } };
+  const search = normalizeQuery(query);
+  const where: Prisma.EpisodeWhereInput = {
+    ...(seriesId ? { mediaId: seriesId } : {}),
+    media: { trashedAt: null },
+    ...(search ? { title: { contains: escapeLike(search), mode: "insensitive" } } : {}),
+  };
   const total = await db.episode.count({ where });
   const { page, totalPages, skip } = pageWindow(total, requestedPage, LIBRARY_PAGE_SIZE);
   const items = await db.episode.findMany({
@@ -770,7 +780,12 @@ export async function getCatalogOverview() {
   const live: Prisma.MediaWhereInput = { trashedAt: null };
   const [groups, plays, mostPlayed, recentlyAdded] = await Promise.all([
     db.media.groupBy({ by: ["type", "status"], where: live, _count: { _all: true } }),
-    db.mediaView.count({ where: { day: { gte: new Date(trendingSince(new Date())) } } }),
+    db.mediaView.count({
+      where: {
+        day: { gte: new Date(trendingSince(new Date())) },
+        media: { status: "published", trashedAt: null },
+      },
+    }),
     trendingRows(DASHBOARD_LIST_SIZE),
     db.media.findMany({
       where: live,
@@ -788,4 +803,23 @@ export async function getCatalogOverview() {
     mostPlayed: mostPlayed.map(({ id, type, title, views }) => ({ id, type, title, plays: views })),
     recentlyAdded,
   };
+}
+
+/**
+ * Resolves an old episode slug to its latest slug through any episode redirects.
+ * Follows chained redirects up to 10 hops.
+ */
+export async function resolveEpisodeRedirect(slug: string): Promise<string | null> {
+  let currentSlug = slug;
+  let hops = 0;
+  while (hops < 10) {
+    const redirect = await db.episodeRedirect.findFirst({
+      where: { oldSlug: currentSlug },
+      select: { newSlug: true },
+    });
+    if (!redirect) break;
+    currentSlug = redirect.newSlug;
+    hops++;
+  }
+  return hops > 0 ? currentSlug : null;
 }

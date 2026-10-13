@@ -4,17 +4,20 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { findImported } from "@/lib/catalog";
 import { db } from "@/lib/db";
-import { isImdbId, isTmdbId } from "@/lib/import-mapping";
+import { isImdbId, isTmdbId, parseTmdbRef, tmdbStill } from "@/lib/import-mapping";
 import { isMediaId } from "@/lib/library-types";
 import type { MediaStatus, MediaType } from "@/lib/media";
 import { requireAdmin } from "@/lib/session";
 import { setAdminFlash } from "@/lib/admin-flash";
+import { imageHosts } from "@/lib/image-hosts.mjs";
+import { getTmdbDetails, getTmdbSeasonDetails } from "@/lib/tmdb";
 import {
   EPISODE_FIELDS,
   TITLE_FIELDS,
   episodeDuration,
   episodeId,
   formValues,
+  imageUrlProblem,
   libraryPath,
   parseEpisode,
   parseTitle,
@@ -126,7 +129,7 @@ export async function updateTitle(
   const gone = { message: "This title is in the trash or was deleted.", values, version: Date.now() };
   const existing = await db.media.findUnique({
     where: { id },
-    select: { type: true, trashedAt: true, updatedAt: true },
+    select: { type: true, status: true, publishedAt: true, trashedAt: true, updatedAt: true },
   });
   if (!existing || existing.trashedAt) return gone;
 
@@ -145,11 +148,19 @@ export async function updateTitle(
 
   const parsed = parseTitle(existing.type, values);
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
+
+  const shouldSetPublishedAt =
+    parsed.data.status === "published" &&
+    (existing.status !== "published" || existing.publishedAt === null);
+
   const saved = await db.$transaction(async (tx) => {
     // Not if it was trashed meanwhile: a trashed title must stay a draft.
     const { count } = await tx.media.updateMany({
       where: { id, trashedAt: null },
-      data: titleData(existing.type, parsed.data),
+      data: {
+        ...titleData(existing.type, parsed.data),
+        ...(shouldSetPublishedAt ? { publishedAt: new Date() } : {}),
+      },
     });
     if (count > 0 && parsed.data.featured && parsed.data.status === "published") {
       await unfeatureOthers(tx, id);
@@ -164,8 +175,11 @@ export async function updateTitle(
 export async function updateMediaStatusBatch(ids: string[], status: MediaStatus) {
   if (ids.length === 0) return;
   await db.$transaction(async (tx) => {
-    await tx.media.updateMany({ where: { id: { in: ids }, trashedAt: null }, data: { status } });
     if (status === "published") {
+      await tx.media.updateMany({
+        where: { id: { in: ids }, trashedAt: null },
+        data: { status, publishedAt: new Date() },
+      });
       const featured = await tx.media.findFirst({
         where: { id: { in: ids }, featured: true, trashedAt: null },
         select: { id: true },
@@ -173,6 +187,8 @@ export async function updateMediaStatusBatch(ids: string[], status: MediaStatus)
       if (featured) {
         await unfeatureOthers(tx, featured.id);
       }
+    } else {
+      await tx.media.updateMany({ where: { id: { in: ids }, trashedAt: null }, data: { status } });
     }
   });
   refreshPages();
@@ -390,12 +406,48 @@ export async function updateEpisode(
   const parsed = parseEpisode(values);
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
   const { seasonNumber, episodeNumber, title, minutes, airDate } = parsed.data;
+  const newSlug = `${existing.mediaId}-season-${seasonNumber}-episode-${episodeNumber}`;
   try {
     await db.$transaction(async (tx) => {
-      await tx.episode.update({
-        where: { id },
-        data: { seasonNumber, episodeNumber, title, duration: episodeDuration(minutes), airDate },
-      });
+      if (id !== newSlug) {
+        const cur = await tx.episode.findUnique({
+          where: { id },
+          select: { seasonNumber: true, episodeNumber: true },
+        });
+        if (cur) {
+          await tx.episodeRedirect.upsert({
+            where: { oldSlug: id },
+            create: {
+              mediaId: existing.mediaId,
+              oldSlug: id,
+              newSlug,
+              oldSeasonNumber: cur.seasonNumber,
+              oldEpisodeNumber: cur.episodeNumber,
+              newSeasonNumber: seasonNumber,
+              newEpisodeNumber: episodeNumber,
+            },
+            update: {
+              newSlug,
+              newSeasonNumber: seasonNumber,
+              newEpisodeNumber: episodeNumber,
+            },
+          });
+          await tx.$executeRaw`
+            UPDATE episode
+            SET id = ${newSlug}, "seasonNumber" = ${seasonNumber}, "episodeNumber" = ${episodeNumber},
+                title = ${title}, duration = ${episodeDuration(minutes)}, "airDate" = ${airDate}
+            WHERE id = ${id}
+          `;
+          await tx.$executeRaw`
+            UPDATE video_source SET "episodeId" = ${newSlug} WHERE "episodeId" = ${id}
+          `;
+        }
+      } else {
+        await tx.episode.update({
+          where: { id },
+          data: { seasonNumber, episodeNumber, title, duration: episodeDuration(minutes), airDate },
+        });
+      }
       await refreshSeasons(tx, existing.mediaId);
     });
   } catch (error) {
@@ -424,4 +476,277 @@ export async function deleteEpisode(idArg: unknown): Promise<void> {
   refreshPages();
   await setAdminFlash({ message: "Episode deleted." });
   redirect(`/admin/library/series/${episode.mediaId}`);
+}
+
+export type TmdbSeasonInfo = {
+  season_number: number;
+  name: string;
+  episode_count: number;
+  air_date?: string | null;
+  poster_path?: string | null;
+};
+
+export async function getSeriesTmdbSeasonsAction(
+  seriesId: string
+): Promise<{ ok: boolean; seasons?: TmdbSeasonInfo[]; message?: string }> {
+  await requireAdmin();
+  const series = await db.media.findUnique({
+    where: { id: seriesId },
+    select: { tmdbId: true },
+  });
+  if (!series?.tmdbId) return { ok: false, message: "Series has no TMDB ID." };
+  const ref = parseTmdbRef(series.tmdbId);
+  if (!ref || ref.kind !== "tv") return { ok: false, message: "Invalid TMDB reference." };
+
+  try {
+    const details = (await getTmdbDetails("tv", ref.id)) as { seasons?: TmdbSeasonInfo[] } | null;
+    if (!details || !Array.isArray(details.seasons)) {
+      return { ok: false, message: "No seasons found on TMDB." };
+    }
+    const validSeasons = details.seasons
+      .filter((s) => s.season_number > 0)
+      .map((s) => ({
+        season_number: s.season_number,
+        name: s.name || `Season ${s.season_number}`,
+        episode_count: s.episode_count ?? 0,
+        air_date: s.air_date ?? null,
+        poster_path: s.poster_path ?? null,
+      }));
+    return { ok: true, seasons: validSeasons };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Error loading seasons from TMDB.",
+    };
+  }
+}
+
+export async function getTmdbSeasonPreviewAction(
+  seriesId: string,
+  seasonNumber: number
+): Promise<{
+  ok: boolean;
+  episodes?: { episodeNumber: number; title: string; runtime: string; stillUrl: string | null }[];
+  message?: string;
+}> {
+  await requireAdmin();
+  const series = await db.media.findUnique({
+    where: { id: seriesId },
+    select: { tmdbId: true },
+  });
+  if (!series?.tmdbId) return { ok: false, message: "Series has no TMDB ID." };
+  const ref = parseTmdbRef(series.tmdbId);
+  if (!ref || ref.kind !== "tv") return { ok: false, message: "Invalid TMDB reference." };
+
+  try {
+    const seasonData = await getTmdbSeasonDetails(ref.id, seasonNumber);
+    if (!seasonData || !Array.isArray(seasonData.episodes)) {
+      return { ok: true, episodes: [] };
+    }
+    const episodes = seasonData.episodes.map((ep) => ({
+      episodeNumber: ep.episode_number,
+      title: ep.name?.trim() || `Episode ${ep.episode_number}`,
+      runtime: `${ep.runtime && ep.runtime > 0 ? ep.runtime : 45} min`,
+      stillUrl: tmdbStill(ep.still_path),
+    }));
+    return { ok: true, episodes };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Error loading episode preview from TMDB.",
+    };
+  }
+}
+
+export async function importSeriesSeasonsAction(
+  seriesId: string,
+  seasonNumbers: number[]
+): Promise<{ ok: boolean; count?: number; message?: string }> {
+  await requireAdmin();
+  if (!Array.isArray(seasonNumbers) || seasonNumbers.length === 0) {
+    return { ok: false, message: "Select at least one season." };
+  }
+  const series = await db.media.findUnique({
+    where: { id: seriesId },
+    select: { id: true, type: true, tmdbId: true, trashedAt: true },
+  });
+  if (!series || series.type !== "series" || series.trashedAt) {
+    return { ok: false, message: "Series not found or is in trash." };
+  }
+  const ref = parseTmdbRef(series.tmdbId);
+  if (!ref || ref.kind !== "tv") return { ok: false, message: "Invalid TMDB ID on series." };
+
+  try {
+    let importedCount = 0;
+    for (const sNum of seasonNumbers) {
+      const seasonData = await getTmdbSeasonDetails(ref.id, sNum);
+      if (!seasonData || !Array.isArray(seasonData.episodes)) continue;
+
+      const existingEpisodes = await db.episode.findMany({
+        where: { mediaId: seriesId, seasonNumber: sNum },
+        select: { episodeNumber: true },
+      });
+      const existingSet = new Set(existingEpisodes.map((e) => e.episodeNumber));
+
+      const missing = seasonData.episodes.filter((ep) => !existingSet.has(ep.episode_number));
+
+      for (const ep of missing) {
+        const id = `${seriesId}-season-${sNum}-episode-${ep.episode_number}`;
+        const runtime = ep.runtime && ep.runtime > 0 ? ep.runtime : 45;
+        await db.episode.create({
+          data: {
+            id,
+            mediaId: seriesId,
+            seasonNumber: sNum,
+            episodeNumber: ep.episode_number,
+            title: ep.name?.trim() || `Episode ${ep.episode_number}`,
+            duration: `${runtime} min`,
+            airDate: ep.air_date ? new Date(`${ep.air_date}T00:00:00.000Z`) : null,
+            stillUrl: tmdbStill(ep.still_path),
+          },
+        });
+        importedCount++;
+      }
+    }
+
+    await db.$transaction(async (tx) => {
+      await refreshSeasons(tx, seriesId);
+    });
+
+    refreshPages();
+    return {
+      ok: true,
+      count: importedCount,
+      message: `Imported ${importedCount} episodes.`,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Error importing episodes.",
+    };
+  }
+}
+
+export type SeasonEpisodeRow = {
+  id: string;
+  seasonNumber: number;
+  episodeNumber: number;
+  title: string;
+  duration: string;
+  airDate?: string | null;
+  stillUrl?: string | null;
+};
+
+export async function saveSeasonEpisodesAction(
+  seriesId: string,
+  seasonNumber: number,
+  episodes: SeasonEpisodeRow[]
+): Promise<{ ok: boolean; message?: string; errors?: Record<string, string> }> {
+  await requireAdmin();
+  if (!isMediaId(seriesId)) throw new Error("Invalid series ID");
+
+  const errors: Record<string, string> = {};
+  const hosts = imageHosts();
+  const seen = new Set<number>();
+
+  for (const ep of episodes) {
+    if (!ep.title.trim()) {
+      errors[`${ep.id}-title`] = "Enter the title.";
+    }
+    if (!ep.episodeNumber || ep.episodeNumber < 1) {
+      errors[`${ep.id}-episodeNumber`] = "Enter a valid episode number.";
+    } else if (seen.has(ep.episodeNumber)) {
+      errors[`${ep.id}-episodeNumber`] = `Season ${seasonNumber} already has an episode ${ep.episodeNumber}.`;
+    } else {
+      seen.add(ep.episodeNumber);
+    }
+    if (ep.stillUrl) {
+      const prob = imageUrlProblem(ep.stillUrl, hosts);
+      if (prob) {
+        errors[`${ep.id}-stillUrl`] = prob;
+      }
+    }
+  }
+
+  if (Object.keys(errors).length > 0) {
+    const errorMsg = Object.values(errors)[0] ?? "Some fields need fixing.";
+    return { ok: false, message: errorMsg, errors };
+  }
+
+  await db.$transaction(async (tx) => {
+    const existing = await tx.episode.findMany({
+      where: { mediaId: seriesId, seasonNumber },
+    });
+    const existingById = new Map(existing.map((e) => [e.id, e]));
+
+    for (const ep of episodes) {
+      const newSlug = `${seriesId}-season-${seasonNumber}-episode-${ep.episodeNumber}`;
+      const prev = existingById.get(ep.id);
+
+      if (prev) {
+        if (prev.episodeNumber !== ep.episodeNumber) {
+          await tx.episodeRedirect.upsert({
+            where: { oldSlug: prev.id },
+            create: {
+              mediaId: seriesId,
+              oldSlug: prev.id,
+              newSlug,
+              oldSeasonNumber: prev.seasonNumber,
+              oldEpisodeNumber: prev.episodeNumber,
+              newSeasonNumber: seasonNumber,
+              newEpisodeNumber: ep.episodeNumber,
+            },
+            update: {
+              newSlug,
+              newSeasonNumber: seasonNumber,
+              newEpisodeNumber: ep.episodeNumber,
+            },
+          });
+          await tx.$executeRaw`
+            UPDATE episode
+            SET id = ${newSlug},
+                "episodeNumber" = ${ep.episodeNumber},
+                title = ${ep.title.trim()},
+                duration = ${ep.duration.trim() || '45 min'},
+                "airDate" = ${ep.airDate ? new Date(ep.airDate) : null},
+                "stillUrl" = ${ep.stillUrl?.trim() || null}
+            WHERE id = ${prev.id}
+          `;
+          await tx.$executeRaw`
+            UPDATE video_source
+            SET "episodeId" = ${newSlug}
+            WHERE "episodeId" = ${prev.id}
+          `;
+        } else {
+          await tx.episode.update({
+            where: { id: prev.id },
+            data: {
+              title: ep.title.trim(),
+              duration: ep.duration.trim() || "45 min",
+              airDate: ep.airDate ? new Date(ep.airDate) : null,
+              stillUrl: ep.stillUrl?.trim() || null,
+            },
+          });
+        }
+      } else {
+        await tx.episode.create({
+          data: {
+            id: newSlug,
+            mediaId: seriesId,
+            seasonNumber,
+            episodeNumber: ep.episodeNumber,
+            title: ep.title.trim(),
+            duration: ep.duration.trim() || "45 min",
+            airDate: ep.airDate ? new Date(ep.airDate) : null,
+            stillUrl: ep.stillUrl?.trim() || null,
+          },
+        });
+      }
+    }
+
+    await refreshSeasons(tx, seriesId);
+  });
+
+  refreshPages();
+  return { ok: true, message: "Saved." };
 }

@@ -164,10 +164,17 @@ function languageName(code: string): string {
 export const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p";
 
 /** A TMDB image path ("/abc123.jpg") at one of its sizes, or "". */
-export function tmdbImage(path: unknown, size: "w342" | "w780" | "w1280"): string {
+export function tmdbImage(path: unknown, size: "w342" | "w780" | "w1280" | "w300"): string {
   return typeof path === "string" && /^\/[A-Za-z0-9_-]+\.(?:jpe?g|png|webp)$/.test(path)
     ? `${TMDB_IMAGE_BASE}/${size}${path}`
     : "";
+}
+
+/** A TMDB still image path ("/abc123.jpg") for an episode, or null. */
+export function tmdbStill(path: unknown): string | null {
+  return typeof path === "string" && /^\/[A-Za-z0-9_-]+\.(?:jpe?g|png|webp)$/.test(path)
+    ? `${TMDB_IMAGE_BASE}/w300${path}`
+    : null;
 }
 
 function yearOf(date: string): number | null {

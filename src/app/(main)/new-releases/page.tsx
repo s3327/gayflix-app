@@ -33,7 +33,7 @@ export default async function NewReleasesPage({
                 key={item.id}
                 item={item}
                 badge={
-                  isRecentlyAdded(item.createdAt) ? (
+                  isRecentlyAdded(item.publishedAt ?? item.createdAt) ? (
                     <Badge tone="brand" size="sm">NEW</Badge>
                   ) : undefined
                 }

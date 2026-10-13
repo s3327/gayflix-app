@@ -3,6 +3,7 @@ import { BUTTON_SECONDARY } from "@/components/admin/FormFields";
 import TitleForm from "@/components/admin/TitleForm";
 import { createTitle } from "@/lib/admin-catalog-actions";
 import { getLiveHero } from "@/lib/catalog";
+import { db } from "@/lib/db";
 import { imageHosts, uploadHost } from "@/lib/image-hosts.mjs";
 import { parseTmdbRef } from "@/lib/import-mapping";
 import type { MediaType } from "@/lib/media";
@@ -20,10 +21,12 @@ import { prepareImport } from "@/lib/title-import";
 export default async function AddTitlePage({ type, tmdbId }: { type: MediaType; tmdbId?: string }) {
   const isMovie = type === "movie";
   const ref = parseTmdbRef(tmdbId);
-  const [plan, currentHero] = await Promise.all([
+  const [plan, currentHero, existingMedia] = await Promise.all([
     ref ? prepareImport(ref, type) : null,
     getLiveHero(),
+    db.media.findMany({ select: { title: true } }),
   ]);
+  const existingTitles = existingMedia.map((m) => m.title);
   const heading = isMovie ? "Add a movie" : "Add a series";
 
   if (plan?.status === "exists") {
@@ -87,6 +90,7 @@ export default async function AddTitlePage({ type, tmdbId }: { type: MediaType; 
           submitLabel={isMovie ? "Add movie" : "Add series"}
           cancelHref={ready ? "/admin/import" : libraryPath(type)}
           currentHero={currentHero}
+          existingTitles={existingTitles}
         />
       </div>
     </div>

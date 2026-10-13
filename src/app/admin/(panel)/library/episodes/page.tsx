@@ -23,15 +23,18 @@ export default async function LibraryEpisodesPage({
   const params = await searchParams;
   const series = await listSeriesChoices();
   const requested = firstParam(params.series);
-  const seriesId = series.some((choice) => choice.id === requested) ? requested : undefined;
+  const query = firstParam(params.q) ?? "";
+  const seriesId = requested && requested !== "" ? requested : undefined;
   const { items, page, totalPages, total } = await listEpisodes({
     seriesId,
+    query,
     page: pageParam(params.page),
   });
 
   function pageHref(target: number) {
     const qs = new URLSearchParams();
     if (seriesId) qs.set("series", seriesId);
+    if (query) qs.set("q", query);
     if (target !== 1) qs.set("page", String(target));
     const search = qs.toString();
     return search ? `/admin/library/episodes?${search}` : "/admin/library/episodes";
@@ -57,7 +60,7 @@ export default async function LibraryEpisodesPage({
         method="GET"
         className="flex flex-wrap items-center gap-3 px-6 py-6 sm:px-10"
       >
-        <div className="relative min-w-[200px] flex-1 sm:max-w-sm">
+        <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
           <select
             name="series"
             defaultValue={seriesId ?? ""}
@@ -73,6 +76,18 @@ export default async function LibraryEpisodesPage({
           </select>
           <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
         </div>
+
+        <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
+          <input
+            type="search"
+            name="q"
+            defaultValue={query}
+            placeholder="Search by title"
+            aria-label="Search by title"
+            className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+          />
+        </div>
+
         <button
           type="submit"
           className="shrink-0 rounded-card border border-border-strong px-5 py-2.5 text-sm font-semibold text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary"
@@ -127,7 +142,11 @@ export default async function LibraryEpisodesPage({
         </>
       ) : (
         <p className="mx-6 text-sm text-ink-secondary sm:mx-10">
-          {seriesId ? "This series has no episodes yet." : "No episodes yet."}
+          {query
+            ? "No episodes match this search."
+            : seriesId
+            ? "This series has no episodes yet."
+            : "No episodes yet."}
         </p>
       )}
 

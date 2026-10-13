@@ -4,6 +4,8 @@ import { ArrowLeft, Plus } from "lucide-react";
 import Badge from "@/components/Badge";
 import MediaCoverThumb from "@/components/MediaCoverThumb";
 import { BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY } from "@/components/admin/FormFields";
+import ImportEpisodesModal from "@/components/admin/ImportEpisodesModal";
+import SeasonTableEditor from "@/components/admin/SeasonTableEditor";
 import TitleForm from "@/components/admin/TitleForm";
 import VideoSources from "@/components/admin/VideoSources";
 import { restoreTitle, trashTitle, updateTitle } from "@/lib/admin-catalog-actions";
@@ -144,29 +146,43 @@ export default async function TitleEditPage({
       </div>
 
       {!isSeries && !isTrashed && (
-        <VideoSources owner="movie" ownerId={row.id} sources={row.videoSources} />
+        <>
+          {row.videoSources.length === 0 && (
+            <div
+              role="status"
+              className="mt-6 max-w-3xl rounded-card border border-status-warning/40 bg-status-warning/10 p-4 text-sm font-medium text-status-warning"
+            >
+              Warning: This title has no video sources.
+            </div>
+          )}
+          <VideoSources owner="movie" ownerId={row.id} sources={row.videoSources} />
+        </>
       )}
 
       {isSeries && (
-        <section aria-labelledby="episodes-heading" className="mt-12 max-w-3xl">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <h2 id="episodes-heading" className="font-display text-xl font-bold">
-              Episodes
-            </h2>
-            {!isTrashed && (
-              <Link
-                href={`/admin/upload/episodes?series=${row.id}`}
-                className={`flex items-center gap-2 ${BUTTON_SECONDARY}`}
-              >
-                <Plus className="h-4 w-4" />
-                Add an episode
-              </Link>
-            )}
-          </div>
-          {row.episodes.length === 0 ? (
-            <p className="mt-4 text-sm text-ink-secondary">No episodes yet.</p>
-          ) : (
-            <ul className="mt-4 divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-bg-surface">
+        <>
+          <section aria-labelledby="episodes-heading" className="mt-12 max-w-3xl">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <h2 id="episodes-heading" className="font-display text-xl font-bold">
+                Episodes
+              </h2>
+              {!isTrashed && (
+                <div className="flex flex-wrap items-center gap-3">
+                  {row.tmdbId && <ImportEpisodesModal seriesId={row.id} tmdbId={row.tmdbId} />}
+                  <Link
+                    href={`/admin/upload/episodes?series=${row.id}`}
+                    className={`flex items-center gap-2 ${BUTTON_SECONDARY}`}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add an episode
+                  </Link>
+                </div>
+              )}
+            </div>
+            {row.episodes.length === 0 ? (
+              <p className="mt-4 text-sm text-ink-secondary">No episodes yet.</p>
+            ) : (
+              <ul className="mt-4 divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-bg-surface">
               {row.episodes.map((episode) => (
                 <li key={episode.id}>
                   <Link
@@ -191,8 +207,18 @@ export default async function TitleEditPage({
             </ul>
           )}
         </section>
-      )}
-    </div>
+        {!isTrashed && row.episodes.length > 0 && (
+          <div className="max-w-3xl">
+            <SeasonTableEditor
+              seriesId={row.id}
+              episodes={row.episodes}
+              imageHosts={hosts}
+            />
+          </div>
+        )}
+      </>
+    )}
+  </div>
   );
 }
 
