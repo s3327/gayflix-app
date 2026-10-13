@@ -16,7 +16,18 @@ export default function FilterChipsBar({ basePath }: { basePath: string }) {
   if (status) chips.push({ key: "status", label: `Status: ${status}`, value: status });
 
   const audit = searchParams.get("audit");
-  if (audit) chips.push({ key: "audit", label: `Audit: ${audit}`, value: audit });
+  if (audit) {
+    const auditLabels: Record<string, string> = {
+      "no-video": "no video sources",
+      "missing-video": "no video sources",
+      "no-backdrop": "missing backdrop",
+      "missing-backdrop": "missing backdrop",
+      "empty-series": "empty series",
+      "stale-drafts": "stale drafts",
+    };
+    const auditText = auditLabels[audit] ?? audit;
+    chips.push({ key: "audit", label: `Audit: ${auditText}`, value: audit });
+  }
 
   const genre = searchParams.get("genre");
   if (genre) chips.push({ key: "genre", label: `Genre: ${genre}`, value: genre });

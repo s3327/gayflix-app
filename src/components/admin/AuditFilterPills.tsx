@@ -27,14 +27,14 @@ export default function AuditFilterPills({
 
   const pills = [
     { label: "All Titles", value: null },
-    { label: "🔴 Missing Video", value: "missing-video" },
-    { label: "🟡 Missing Backdrop", value: "missing-backdrop" },
-    ...(type === "series" ? [{ label: "🟠 Empty Series", value: "empty-series" }] : []),
-    { label: "⚪ Stale Drafts (>14d)", value: "stale-drafts" },
+    { label: "Missing Video", value: "no-video" },
+    { label: "Missing Backdrop", value: "no-backdrop" },
+    ...(type === "series" ? [{ label: "Empty Series", value: "empty-series" }] : []),
+    { label: "Stale Drafts (>14d)", value: "stale-drafts" },
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+    <div role="region" aria-label="Audit Filters" className="flex flex-wrap items-center gap-1.5 text-xs">
       <span className="text-ink-muted mr-1">Audit:</span>
       {pills.map((p) => {
         const isActive = (currentAudit ?? null) === p.value;

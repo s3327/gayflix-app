@@ -289,7 +289,7 @@ export default function CommandMenu() {
                   setQuery(e.target.value);
                   setSelectedIndex(0);
                 }}
-                placeholder="Type a command or search titles, episodes, accounts..."
+                placeholder="Type a command, page name, title..."
                 className="w-full bg-transparent text-sm text-ink-primary placeholder:text-ink-muted focus:outline-hidden"
               />
               <button

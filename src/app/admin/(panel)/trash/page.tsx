@@ -106,111 +106,102 @@ export default async function TrashPage({
       ) : (
         <form className="mt-6">
           {/* Bulk Actions Header */}
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-ink-muted">
-              With checked (<span data-selected-count className="text-ink-primary font-bold">0</span>):
-            </span>
-            <button
-              type="submit"
-              formAction={bulkRestoreTrash}
-              className="flex items-center gap-1.5 rounded-card border border-border-strong px-3 py-1 text-xs font-semibold text-ink-secondary hover:bg-bg-elevated hover:text-ink-primary"
-            >
-              <RotateCcw className="h-3 w-3" />
-              Restore checked
-            </button>
-            <ConfirmSubmitButton
-              formAction={bulkDeleteForGoodTrash}
-              confirmTitle="Permanently delete checked titles?"
-              confirmDescription="All selected titles and their episodes will be permanently deleted. This cannot be undone."
-              confirmLabel="Delete permanently"
-              className="flex items-center gap-1.5 rounded-card border border-status-error/30 px-3 py-1 text-xs font-semibold text-status-error hover:bg-status-error/10"
-            >
-              <Trash2 className="h-3 w-3" />
-              Delete for good
-            </ConfirmSubmitButton>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-xs font-semibold text-ink-muted cursor-pointer">
+                <SelectAllCheckbox />
+                <span>Select all</span>
+              </label>
+              <span className="text-xs font-semibold text-ink-muted">
+                With checked (<span data-selected-count className="text-ink-primary font-bold">0</span>):
+              </span>
+              <button
+                type="submit"
+                formAction={bulkRestoreTrash}
+                className="flex items-center gap-1.5 rounded-card border border-border-strong px-3 py-1 text-xs font-semibold text-ink-secondary hover:bg-bg-elevated hover:text-ink-primary"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Restore checked
+              </button>
+              <ConfirmSubmitButton
+                formAction={bulkDeleteForGoodTrash}
+                confirmTitle="Permanently delete checked titles?"
+                confirmDescription="All selected titles and their episodes will be permanently deleted. This cannot be undone."
+                confirmLabel="Delete permanently"
+                className="flex items-center gap-1.5 rounded-card border border-status-error/30 px-3 py-1 text-xs font-semibold text-status-error hover:bg-status-error/10"
+              >
+                <Trash2 className="h-3 w-3" />
+                Delete for good
+              </ConfirmSubmitButton>
+            </div>
           </div>
 
-          <div className="overflow-x-auto rounded-card border border-border-subtle bg-bg-surface shadow-2xs">
-            <table className="w-full table-fixed text-sm">
-              <thead>
-                <tr className="border-b border-border-subtle bg-bg-surface text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                  <th className="w-10 px-4 py-3 text-left">
-                    <SelectAllCheckbox />
-                  </th>
-                  <th className="px-4 py-3 text-left">Title</th>
-                  <th className="w-32 px-4 py-3 text-left">Type & Episodes</th>
-                  <th className="w-20 px-4 py-3 text-left">Year</th>
-                  <th className="w-48 px-4 py-3 text-left">Trashed At / Purge</th>
-                  <th className="w-48 px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-subtle">
-                {items.map((item) => {
-                  const isSeries = item.type === "series";
-                  const daysLeft = daysUntilPurge(item.trashedAt!);
+          <ul role="list" className="divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-bg-surface shadow-2xs">
+            {items.map((item) => {
+              const isSeries = item.type === "series";
+              const daysLeft = daysUntilPurge(item.trashedAt!);
 
-                  return (
-                    <tr key={item.id} className="transition-colors hover:bg-bg-elevated">
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          name="ids"
-                          value={item.id}
-                          aria-label={`Select ${item.title}`}
-                          className="h-4 w-4 rounded-sm border-border-strong accent-brand-pink"
-                        />
-                      </td>
-                      <td className="px-4 py-3">
+              return (
+                <li
+                  key={item.id}
+                  role="listitem"
+                  className="flex flex-wrap items-center justify-between gap-4 p-4 hover:bg-bg-elevated transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <input
+                      type="checkbox"
+                      name="ids"
+                      value={item.id}
+                      aria-label={`Select ${item.title}`}
+                      className="h-4 w-4 rounded-sm border-border-strong accent-brand-pink shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Link
                           href={`${libraryPath(item.type)}/${item.id}`}
-                          className="font-medium text-ink-primary hover:text-ink-brand truncate block"
+                          className="font-medium text-ink-primary hover:text-ink-brand truncate"
                         >
                           {item.title}
                         </Link>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-ink-secondary">
-                        {isSeries ? `Series (${episodeCount(item._count.episodes)})` : "Movie"}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-ink-secondary">{item.year}</td>
-                      <td className="px-4 py-3 text-xs">
-                        <span className="block text-ink-muted">
-                          {dateTime.format(item.trashedAt!)} UTC
+                        <span className="inline-flex items-center rounded-full bg-status-warning/15 px-2 py-0.5 text-2xs font-semibold text-status-warning border border-status-warning/30">
+                          Purges in ~{daysLeft} {daysLeft === 1 ? "day" : "days"}
                         </span>
-                        <span className="text-2xs font-semibold text-status-warning">
-                          Auto-purge in {daysLeft} {daysLeft === 1 ? "day" : "days"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            type="submit"
-                            formAction={restoreTitle.bind(null, item.id)}
-                            className="rounded-md border border-border-strong px-2.5 py-1 text-xs font-semibold text-ink-secondary hover:bg-bg-elevated hover:text-ink-primary"
-                          >
-                            Restore
-                          </button>
-                          <ConfirmSubmitButton
-                            formAction={deleteTitle.bind(null, item.id)}
-                            ariaLabel={`Delete ${item.title} for good`}
-                            confirmTitle="Delete for good?"
-                            confirmDescription={
-                              isSeries && item._count.episodes > 0
-                                ? `"${item.title}" and its ${episodeCount(item._count.episodes)} will be permanently deleted. This cannot be undone.`
-                                : `"${item.title}" will be permanently deleted. This cannot be undone.`
-                            }
-                            confirmLabel="Delete for good"
-                            className="rounded-md border border-status-error/30 px-2.5 py-1 text-xs font-semibold text-status-error hover:bg-status-error/10"
-                          >
-                            Delete
-                          </ConfirmSubmitButton>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                      <p className="mt-0.5 text-xs text-ink-muted">
+                        {isSeries ? `Series · ${episodeCount(item._count.episodes)}` : "Movie"} ·{" "}
+                        {item.year} · Moved to the trash {dateTime.format(item.trashedAt!)} UTC
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="submit"
+                      formAction={restoreTitle.bind(null, item.id)}
+                      aria-label={`Restore ${item.title}`}
+                      className="rounded-card border border-border-strong px-3 py-1.5 text-xs font-semibold text-ink-secondary hover:bg-bg-elevated hover:text-ink-primary"
+                    >
+                      Restore
+                    </button>
+                    <ConfirmSubmitButton
+                      formAction={deleteTitle.bind(null, item.id)}
+                      ariaLabel={`Delete ${item.title} for good`}
+                      confirmTitle="Delete for good?"
+                      confirmDescription={
+                        isSeries && item._count.episodes > 0
+                          ? `"${item.title}" and its ${episodeCount(item._count.episodes)} will be permanently deleted. This cannot be undone.`
+                          : `"${item.title}" will be permanently deleted. This cannot be undone.`
+                      }
+                      confirmLabel="Delete for good"
+                      className="rounded-card border border-status-error/30 px-3 py-1.5 text-xs font-semibold text-status-error hover:bg-status-error/10"
+                    >
+                      Delete for good
+                    </ConfirmSubmitButton>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </form>
       )}
 

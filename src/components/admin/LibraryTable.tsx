@@ -147,7 +147,7 @@ export default function LibraryTable({
         </div>
 
         {/* Desktop & Tablet Table (md and up) */}
-        <div className="mx-6 hidden overflow-x-auto rounded-card border border-border-subtle md:block sm:mx-10">
+        <div className="mx-6 overflow-x-auto rounded-card border border-border-subtle sm:mx-10">
           <table className="w-full table-fixed text-sm">
             <thead>
               <tr className="border-b border-border-subtle bg-bg-surface text-xs font-semibold uppercase tracking-wide text-ink-muted">
@@ -241,7 +241,7 @@ export default function LibraryTable({
                     {showEpisodes && (
                       <td className="whitespace-nowrap px-4 py-3 text-ink-secondary text-xs">
                         {item.episodes != null && item.seasons != null
-                          ? `${item.seasons} Season${item.seasons === 1 ? "" : "s"} · ${item.episodes} Ep`
+                          ? `${item.seasons} Season${item.seasons === 1 ? "" : "s"} · ${item.episodes} Episode${item.episodes === 1 ? "" : "s"}`
                           : "—"}
                       </td>
                     )}
@@ -260,6 +260,7 @@ export default function LibraryTable({
                           type="button"
                           onClick={() => setActiveQuickEditItem(item)}
                           title="Quick edit (Q)"
+                          aria-label={`Quick edit ${item.title}`}
                           className="flex items-center gap-1 rounded-md px-2 py-1 text-2xs font-semibold text-ink-secondary hover:bg-bg-elevated hover:text-ink-primary border border-border-subtle"
                         >
                           <SlidersHorizontal className="h-3 w-3" />
@@ -268,6 +269,7 @@ export default function LibraryTable({
                         <Link
                           href={`${basePath}/${item.id}`}
                           title="Full edit (E)"
+                          aria-label={`Edit ${item.title}`}
                           className="flex items-center gap-1 rounded-md px-2 py-1 text-2xs font-semibold text-ink-secondary hover:bg-bg-elevated hover:text-ink-primary border border-border-subtle"
                         >
                           <Pencil className="h-3 w-3" />
@@ -277,6 +279,7 @@ export default function LibraryTable({
                           type="submit"
                           formAction={setTitleStatus.bind(null, item.id, isPublished ? "draft" : "published")}
                           title={isPublished ? "Unpublish" : "Publish"}
+                          aria-label={`${isPublished ? "Unpublish" : "Publish"} ${item.title}`}
                           className="flex items-center gap-1 rounded-md px-2 py-1 text-2xs font-semibold text-ink-secondary hover:bg-bg-elevated hover:text-ink-primary border border-border-subtle"
                         >
                           {isPublished ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3 text-status-success" />}
@@ -298,100 +301,6 @@ export default function LibraryTable({
               })}
             </tbody>
           </table>
-        </div>
-
-        {/* Mobile Responsive Cards (screens < 768px, F25) */}
-        <div className="mx-4 space-y-3 md:hidden">
-          {items.map((item) => {
-            const isPublished = item.status === "published";
-            return (
-              <div
-                key={item.id}
-                className="rounded-card border border-border-subtle bg-bg-surface p-4 shadow-2xs space-y-3"
-              >
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    name="ids"
-                    value={item.id}
-                    aria-label={`Select ${item.title}`}
-                    className="mt-1 h-4 w-4 rounded-sm border-border-strong accent-brand-pink shrink-0"
-                  />
-                  {item.posterUrl ? (
-                    <div className="relative h-16 w-11 overflow-hidden rounded bg-bg-base border border-border-subtle shrink-0">
-                      <Image
-                        src={item.posterUrl}
-                        alt=""
-                        fill
-                        sizes="44px"
-                        className="object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex h-16 w-11 items-center justify-center rounded bg-bg-base text-ink-muted border border-border-subtle shrink-0">
-                      <Film className="h-5 w-5" />
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <Link
-                      href={`${basePath}/${item.id}`}
-                      className="block truncate font-medium text-sm text-ink-primary hover:text-ink-brand"
-                    >
-                      {item.title}
-                    </Link>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-ink-secondary">
-                      <span>{item.year}</span>
-                      {showEpisodes && item.episodes != null && (
-                        <span>· {item.episodes} episodes</span>
-                      )}
-                      <span>· {item.viewCount ?? 0} views</span>
-                    </div>
-                    <div className="mt-2">
-                      <Badge tone={isPublished ? "success" : "neutral"}>
-                        {isPublished ? "Published" : "Draft"}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mobile action bar */}
-                <div className="flex items-center justify-between border-t border-border-subtle pt-3 text-xs">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveQuickEditItem(item)}
-                      className="rounded border border-border-subtle px-2 py-1 font-semibold text-ink-secondary hover:bg-bg-elevated"
-                    >
-                      Quick Edit
-                    </button>
-                    <Link
-                      href={`${basePath}/${item.id}`}
-                      className="rounded border border-border-subtle px-2 py-1 font-semibold text-ink-secondary hover:bg-bg-elevated"
-                    >
-                      Full Edit
-                    </Link>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="submit"
-                      formAction={setTitleStatus.bind(null, item.id, isPublished ? "draft" : "published")}
-                      className="rounded border border-border-subtle px-2 py-1 font-semibold text-ink-secondary hover:bg-bg-elevated"
-                    >
-                      {isPublished ? "Unpublish" : "Publish"}
-                    </button>
-                    <button
-                      type="submit"
-                      formAction={trashTitle.bind(null, item.id)}
-                      className="rounded border border-status-error/30 p-1 text-status-error hover:bg-status-error/10"
-                      aria-label={`Move ${item.title} to trash`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
         </div>
       </form>
 

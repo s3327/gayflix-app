@@ -57,18 +57,19 @@ export async function GET(request: Request) {
       });
 
       const headers = [
-        "ID",
-        "Title",
-        "Year",
-        "Status",
-        "Duration",
-        "Genres",
-        "Tags",
-        "Rating",
-        "Views",
-        mediaType === "movie" ? "Director" : "Creator",
-        "Published At",
-        "Created At",
+        "id",
+        "title",
+        "type",
+        "year",
+        "status",
+        "duration",
+        "genres",
+        "tags",
+        "rating",
+        "viewCount",
+        mediaType === "movie" ? "director" : "creator",
+        "publishedAt",
+        "createdAt",
       ];
 
       const lines = [
@@ -77,6 +78,7 @@ export async function GET(request: Request) {
           toCsvRow([
             r.id,
             r.title,
+            mediaType,
             r.year,
             r.status,
             r.duration,

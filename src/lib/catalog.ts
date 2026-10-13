@@ -101,7 +101,7 @@ function toMedia(row: CardRow): Media {
     title: row.title,
     year: row.year,
     duration: row.duration,
-    genre: row.genres[0] ?? "",
+    genre: row.genres?.[0] ?? "",
     posterUrl: row.posterUrl,
     gradient: row.gradient ?? undefined,
     createdAt: row.createdAt.toISOString(),
@@ -126,7 +126,7 @@ type DetailRow = Prisma.MediaGetPayload<{ include: { episodes: true } }>;
 function toDetail(row: DetailRow): MediaDetail {
   return {
     ...toMedia(row),
-    genres: row.genres,
+    genres: row.genres ?? [],
     country: row.country,
     language: row.language,
     synopsis: row.synopsis,
@@ -134,12 +134,12 @@ function toDetail(row: DetailRow): MediaDetail {
     rating: row.rating ?? undefined,
     director: row.director ?? undefined,
     creator: row.creator ?? undefined,
-    cast: row.cast,
-    tags: row.tags,
+    cast: row.cast ?? [],
+    tags: row.tags ?? [],
     releaseDate: row.releaseDate ? longDate.format(row.releaseDate) : undefined,
     runtimeMinutes: row.runtimeMinutes ?? undefined,
     backdropUrl: row.backdropUrl ?? undefined,
-    episodes: row.episodes.map(toEpisode),
+    episodes: (row.episodes ?? []).map(toEpisode),
   };
 }
 
@@ -601,7 +601,13 @@ export type LibraryRow = {
 
 export type LibrarySort = "title" | "year" | "status" | "viewCount" | "publishedAt" | "createdAt" | "updatedAt";
 export type LibraryOrder = "asc" | "desc";
-export type LibraryAudit = "missing-video" | "missing-backdrop" | "empty-series" | "stale-drafts";
+export type LibraryAudit =
+  | "missing-video"
+  | "no-video"
+  | "missing-backdrop"
+  | "no-backdrop"
+  | "empty-series"
+  | "stale-drafts";
 
 /**
  * The admin library: one page of movies or series, drafts included.
@@ -641,7 +647,7 @@ export async function listLibrary({
     ...(genre ? { genres: { has: genre } } : {}),
   };
 
-  if (audit === "missing-video") {
+  if (audit === "missing-video" || audit === "no-video") {
     if (type === "movie") {
       where.videoSources = { none: { enabled: true } };
       where.status = "published";
@@ -649,7 +655,7 @@ export async function listLibrary({
       where.episodes = { none: { videoSources: { some: { enabled: true } } } };
       where.status = "published";
     }
-  } else if (audit === "missing-backdrop") {
+  } else if (audit === "missing-backdrop" || audit === "no-backdrop") {
     where.OR = [{ backdropUrl: null }, { backdropUrl: "" }];
   } else if (audit === "empty-series") {
     where.episodes = { none: {} };

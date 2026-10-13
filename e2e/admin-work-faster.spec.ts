@@ -160,7 +160,7 @@ test.describe("Phase 3: Work Faster", () => {
       await page.getByRole("button", { name: "Search" }).click();
 
       // Row should be visible with auto-purge badge
-      const row = page.locator("tr", { hasText: trashedTitle.title });
+      const row = page.getByRole("listitem").filter({ hasText: trashedTitle.title });
       await expect(row).toBeVisible();
       await expect(row.getByText(/Purges in ~30 days/)).toBeVisible();
 
@@ -193,8 +193,8 @@ test.describe("Phase 3: Work Faster", () => {
     };
     try {
       await sql(
-        `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "createdAt", "updatedAt")
-         VALUES ($1, 'movie', 'draft', $2, 2024, '2h 00m', ARRAY['Sci-Fi'], 'USA', 'English', $3, now(), now())`,
+        `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "createdAt", "updatedAt", cast, tags)
+         VALUES ($1, 'movie', 'draft', $2, 2024, '2h 00m', ARRAY['Sci-Fi'], 'USA', 'English', $3, now(), now(), ARRAY[]::text[], ARRAY[]::text[])`,
         [draftTitle.id, draftTitle.title, POSTER]
       );
 
@@ -231,3 +231,4 @@ test.describe("Phase 3: Work Faster", () => {
     expect(text.startsWith("id,title,type,year,status")).toBe(true);
   });
 });
+

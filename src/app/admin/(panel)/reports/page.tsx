@@ -37,7 +37,7 @@ export default async function ReportsPage({
   await requireAdmin();
   const params = await searchParams;
   const showResolved = firstParam(params.status) === "resolved";
-  const viewMode = firstParam(params.view) ?? (showResolved ? "list" : "triage");
+  const viewMode = firstParam(params.view) ?? "list";
   const where = { resolvedAt: showResolved ? { not: null } : null };
 
   const [total, openCount] = await Promise.all([
@@ -133,18 +133,6 @@ export default async function ReportsPage({
 
       <nav aria-label="Report views and status" className="mt-6 flex flex-wrap gap-2">
         <Link
-          href={tabHref(false, "triage")}
-          aria-current={!showResolved && viewMode === "triage" ? "page" : undefined}
-          className={`flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
-            !showResolved && viewMode === "triage"
-              ? "border-brand-pink bg-brand-pink/10 text-ink-brand shadow-2xs"
-              : "border-border-strong text-ink-secondary hover:bg-bg-elevated hover:text-ink-primary"
-          }`}
-        >
-          <Layers className="h-3.5 w-3.5" />
-          Triage Queue ({openCount})
-        </Link>
-        <Link
           href={tabHref(false, "list")}
           aria-current={!showResolved && viewMode === "list" ? "page" : undefined}
           className={`flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
@@ -155,6 +143,18 @@ export default async function ReportsPage({
         >
           <List className="h-3.5 w-3.5" />
           All Open Reports
+        </Link>
+        <Link
+          href={tabHref(false, "triage")}
+          aria-current={!showResolved && viewMode === "triage" ? "page" : undefined}
+          className={`flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
+            !showResolved && viewMode === "triage"
+              ? "border-brand-pink bg-brand-pink/10 text-ink-brand shadow-2xs"
+              : "border-border-strong text-ink-secondary hover:bg-bg-elevated hover:text-ink-primary"
+          }`}
+        >
+          <Layers className="h-3.5 w-3.5" />
+          Triage Queue ({openCount})
         </Link>
         <Link
           href={tabHref(true, "list")}
