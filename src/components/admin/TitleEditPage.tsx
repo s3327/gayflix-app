@@ -8,6 +8,7 @@ import ImportEpisodesModal from "@/components/admin/ImportEpisodesModal";
 import SeasonTableEditor from "@/components/admin/SeasonTableEditor";
 import TitleForm from "@/components/admin/TitleForm";
 import VideoSources from "@/components/admin/VideoSources";
+import TmdbRefreshModal from "@/components/admin/TmdbRefreshModal";
 import { restoreTitle, trashTitle, updateTitle } from "@/lib/admin-catalog-actions";
 import { getLiveHero, getTitleForEdit } from "@/lib/catalog";
 import { imageHosts, uploadHost } from "@/lib/image-hosts.mjs";
@@ -75,11 +76,22 @@ export default async function TitleEditPage({
           </div>
           {row.tmdbId && <SourceLine tmdbId={row.tmdbId} imdbId={row.imdbId} />}
           {!isTrashed && (
-            <div className="mt-4 flex flex-wrap gap-3">
-              {isPublished && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              {isPublished ? (
                 <Link href={titleHref(row)} className={BUTTON_SECONDARY}>
                   View on the site
                 </Link>
+              ) : (
+                <Link href={`/admin/preview/${row.id}`} className={BUTTON_SECONDARY}>
+                  Preview draft
+                </Link>
+              )}
+              {row.tmdbId && (
+                <TmdbRefreshModal
+                  id={row.id}
+                  currentTmdbId={row.tmdbId}
+                  currentImdbId={row.imdbId}
+                />
               )}
               <form action={trashTitle.bind(null, row.id)}>
                 <button type="submit" className={BUTTON_DANGER}>

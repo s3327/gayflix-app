@@ -75,7 +75,7 @@ export default function AdminLoginForm({ nextUrl }: { nextUrl?: string }) {
         {needsTwoFactor ? (
           <TwoFactorForm onVerified={enter} onStartOver={() => setNeedsTwoFactor(false)} />
         ) : (
-          <form method="post" onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
+          <form method="post" onSubmit={handleSubmit} noValidate className="mt-8 flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="email"

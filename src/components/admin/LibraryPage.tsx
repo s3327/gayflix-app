@@ -2,8 +2,10 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import LibrarySearchBar from "@/components/admin/LibrarySearchBar";
 import LibraryTable from "@/components/admin/LibraryTable";
+import AuditFilterPills from "@/components/admin/AuditFilterPills";
+import FilterChipsBar from "@/components/admin/FilterChipsBar";
 import Pagination from "@/components/Pagination";
-import { listLibrary } from "@/lib/catalog";
+import { listLibrary, type LibrarySort, type LibraryOrder, type LibraryAudit } from "@/lib/catalog";
 import type { MediaStatus, MediaType } from "@/lib/media";
 import { normalizeQuery } from "@/lib/search";
 import { firstParam, pageParam, type SearchParams } from "@/lib/search-params";
@@ -15,8 +17,8 @@ function statusParam(value: string | undefined): MediaStatus | undefined {
 
 /**
  * /admin/library/movies and /admin/library/series: every title of that
- * type, drafts included, newest first, with search by title and a
- * status filter. Admins only (listLibrary checks too).
+ * type, drafts included, newest first, with search by title, audit filters,
+ * sort, and status filter. Admins only (listLibrary checks too).
  */
 export default async function LibraryPage({
   type,
@@ -27,11 +29,23 @@ export default async function LibraryPage({
 }) {
   const query = normalizeQuery(firstParam(searchParams.q) ?? "");
   const status = statusParam(firstParam(searchParams.status));
+  const sort = (firstParam(searchParams.sort) as LibrarySort) ?? "createdAt";
+  const order = (firstParam(searchParams.order) as LibraryOrder) ?? "desc";
+  const audit = firstParam(searchParams.audit) as LibraryAudit | undefined;
+  const genre = firstParam(searchParams.genre);
+  const pageSizeParam = Number(firstParam(searchParams.pageSize));
+  const pageSize = !isNaN(pageSizeParam) && pageSizeParam > 0 ? pageSizeParam : 50;
+
   const { items, page, totalPages, total } = await listLibrary({
     type,
     page: pageParam(searchParams.page),
     query,
     status,
+    sort,
+    order,
+    pageSize,
+    audit,
+    genre,
   });
 
   const basePath = libraryPath(type);
@@ -39,6 +53,11 @@ export default async function LibraryPage({
     const qs = new URLSearchParams();
     if (query) qs.set("q", query);
     if (status) qs.set("status", status);
+    if (sort && sort !== "createdAt") qs.set("sort", sort);
+    if (order && order !== "desc") qs.set("order", order);
+    if (audit) qs.set("audit", audit);
+    if (genre) qs.set("genre", genre);
+    if (pageSize !== 50) qs.set("pageSize", String(pageSize));
     if (target !== 1) qs.set("page", String(target));
     const search = qs.toString();
     return search ? `${basePath}?${search}` : basePath;
@@ -63,14 +82,24 @@ export default async function LibraryPage({
 
       <LibrarySearchBar action={basePath} query={query} status={status ?? "all"} />
 
+      <div className="mx-6 mt-3 space-y-2 sm:mx-10">
+        <AuditFilterPills basePath={basePath} type={type} />
+        <FilterChipsBar basePath={basePath} />
+      </div>
+
       {items.length > 0 ? (
-        <>
+        <div className="mt-4">
           <p className="mx-6 mb-3 text-sm text-ink-muted sm:mx-10">{count}</p>
-          <LibraryTable items={items} basePath={basePath} showEpisodes={type === "series"} />
-        </>
+          <LibraryTable
+            items={items}
+            basePath={basePath}
+            showEpisodes={type === "series"}
+            exportType={type === "movie" ? "movies" : "series"}
+          />
+        </div>
       ) : (
-        <p className="mx-6 text-sm text-ink-secondary sm:mx-10">
-          {query || status ? "Nothing matches that search." : `No ${plural} yet.`}
+        <p className="mx-6 mt-6 text-sm text-ink-secondary sm:mx-10">
+          {query || status || audit ? "Nothing matches that filter or search." : `No ${plural} yet.`}
         </p>
       )}
 

@@ -20,6 +20,8 @@ import {
   queryYear,
   type SearchSuggestion,
 } from "@/lib/search";
+
+export { escapeLike, normalizeQuery };
 import { getSession, requireAdmin } from "@/lib/session";
 import { videoHosts, videoUrlAllowed } from "@/lib/video-hosts";
 import type { VideoSourceEntry } from "@/lib/video-source";
@@ -579,14 +581,31 @@ export type LibraryRow = {
   year: number;
   type: MediaType;
   status: MediaStatus;
+  posterUrl?: string;
+  backdropUrl?: string | null;
+  duration?: string;
+  genres?: string[];
+  tags?: string[];
+  tagline?: string | null;
+  rating?: number | null;
+  viewCount?: number;
+  featured?: boolean;
+  publishedAt?: Date | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+  videoSourcesCount?: number;
   /** Series with episodes: counted from them. */
   seasons?: number;
   episodes?: number;
 };
 
+export type LibrarySort = "title" | "year" | "status" | "viewCount" | "publishedAt" | "createdAt" | "updatedAt";
+export type LibraryOrder = "asc" | "desc";
+export type LibraryAudit = "missing-video" | "missing-backdrop" | "empty-series" | "stale-drafts";
+
 /**
- * The admin library: one page of movies or series, drafts included,
- * newest first. Titles in the trash are listed by listTrash instead.
+ * The admin library: one page of movies or series, drafts included.
+ * Supports sorting, audit filters, and configurable page size.
  * Only for admins (checked here too).
  */
 export async function listLibrary({
@@ -594,12 +613,22 @@ export async function listLibrary({
   page: requestedPage,
   query = "",
   status,
+  sort = "createdAt",
+  order = "desc",
+  pageSize = LIBRARY_PAGE_SIZE,
+  genre,
+  audit,
 }: {
   type: MediaType;
   page: number;
   /** Matches titles containing it. */
   query?: string;
   status?: MediaStatus;
+  sort?: LibrarySort;
+  order?: LibraryOrder;
+  pageSize?: number;
+  genre?: string;
+  audit?: LibraryAudit;
 }) {
   await requireAdmin();
   await connection();
@@ -609,21 +638,66 @@ export async function listLibrary({
     status,
     trashedAt: null,
     title: search ? { contains: escapeLike(search), mode: "insensitive" } : undefined,
+    ...(genre ? { genres: { has: genre } } : {}),
   };
+
+  if (audit === "missing-video") {
+    if (type === "movie") {
+      where.videoSources = { none: { enabled: true } };
+      where.status = "published";
+    } else {
+      where.episodes = { none: { videoSources: { some: { enabled: true } } } };
+      where.status = "published";
+    }
+  } else if (audit === "missing-backdrop") {
+    where.OR = [{ backdropUrl: null }, { backdropUrl: "" }];
+  } else if (audit === "empty-series") {
+    where.episodes = { none: {} };
+  } else if (audit === "stale-drafts") {
+    where.status = "draft";
+    where.createdAt = { lte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) };
+  }
+
+  const sortMap: Record<LibrarySort, Prisma.MediaOrderByWithRelationInput> = {
+    title: { title: order },
+    year: { year: order },
+    status: { status: order },
+    viewCount: { viewCount: order },
+    publishedAt: { publishedAt: order },
+    createdAt: { createdAt: order },
+    updatedAt: { updatedAt: order },
+  };
+  const orderBy: Prisma.MediaOrderByWithRelationInput[] = [
+    sortMap[sort] ?? { createdAt: "desc" },
+    { id: "desc" },
+  ];
+
   const total = await db.media.count({ where });
-  const { page, totalPages, skip } = pageWindow(total, requestedPage, LIBRARY_PAGE_SIZE);
+  const { page, totalPages, skip } = pageWindow(total, requestedPage, pageSize);
   const rows = await db.media.findMany({
     where,
-    orderBy: ORDER.added,
+    orderBy,
     skip,
-    take: LIBRARY_PAGE_SIZE,
+    take: pageSize,
     select: {
       id: true,
       title: true,
       year: true,
       type: true,
       status: true,
-      _count: { select: { episodes: true } },
+      posterUrl: true,
+      backdropUrl: true,
+      duration: true,
+      genres: true,
+      tags: true,
+      tagline: true,
+      rating: true,
+      viewCount: true,
+      featured: true,
+      publishedAt: true,
+      createdAt: true,
+      updatedAt: true,
+      _count: { select: { episodes: true, videoSources: { where: { enabled: true } } } },
     },
   });
 
@@ -638,11 +712,11 @@ export async function listLibrary({
     }
   }
 
-  const items: LibraryRow[] = rows.map(({ _count, ...row }) =>
-    _count.episodes > 0
-      ? { ...row, seasons: seasons.get(row.id), episodes: _count.episodes }
-      : row
-  );
+  const items: LibraryRow[] = rows.map(({ _count, ...row }) => ({
+    ...row,
+    videoSourcesCount: _count.videoSources,
+    ...(_count.episodes > 0 ? { seasons: seasons.get(row.id), episodes: _count.episodes } : {}),
+  }));
   return { items, page, totalPages, total };
 }
 
@@ -684,14 +758,22 @@ export async function getLastEpisode(seriesId: string) {
 }
 
 /** /admin/library/episodes: one page of episodes, of one series or all. */
+export type EpisodeSort = "title" | "series" | "season" | "episode" | "airDate";
+
 export async function listEpisodes({
   seriesId,
   query = "",
   page: requestedPage,
+  sort = "series",
+  order = "asc",
+  pageSize = LIBRARY_PAGE_SIZE,
 }: {
   seriesId?: string;
   query?: string;
   page: number;
+  sort?: EpisodeSort;
+  order?: "asc" | "desc";
+  pageSize?: number;
 }) {
   await requireAdmin();
   await connection();
@@ -702,12 +784,24 @@ export async function listEpisodes({
     ...(search ? { title: { contains: escapeLike(search), mode: "insensitive" } } : {}),
   };
   const total = await db.episode.count({ where });
-  const { page, totalPages, skip } = pageWindow(total, requestedPage, LIBRARY_PAGE_SIZE);
+  const { page, totalPages, skip } = pageWindow(total, requestedPage, pageSize);
+
+  const orderBy: Prisma.EpisodeOrderByWithRelationInput[] =
+    sort === "title"
+      ? [{ title: order }, { id: "asc" }]
+      : sort === "season"
+      ? [{ seasonNumber: order }, { episodeNumber: order }, { id: "asc" }]
+      : sort === "episode"
+      ? [{ episodeNumber: order }, { seasonNumber: order }, { id: "asc" }]
+      : sort === "airDate"
+      ? [{ airDate: order }, { id: "asc" }]
+      : [{ media: { title: order } }, { mediaId: "asc" }, ...EPISODE_ORDER];
+
   const items = await db.episode.findMany({
     where,
-    orderBy: [{ media: { title: "asc" } }, { mediaId: "asc" }, ...EPISODE_ORDER],
+    orderBy,
     skip,
-    take: LIBRARY_PAGE_SIZE,
+    take: pageSize,
     include: { media: { select: { title: true } } },
   });
   return { items, page, totalPages, total };
@@ -742,28 +836,66 @@ export async function findImported({ tmdbIds, imdbIds }: { tmdbIds: string[]; im
   });
 }
 
-/** /admin/trash: titles moved to the trash, most recent first. */
-export async function listTrash({ page: requestedPage }: { page: number }) {
+/** /admin/trash: titles moved to the trash, with search and sorting support. */
+export async function listTrash({
+  page: requestedPage,
+  query = "",
+  sort = "trashedAt",
+  order = "desc",
+  pageSize = LIBRARY_PAGE_SIZE,
+}: {
+  page: number;
+  query?: string;
+  sort?: "title" | "year" | "trashedAt";
+  order?: "asc" | "desc";
+  pageSize?: number;
+}) {
   await requireAdmin();
   await connection();
-  const where: Prisma.MediaWhereInput = { trashedAt: { not: null } };
+  const search = normalizeQuery(query);
+  const where: Prisma.MediaWhereInput = {
+    trashedAt: { not: null },
+    ...(search ? { title: { contains: escapeLike(search), mode: "insensitive" } } : {}),
+  };
   const total = await db.media.count({ where });
-  const { page, totalPages, skip } = pageWindow(total, requestedPage, LIBRARY_PAGE_SIZE);
+  const { page, totalPages, skip } = pageWindow(total, requestedPage, pageSize);
+  const orderBy: Prisma.MediaOrderByWithRelationInput[] =
+    sort === "title"
+      ? [{ title: order }, { id: "asc" }]
+      : sort === "year"
+      ? [{ year: order }, { id: "asc" }]
+      : [{ trashedAt: order }, { id: "asc" }];
+
   const items = await db.media.findMany({
     where,
-    orderBy: [{ trashedAt: "desc" }, { id: "asc" }],
+    orderBy,
     skip,
-    take: LIBRARY_PAGE_SIZE,
+    take: pageSize,
     select: {
       id: true,
       type: true,
       title: true,
       year: true,
       trashedAt: true,
+      statusBeforeTrash: true,
       _count: { select: { episodes: true } },
     },
   });
   return { items, page, totalPages, total };
+}
+
+/** Admin-only draft preview for titles before they are published. */
+export async function getDraftTitleForPreview(
+  id: string
+): Promise<(MediaDetail & { status: MediaStatus }) | null> {
+  await requireAdmin();
+  await connection();
+  if (!isMediaId(id)) return null;
+  const row = await db.media.findUnique({
+    where: { id },
+    include: { episodes: { orderBy: EPISODE_ORDER } },
+  });
+  return row && { ...toDetail(row), status: row.status };
 }
 
 /** How many titles the dashboard lists under Most played and Recently added. */

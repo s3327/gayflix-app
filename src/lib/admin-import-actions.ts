@@ -44,3 +44,150 @@ export async function importTitle(
   revalidatePath("/", "layout");
   redirect(`${libraryPath(plan.type)}/${id}?imported=1`);
 }
+
+/** Import multiple titles from TMDB search in batch. */
+export async function importMultipleTitles(
+  tmdbIds: string[]
+): Promise<{ ok: boolean; imported: number; skipped: number; errors: string[] }> {
+  await requireAdmin();
+  let imported = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (const rawId of tmdbIds) {
+    try {
+      const ref = parseTmdbRef(rawId);
+      if (!ref) {
+        skipped++;
+        continue;
+      }
+      const plan = await prepareImport(ref, null);
+      if (plan.status !== "ready" || !plan.input) {
+        skipped++;
+        continue;
+      }
+      const id = await insertTitle(plan.type, plan.input, plan.sources);
+      if (id) imported++;
+      else skipped++;
+    } catch (err: unknown) {
+      skipped++;
+      errors.push(err instanceof Error ? err.message : "Import failed");
+    }
+  }
+
+  revalidatePath("/", "layout");
+  return { ok: true, imported, skipped, errors };
+}
+
+/** Refresh title metadata from TMDB, respecting locked fields. */
+export async function refreshTitleFromTmdb({
+  id,
+  overwriteUnlocked = false,
+}: {
+  id: string;
+  overwriteUnlocked: boolean;
+}): Promise<{ ok: boolean; message?: string; updatedFields?: string[] }> {
+  await requireAdmin();
+  const { db } = await import("@/lib/db");
+  const existing = await db.media.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      type: true,
+      tmdbId: true,
+      imdbId: true,
+      title: true,
+      year: true,
+      synopsis: true,
+      tagline: true,
+      posterUrl: true,
+      backdropUrl: true,
+      director: true,
+      creator: true,
+      cast: true,
+      genres: true,
+      lockedFields: true,
+      trashedAt: true,
+    },
+  });
+
+  if (!existing || existing.trashedAt || !existing.tmdbId) {
+    return { ok: false, message: "Title not found or has no linked TMDB ID" };
+  }
+
+  const ref = parseTmdbRef(existing.tmdbId);
+  if (!ref) return { ok: false, message: "Invalid linked TMDB reference" };
+
+  const plan = await prepareImport(ref, existing.type);
+  if (plan.status !== "ready" || !plan.input) {
+    return { ok: false, message: "Could not fetch fresh metadata from TMDB" };
+  }
+
+  const fresh = plan.input;
+  const locked = new Set(existing.lockedFields);
+  const dataToUpdate: Record<string, unknown> = {};
+  const updatedFields: string[] = [];
+
+  const applyField = (key: string, freshVal: unknown, existingVal: unknown) => {
+    if (locked.has(key)) return;
+    const isBlank =
+      existingVal === null ||
+      existingVal === undefined ||
+      existingVal === "" ||
+      (Array.isArray(existingVal) && existingVal.length === 0);
+    if (overwriteUnlocked || isBlank) {
+      if (freshVal !== undefined && freshVal !== null) {
+        dataToUpdate[key] = freshVal;
+        updatedFields.push(key);
+      }
+    }
+  };
+
+  applyField("title", fresh.title, existing.title);
+  applyField("year", fresh.year, existing.year);
+  applyField("synopsis", fresh.synopsis, existing.synopsis);
+  applyField("tagline", fresh.tagline, existing.tagline);
+  applyField("posterUrl", fresh.posterUrl, existing.posterUrl);
+  applyField("backdropUrl", fresh.backdropUrl, existing.backdropUrl);
+  if (existing.type === "movie") {
+    applyField("director", fresh.credit, existing.director);
+  } else {
+    applyField("creator", fresh.credit, existing.creator);
+  }
+  applyField("cast", fresh.cast, existing.cast);
+  applyField("genres", fresh.genres, existing.genres);
+
+  if (Object.keys(dataToUpdate).length > 0) {
+    await db.media.update({ where: { id }, data: dataToUpdate });
+    revalidatePath("/", "layout");
+  }
+
+  return { ok: true, updatedFields };
+}
+
+/** Re-link a title to a different TMDB or IMDb ID. */
+export async function fixTitleMatch({
+  id,
+  tmdbId,
+  imdbId,
+}: {
+  id: string;
+  tmdbId?: string;
+  imdbId?: string;
+}): Promise<{ ok: boolean; message?: string }> {
+  await requireAdmin();
+  const { db } = await import("@/lib/db");
+  const existing = await db.media.findUnique({ where: { id } });
+  if (!existing) return { ok: false, message: "Title not found" };
+
+  await db.media.update({
+    where: { id },
+    data: {
+      ...(tmdbId !== undefined ? { tmdbId: tmdbId.trim() || null } : {}),
+      ...(imdbId !== undefined ? { imdbId: imdbId.trim() || null } : {}),
+    },
+  });
+
+  revalidatePath("/", "layout");
+  return { ok: true };
+}

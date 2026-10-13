@@ -3,7 +3,7 @@ import {
   LayoutDashboard,
   Import,
   Library,
-  Upload,
+  PlusCircle,
   Users,
   Trash2,
   Settings,
@@ -44,8 +44,8 @@ export const adminNav: NavEntry[] = [
   },
   {
     type: "group",
-    label: "Upload",
-    icon: Upload,
+    label: "Add",
+    icon: PlusCircle,
     basePath: "/admin/upload",
     children: [
       { label: "Movies", href: "/admin/upload/movies" },
