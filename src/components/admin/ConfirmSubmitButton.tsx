@@ -25,26 +25,35 @@ export default function ConfirmSubmitButton({
   formAction?: (form: FormData) => Promise<void>;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const hiddenSubmitRef = useRef<HTMLButtonElement>(null);
 
   return (
     <>
       <button
-        ref={buttonRef}
         type="button"
-        formAction={formAction}
         aria-label={ariaLabel}
         onClick={() => setIsOpen(true)}
         className={className}
       >
         {children}
       </button>
+      <button
+        ref={hiddenSubmitRef}
+        type="submit"
+        formAction={formAction}
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
+      />
       {isOpen && (
         <ConfirmModal
           title={confirmTitle}
           description={confirmDescription}
           confirmLabel={confirmLabel}
-          onConfirm={() => buttonRef.current?.form?.requestSubmit(buttonRef.current)}
+          onConfirm={() => {
+            setIsOpen(false);
+            hiddenSubmitRef.current?.click();
+          }}
           onClose={() => setIsOpen(false)}
         />
       )}

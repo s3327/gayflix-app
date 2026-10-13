@@ -4,7 +4,6 @@ import { ArrowLeft, Plus } from "lucide-react";
 import Badge from "@/components/Badge";
 import MediaCoverThumb from "@/components/MediaCoverThumb";
 import { BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY } from "@/components/admin/FormFields";
-import ConfirmSubmitButton from "@/components/admin/ConfirmSubmitButton";
 import TitleForm from "@/components/admin/TitleForm";
 import VideoSources from "@/components/admin/VideoSources";
 import { restoreTitle, trashTitle, updateTitle } from "@/lib/admin-catalog-actions";
@@ -81,14 +80,9 @@ export default async function TitleEditPage({
                 </Link>
               )}
               <form action={trashTitle.bind(null, row.id)}>
-                <ConfirmSubmitButton
-                  confirmTitle="Move this title to the trash?"
-                  confirmDescription={`"${row.title}" will be taken off the site. Any unsaved edits will be discarded.`}
-                  confirmLabel="Move to trash"
-                  className={BUTTON_DANGER}
-                >
+                <button type="submit" className={BUTTON_DANGER}>
                   Move to trash
-                </ConfirmSubmitButton>
+                </button>
               </form>
             </div>
           )}

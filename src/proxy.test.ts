@@ -77,11 +77,4 @@ describe("proxy (admin gate at /admin)", () => {
     vi.stubEnv("ADMIN_BASIC_AUTH_PASSWORD", "");
     expect(proxy(request(ADMIN)).headers.get("x-middleware-next")).toBe("1");
   });
-
-  it("guards /api/auth/admin endpoints under the same gate", () => {
-    vi.stubEnv("ADMIN_BASIC_AUTH_USER", "admin");
-    vi.stubEnv("ADMIN_BASIC_AUTH_PASSWORD", "secret");
-    const response = proxy(request("http://gayflix.test/api/auth/admin/list-users"));
-    expect(response.status).toBe(401);
-  });
 });

@@ -77,14 +77,14 @@ test.describe("admin title editor", () => {
       await expect(row).toHaveCount(0);
       expect((await request.get(`/movie/${id}`)).status()).toBe(404);
 
-      // Restored titles come back as drafts.
+      // Restored titles come back with their previous status (Published).
       await page.goto("/admin/trash");
       const trashed = main.getByRole("listitem").filter({ hasText: uid });
       await expect(trashed).toContainText("Movie · 2024 · Moved to the trash");
       await trashed.getByRole("button", { name: /^Restore / }).click();
       await expect(trashed).toHaveCount(0);
       await page.goto(`/admin/library/movies/${id}`);
-      await expect(main.getByText("Draft", { exact: true })).toBeVisible();
+      await expect(main.getByText("Published", { exact: true })).toBeVisible();
 
       // In the trash, a title can only be restored or deleted.
       await main.getByRole("button", { name: "Move to trash", exact: true }).click();

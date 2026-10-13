@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Pencil, Eye, EyeOff, Trash2 } from "lucide-react";
 import Badge from "@/components/Badge";
-import ConfirmSubmitButton from "@/components/admin/ConfirmSubmitButton";
+import BulkTrashButton from "@/components/admin/BulkTrashButton";
 import SelectAllCheckbox from "@/components/admin/SelectAllCheckbox";
 import {
   setSelectedStatus,
@@ -33,15 +33,7 @@ export default function LibraryTable({
         <span className="text-sm text-ink-muted">With the checked rows:</span>
         <BulkButton formAction={setSelectedStatus.bind(null, "published")}>Publish</BulkButton>
         <BulkButton formAction={setSelectedStatus.bind(null, "draft")}>Unpublish</BulkButton>
-        <ConfirmSubmitButton
-          formAction={trashSelected}
-          confirmTitle="Move checked titles to trash?"
-          confirmDescription="The selected titles will be removed from the public site and moved to trash."
-          confirmLabel="Move to trash"
-          className="rounded-card border border-border-strong px-3 py-1 text-xs font-semibold text-status-error transition-colors hover:bg-status-error/10"
-        >
-          Move to trash
-        </ConfirmSubmitButton>
+        <BulkTrashButton formAction={trashSelected}>Move to trash</BulkTrashButton>
       </div>
 
       {/* On a narrow screen the table scrolls sideways on its own, as the

@@ -5,7 +5,7 @@ import { errorReportingOrigin } from "@/lib/error-reporting";
 import { videoHostSources, videoHosts } from "@/lib/video-hosts";
 
 function isAdminPath(pathname: string) {
-  return pathname === "/admin" || pathname.startsWith("/admin/") || pathname.startsWith("/api/auth/admin");
+  return pathname === "/admin" || pathname.startsWith("/admin/");
 }
 
 function adminDenied(access: "unauthorized" | "disabled") {
@@ -79,6 +79,5 @@ export const config = {
     // Prefetches are deliberately NOT skipped, so they can't be used to
     // fetch /admin content without passing the admin check.
     "/((?!api/|_next/static|_next/image|favicon.ico|icon.png|robots.txt|sitemap.xml|brand/).*)",
-    "/api/auth/admin/:path*",
   ],
 };

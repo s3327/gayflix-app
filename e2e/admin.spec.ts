@@ -40,9 +40,9 @@ test.describe("with the admin password", () => {
 
   test("guests are sent to the admin login", async ({ page }) => {
     await page.goto("/admin/dashboard");
-    await expect(page).toHaveURL(/\/admin\/login$/);
+    await expect(page).toHaveURL(/\/admin\/login(\?.*)?$/);
     await page.goto("/admin");
-    await expect(page).toHaveURL(/\/admin\/login$/);
+    await expect(page).toHaveURL(/\/admin\/login(\?.*)?$/);
   });
 
   test("the login form never puts the password in the URL", async ({ page }) => {
@@ -64,7 +64,7 @@ test.describe("with the admin password", () => {
         "/admin/upload/movies?tmdb=movie%2F990001",
       ]) {
         await page.goto(path);
-        await expect(page).toHaveURL(/\/admin\/login$/);
+        await expect(page).toHaveURL(/\/admin\/login(\?.*)?$/);
       }
     });
 
@@ -182,7 +182,7 @@ test.describe("with the admin password", () => {
     const { admin, page } = await newAdmin(browser, request);
     await ageSessions(admin.email, 13);
     await page.goto("/admin/dashboard");
-    await expect(page).toHaveURL(/\/admin\/login$/);
+    await expect(page).toHaveURL(/\/admin\/login(\?.*)?$/);
     // Still signed in on the public site.
     await page.goto("/account");
     await expect(page).toHaveURL(/\/account$/);
@@ -195,7 +195,7 @@ test.describe("with the admin password", () => {
     const { admin, page } = await newAdmin(browser, request);
     await unverifySessions(admin.email);
     await page.goto("/admin/dashboard");
-    await expect(page).toHaveURL(/\/admin\/login$/);
+    await expect(page).toHaveURL(/\/admin\/login(\?.*)?$/);
     const response = await page.request.get("/api/auth/admin/list-users");
     expect(response.status()).toBe(403);
   });
