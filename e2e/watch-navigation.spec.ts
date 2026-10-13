@@ -63,7 +63,7 @@ test.describe("watch player episode navigation and redirects", () => {
     const ep1 = `${seriesId}-season-1-episode-1`;
     const ep2 = `${seriesId}-season-1-episode-2`;
 
-    await addSeries(seriesId, `E2E Nav Next ${uid}`);
+    await addSeries(seriesId, `E2E Nav Forward ${uid}`);
     await addEpisode({ id: ep1, seriesId, seasonNumber: 1, episodeNumber: 1, title: "Pilot", stillUrl: STILL_1 });
     await addEpisode({ id: ep2, seriesId, seasonNumber: 1, episodeNumber: 2, title: "Second Step", stillUrl: STILL_2 });
 
@@ -124,7 +124,7 @@ test.describe("watch player episode navigation and redirects", () => {
     const ep1 = `${seriesId}-season-1-episode-1`;
     const ep2 = `${seriesId}-season-1-episode-2`;
 
-    await addSeries(seriesId, `E2E Click Next ${uid}`);
+    await addSeries(seriesId, `E2E Click Forward ${uid}`);
     await addEpisode({ id: ep1, seriesId, seasonNumber: 1, episodeNumber: 1, title: "Pilot", stillUrl: STILL_1 });
     await addEpisode({ id: ep2, seriesId, seasonNumber: 1, episodeNumber: 2, title: "Next Level", stillUrl: STILL_2 });
 

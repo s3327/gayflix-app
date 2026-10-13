@@ -3,15 +3,15 @@ import Link from "next/link";
 import { ChevronDown, Search } from "lucide-react";
 import Pagination from "@/components/Pagination";
 import UserBadges from "@/components/admin/UserBadges";
-
-export const metadata: Metadata = {
-  title: "Users",
-};
 import { listUsers } from "@/lib/admin-users";
 import { normalizeQuery } from "@/lib/search";
 import { firstParam, pageParam, type SearchParams } from "@/lib/search-params";
 import { requireAdmin } from "@/lib/session";
 import { userFilterParam, type UserFilter } from "@/lib/user-admin";
+
+export const metadata: Metadata = {
+  title: "Users",
+};
 
 const date = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" });
 

@@ -452,6 +452,7 @@ function tmdb(url, response) {
   // Movie or TV details endpoint: /movie/{id} or /tv/{id}
   if ((match = /^\/(movie|tv)\/(\d+)$/.exec(path))) {
     const entry = TITLES.find((title) => title.kind === match[1] && title.id === Number(match[2]));
+    if (entry?.errorOnSeason) return send(response, 503, { status_message: "TMDB Season Down" });
     return entry ? send(response, 200, details(entry)) : send(response, 404, { status_code: 34 });
   }
 

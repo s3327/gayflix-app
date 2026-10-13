@@ -469,6 +469,7 @@ test.describe("TMDB seasons and episodes bulk import", () => {
       const modal = page.getByRole("dialog", { name: /import episodes/i });
 
       // Uncheck all season checkboxes
+      await expect(modal.getByRole("checkbox").first()).toBeVisible();
       const checkboxes = modal.getByRole("checkbox");
       const count = await checkboxes.count();
       for (let i = 0; i < count; i++) {

@@ -3,16 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import ConfirmSubmitButton from "@/components/admin/ConfirmSubmitButton";
-
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}): Promise<Metadata> {
-  const { id } = await params;
-  const user = await getUserForAdmin(id);
-  return { title: user?.name ? `${user.name} (${user.email})` : user?.email ?? "User" };
-}
 import {
   BUTTON_DANGER,
   BUTTON_SECONDARY,
@@ -37,6 +27,16 @@ import {
   userActionProblem,
   type UserAction,
 } from "@/lib/user-admin";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const user = await getUserForAdmin(id);
+  return { title: user?.name ? `${user.name} (${user.email})` : user?.email ?? "User" };
+}
 
 const date = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" });
 const dateTime = new Intl.DateTimeFormat("en-US", {

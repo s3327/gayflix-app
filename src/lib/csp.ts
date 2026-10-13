@@ -33,9 +33,9 @@ export function buildContentSecurityPolicy(
     // Dev additionally needs eval (React's dev tooling); prod never does.
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${dev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
-    // Posters go through next/image (/_next/image on this origin), so no
-    // third-party image host needs to be listed here.
-    "img-src 'self' data: blob:",
+    // Posters go through next/image (/_next/image on this origin), and
+    // episode still thumbnails or external images can load directly.
+    "img-src 'self' data: blob: https:",
     "font-src 'self'",
     // Dev also needs websockets for hot reload.
     `connect-src 'self'${reportOrigin ? ` ${reportOrigin}` : ""}${video}${dev ? " ws: wss:" : ""}`,

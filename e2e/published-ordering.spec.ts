@@ -277,7 +277,7 @@ test.describe("publication timestamp and ordering", () => {
   }) => {
     void consoleProblems;
     const uid = uniqueId();
-    const identicalTime = "2024-05-01T12:00:00.000Z";
+    const identicalTime = new Date(Date.now() + 60000).toISOString();
     const tA = { id: `e2e-order-aaa-${uid}`, title: `E2E Tie AAA ${uid}` };
     const tZ = { id: `e2e-order-zzz-${uid}`, title: `E2E Tie ZZZ ${uid}` };
 

@@ -456,7 +456,7 @@ test.describe("signed in as an admin", () => {
         await page.goto("/admin/dashboard");
         const panel = page.locator("section").filter({ hasText: /needs attention/i });
         await expect(panel.getByText(seriesTitle)).toBeVisible();
-        await expect(panel.getByText(/0 episodes/i)).toBeVisible();
+        await expect(panel.getByText(/0 episodes/i).first()).toBeVisible();
 
         // 4. Click link from triage panel to edit page
         await panel.getByRole("link", { name: seriesTitle }).click();
