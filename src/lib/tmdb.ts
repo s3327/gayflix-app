@@ -77,3 +77,34 @@ export async function findOnTmdb(imdbId: string) {
 export async function getTmdbDetails(kind: TmdbKind, id: number): Promise<unknown> {
   return tmdbGet(`/${kind}/${id}`, { append_to_response: "credits,keywords,external_ids" });
 }
+
+export type TmdbEpisode = {
+  id: number;
+  season_number: number;
+  episode_number: number;
+  name: string;
+  overview?: string;
+  air_date?: string | null;
+  runtime?: number | null;
+  still_path?: string | null;
+};
+
+export type TmdbSeason = {
+  id: number;
+  season_number: number;
+  name: string;
+  overview?: string;
+  air_date?: string | null;
+  poster_path?: string | null;
+  episode_count?: number;
+  episodes?: TmdbEpisode[];
+};
+
+/**
+ * Details of one season of a TV series on TMDB, including its episodes.
+ * Returns null when not found.
+ */
+export async function getTmdbSeasonDetails(tvId: number, seasonNumber: number): Promise<TmdbSeason | null> {
+  const body = await tmdbGet(`/tv/${tvId}/season/${seasonNumber}`);
+  return (body as TmdbSeason) ?? null;
+}

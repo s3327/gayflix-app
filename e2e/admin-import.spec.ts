@@ -217,3 +217,467 @@ test.describe("import", () => {
     await expect(main.getByRole("alert")).toHaveText("TMDB didn't answer. Try again in a minute.");
   });
 });
+
+function uniqueId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+test.describe("TMDB seasons and episodes bulk import", () => {
+  test.use({ httpCredentials: ADMIN_CREDENTIALS, storageState: ADMIN_STATE });
+
+  // Tier 1: Feature Coverage (>=5 cases)
+
+  test("T1-Import-1: opens the import episodes modal from series edit page and displays available seasons and counts", async ({
+    page,
+    consoleProblems,
+  }) => {
+    void consoleProblems;
+    const uid = uniqueId();
+    const seriesId = `e2e-series-import-${uid}`;
+    await sql(
+      `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "tmdbId", "createdAt", "updatedAt")
+       VALUES ($1, 'series', 'draft', $2, 2024, '', ARRAY['Drama'], 'Canada', 'English', 'https://picsum.photos/seed/e2e/500/750', 'tv/990009', now(), now())`,
+      [seriesId, `E2E Series Import ${uid}`]
+    );
+    try {
+      await page.goto(`/admin/library/series/${seriesId}`);
+      const importButton = page.getByRole("button", { name: /import episodes from tmdb|import episodes/i });
+      await expect(importButton).toBeVisible();
+      await importButton.click();
+
+      const modal = page.getByRole("dialog", { name: /import episodes/i });
+      await expect(modal).toBeVisible();
+      await expect(modal.getByText(/season 1/i)).toBeVisible();
+      await expect(modal.getByText(/10 episodes/i)).toBeVisible();
+      await expect(modal.getByText(/season 2/i)).toBeVisible();
+      await expect(modal.getByText(/8 episodes/i)).toBeVisible();
+    } finally {
+      await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
+    }
+  });
+
+  test("T1-Import-2: previews episode details within a season before importing", async ({
+    page,
+    consoleProblems,
+  }) => {
+    void consoleProblems;
+    const uid = uniqueId();
+    const seriesId = `e2e-series-prev-${uid}`;
+    await sql(
+      `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "tmdbId", "createdAt", "updatedAt")
+       VALUES ($1, 'series', 'draft', $2, 2024, '', ARRAY['Drama'], 'Canada', 'English', 'https://picsum.photos/seed/e2e/500/750', 'tv/990009', now(), now())`,
+      [seriesId, `E2E Series Preview ${uid}`]
+    );
+    try {
+      await page.goto(`/admin/library/series/${seriesId}`);
+      await page.getByRole("button", { name: /import episodes/i }).click();
+      const modal = page.getByRole("dialog", { name: /import episodes/i });
+      await expect(modal).toBeVisible();
+
+      // Trigger preview for Season 1
+      const previewTrigger = modal.getByRole("button", { name: /preview season 1|expand season 1|season 1/i }).first();
+      await previewTrigger.click();
+
+      // Verify episode details visible in preview
+      await expect(modal.getByText(/episode 1/i).first()).toBeVisible();
+      await expect(modal.getByText(/episode 2/i).first()).toBeVisible();
+      await expect(modal.getByText(/45 min/i).first()).toBeVisible();
+    } finally {
+      await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
+    }
+  });
+
+  test("T1-Import-3: imports a single season and persists episodes and still thumbnails", async ({
+    page,
+    consoleProblems,
+  }) => {
+    void consoleProblems;
+    const uid = uniqueId();
+    const seriesId = `e2e-series-single-${uid}`;
+    await sql(
+      `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "tmdbId", "createdAt", "updatedAt")
+       VALUES ($1, 'series', 'draft', $2, 2024, '', ARRAY['Drama'], 'Canada', 'English', 'https://picsum.photos/seed/e2e/500/750', 'tv/990009', now(), now())`,
+      [seriesId, `E2E Series Single ${uid}`]
+    );
+    try {
+      await page.goto(`/admin/library/series/${seriesId}`);
+      await page.getByRole("button", { name: /import episodes/i }).click();
+      const modal = page.getByRole("dialog", { name: /import episodes/i });
+      await expect(modal).toBeVisible();
+
+      // Ensure Season 1 is selected and Season 2 is unselected
+      const s1Checkbox = modal.getByRole("checkbox", { name: /season 1/i });
+      const s2Checkbox = modal.getByRole("checkbox", { name: /season 2/i });
+      if (!(await s1Checkbox.isChecked())) await s1Checkbox.check();
+      if (await s2Checkbox.isChecked()) await s2Checkbox.uncheck();
+
+      await modal.getByRole("button", { name: /import/i }).click();
+
+      // Wait for success status or modal close
+      await expect(modal).toHaveCount(0);
+      const eps = await sql<{ id: string; seasonNumber: number; episodeNumber: number; stillUrl: string | null }>(
+        `SELECT id, "seasonNumber", "episodeNumber", "stillUrl" FROM episode WHERE "mediaId" = $1 ORDER BY "episodeNumber"`,
+        [seriesId]
+      );
+      expect(eps.length).toBe(10);
+      expect(eps[0].episodeNumber).toBe(1);
+      expect(eps[0].seasonNumber).toBe(1);
+      expect(eps[0].stillUrl).toMatch(/\/mock-still-s1e1\.jpg/);
+    } finally {
+      await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
+    }
+  });
+
+  test("T1-Import-4: idempotent import preserves manual edits and imports only missing episodes", async ({
+    page,
+    consoleProblems,
+  }) => {
+    void consoleProblems;
+    const uid = uniqueId();
+    const seriesId = `e2e-series-idem-${uid}`;
+    await sql(
+      `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "tmdbId", "createdAt", "updatedAt")
+       VALUES ($1, 'series', 'draft', $2, 2024, '', ARRAY['Drama'], 'Canada', 'English', 'https://picsum.photos/seed/e2e/500/750', 'tv/990009', now(), now())`,
+      [seriesId, `E2E Series Idem ${uid}`]
+    );
+    // Pre-seed Episode 1 with custom manual title and duration
+    await sql(
+      `INSERT INTO episode (id, "mediaId", "seasonNumber", "episodeNumber", title, duration)
+       VALUES ($1, $2, 1, 1, 'Manual Custom Pilot', '52 min')`,
+      [`${seriesId}-season-1-episode-1`, seriesId]
+    );
+    try {
+      await page.goto(`/admin/library/series/${seriesId}`);
+      await page.getByRole("button", { name: /import episodes/i }).click();
+      const modal = page.getByRole("dialog", { name: /import episodes/i });
+      await expect(modal).toBeVisible();
+
+      const s1Checkbox = modal.getByRole("checkbox", { name: /season 1/i });
+      if (!(await s1Checkbox.isChecked())) await s1Checkbox.check();
+      const s2Checkbox = modal.getByRole("checkbox", { name: /season 2/i });
+      if (await s2Checkbox.isChecked()) await s2Checkbox.uncheck();
+
+      await modal.getByRole("button", { name: /import/i }).click();
+      await expect(modal).toHaveCount(0);
+
+      // Verify Episode 1 title and duration were preserved untouched
+      const eps = await sql<{ episodeNumber: number; title: string; duration: string }>(
+        `SELECT "episodeNumber", title, duration FROM episode WHERE "mediaId" = $1 ORDER BY "episodeNumber"`,
+        [seriesId]
+      );
+      expect(eps.length).toBe(10);
+      expect(eps[0].title).toBe("Manual Custom Pilot");
+      expect(eps[0].duration).toBe("52 min");
+      expect(eps[1].title).toBe("Episode 2");
+    } finally {
+      await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
+    }
+  });
+
+  test("T1-Import-5: recomputes series duration upon episode import", async ({
+    page,
+    consoleProblems,
+  }) => {
+    void consoleProblems;
+    const uid = uniqueId();
+    const seriesId = `e2e-series-dur-${uid}`;
+    await sql(
+      `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "tmdbId", "createdAt", "updatedAt")
+       VALUES ($1, 'series', 'draft', $2, 2024, '', ARRAY['Drama'], 'Canada', 'English', 'https://picsum.photos/seed/e2e/500/750', 'tv/990009', now(), now())`,
+      [seriesId, `E2E Series Dur ${uid}`]
+    );
+    try {
+      await page.goto(`/admin/library/series/${seriesId}`);
+      await page.getByRole("button", { name: /import episodes/i }).click();
+      const modal = page.getByRole("dialog", { name: /import episodes/i });
+
+      // Import Season 1 only
+      const s1Checkbox = modal.getByRole("checkbox", { name: /season 1/i });
+      const s2Checkbox = modal.getByRole("checkbox", { name: /season 2/i });
+      if (!(await s1Checkbox.isChecked())) await s1Checkbox.check();
+      if (await s2Checkbox.isChecked()) await s2Checkbox.uncheck();
+      await modal.getByRole("button", { name: /import/i }).click();
+      await expect(modal).toHaveCount(0);
+
+      let [row] = await sql<{ duration: string }>(`SELECT duration FROM media WHERE id = $1`, [seriesId]);
+      expect(row.duration).toMatch(/1 Season/);
+
+      // Now import Season 2
+      await page.getByRole("button", { name: /import episodes/i }).click();
+      const modal2 = page.getByRole("dialog", { name: /import episodes/i });
+      const s2Checkbox2 = modal2.getByRole("checkbox", { name: /season 2/i });
+      if (!(await s2Checkbox2.isChecked())) await s2Checkbox2.check();
+      await modal2.getByRole("button", { name: /import/i }).click();
+      await expect(modal2).toHaveCount(0);
+
+      [row] = await sql<{ duration: string }>(`SELECT duration FROM media WHERE id = $1`, [seriesId]);
+      expect(row.duration).toMatch(/2 Seasons/);
+    } finally {
+      await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
+    }
+  });
+
+  // Tier 2: Boundary & Corner Cases (>=5 cases)
+
+  test("T2-Import-1: handles season with 0 episodes gracefully in modal and import action", async ({
+    page,
+    consoleProblems,
+  }) => {
+    void consoleProblems;
+    const uid = uniqueId();
+    const seriesId = `e2e-series-zero-${uid}`;
+    await sql(
+      `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "tmdbId", "createdAt", "updatedAt")
+       VALUES ($1, 'series', 'draft', $2, 2024, '', ARRAY['Drama'], 'Canada', 'English', 'https://picsum.photos/seed/e2e/500/750', 'tv/990010', now(), now())`,
+      [seriesId, `E2E Series Zero ${uid}`]
+    );
+    try {
+      await page.goto(`/admin/library/series/${seriesId}`);
+      await page.getByRole("button", { name: /import episodes/i }).click();
+      const modal = page.getByRole("dialog", { name: /import episodes/i });
+      await expect(modal.getByText(/0 episodes/i)).toBeVisible();
+
+      const s1 = modal.getByRole("checkbox", { name: /season 1/i });
+      if (!(await s1.isChecked())) await s1.check();
+      const s2 = modal.getByRole("checkbox", { name: /season 2/i });
+      if (await s2.isChecked()) await s2.uncheck();
+
+      await modal.getByRole("button", { name: /import/i }).click();
+      await expect(modal).toHaveCount(0);
+      const eps = await sql(`SELECT id FROM episode WHERE "mediaId" = $1`, [seriesId]);
+      expect(eps).toHaveLength(0);
+    } finally {
+      await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
+    }
+  });
+
+  test("T2-Import-2: disables import submission or warns when no seasons are selected", async ({
+    page,
+    consoleProblems,
+  }) => {
+    void consoleProblems;
+    const uid = uniqueId();
+    const seriesId = `e2e-series-none-${uid}`;
+    await sql(
+      `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "tmdbId", "createdAt", "updatedAt")
+       VALUES ($1, 'series', 'draft', $2, 2024, '', ARRAY['Drama'], 'Canada', 'English', 'https://picsum.photos/seed/e2e/500/750', 'tv/990009', now(), now())`,
+      [seriesId, `E2E Series None ${uid}`]
+    );
+    try {
+      await page.goto(`/admin/library/series/${seriesId}`);
+      await page.getByRole("button", { name: /import episodes/i }).click();
+      const modal = page.getByRole("dialog", { name: /import episodes/i });
+
+      // Uncheck all season checkboxes
+      await expect(modal.getByRole("checkbox").first()).toBeVisible();
+      const checkboxes = modal.getByRole("checkbox");
+      const count = await checkboxes.count();
+      for (let i = 0; i < count; i++) {
+        if (await checkboxes.nth(i).isChecked()) await checkboxes.nth(i).uncheck();
+      }
+
+      const submitButton = modal.getByRole("button", { name: /import/i });
+      const isDisabled = await submitButton.isDisabled();
+      if (!isDisabled) {
+        await submitButton.click();
+        await expect(modal.getByText(/select at least one season/i)).toBeVisible();
+      } else {
+        expect(isDisabled).toBe(true);
+      }
+    } finally {
+      await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
+    }
+  });
+
+  test("T2-Import-3: handles TMDB 503 error on season fetch gracefully", async ({
+    page,
+    consoleProblems,
+  }) => {
+    void consoleProblems;
+    const uid = uniqueId();
+    const seriesId = `e2e-series-down-${uid}`;
+    await sql(
+      `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "tmdbId", "createdAt", "updatedAt")
+       VALUES ($1, 'series', 'draft', $2, 2024, '', ARRAY['Drama'], 'Canada', 'English', 'https://picsum.photos/seed/e2e/500/750', 'tv/990099', now(), now())`,
+      [seriesId, `E2E Series Down ${uid}`]
+    );
+    try {
+      await page.goto(`/admin/library/series/${seriesId}`);
+      await page.getByRole("button", { name: /import episodes/i }).click();
+      const modal = page.getByRole("dialog", { name: /import episodes/i });
+      await expect(
+        modal.getByText(/tmdb didn't answer|tmdb season down|error loading seasons/i)
+      ).toBeVisible();
+    } finally {
+      await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
+    }
+  });
+
+  test("T2-Import-4: handles episodes with null still_path falling back cleanly", async ({
+    page,
+    consoleProblems,
+  }) => {
+    void consoleProblems;
+    const uid = uniqueId();
+    const seriesId = `e2e-series-nullstill-${uid}`;
+    await sql(
+      `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "tmdbId", "createdAt", "updatedAt")
+       VALUES ($1, 'series', 'draft', $2, 2024, '', ARRAY['Drama'], 'Canada', 'English', 'https://picsum.photos/seed/e2e/500/750', 'tv/990011', now(), now())`,
+      [seriesId, `E2E Series Null Still ${uid}`]
+    );
+    try {
+      await page.goto(`/admin/library/series/${seriesId}`);
+      await page.getByRole("button", { name: /import episodes/i }).click();
+      const modal = page.getByRole("dialog", { name: /import episodes/i });
+      await modal.getByRole("button", { name: /import/i }).click();
+      await expect(modal).toHaveCount(0);
+
+      const eps = await sql<{ episodeNumber: number; stillUrl: string | null }>(
+        `SELECT "episodeNumber", "stillUrl" FROM episode WHERE "mediaId" = $1 ORDER BY "episodeNumber"`,
+        [seriesId]
+      );
+      expect(eps.length).toBe(3);
+      // Episode 2 has null still_path in stub
+      expect(eps[1].stillUrl).toBeNull();
+    } finally {
+      await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
+    }
+  });
+
+  test("T2-Import-5: preserves special characters in episode names and overviews", async ({
+    page,
+    consoleProblems,
+  }) => {
+    void consoleProblems;
+    const uid = uniqueId();
+    const seriesId = `e2e-series-spec-${uid}`;
+    await sql(
+      `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "tmdbId", "createdAt", "updatedAt")
+       VALUES ($1, 'series', 'draft', $2, 2024, '', ARRAY['Drama'], 'Canada', 'English', 'https://picsum.photos/seed/e2e/500/750', 'tv/990011', now(), now())`,
+      [seriesId, `E2E Series Spec ${uid}`]
+    );
+    try {
+      await page.goto(`/admin/library/series/${seriesId}`);
+      await page.getByRole("button", { name: /import episodes/i }).click();
+      const modal = page.getByRole("dialog", { name: /import episodes/i });
+      await modal.getByRole("button", { name: /import/i }).click();
+      await expect(modal).toHaveCount(0);
+
+      const [ep1] = await sql<{ title: string }>(
+        `SELECT title FROM episode WHERE "mediaId" = $1 AND "episodeNumber" = 1`,
+        [seriesId]
+      );
+      expect(ep1.title).toBe("Pilot & Ep 1 <Special>");
+    } finally {
+      await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
+    }
+  });
+
+  // Tier 3: Pairwise Interactions
+
+  test("T3-Import-1: series without TMDB ID does not show import episodes button", async ({
+    page,
+    consoleProblems,
+  }) => {
+    void consoleProblems;
+    const uid = uniqueId();
+    const seriesId = `e2e-series-notmdb-${uid}`;
+    await sql(
+      `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "createdAt", "updatedAt")
+       VALUES ($1, 'series', 'draft', $2, 2024, '', ARRAY['Drama'], 'Canada', 'English', 'https://picsum.photos/seed/e2e/500/750', now(), now())`,
+      [seriesId, `E2E Manual Series ${uid}`]
+    );
+    try {
+      await page.goto(`/admin/library/series/${seriesId}`);
+      const btn = page.getByRole("button", { name: /import episodes from tmdb/i });
+      await expect(btn).toHaveCount(0);
+    } finally {
+      await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
+    }
+  });
+
+  test("T3-Import-2: imported episodes immediately reflect on public series page", async ({
+    page,
+    consoleProblems,
+  }) => {
+    void consoleProblems;
+    const uid = uniqueId();
+    const seriesId = `e2e-series-pub-${uid}`;
+    await sql(
+      `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "tmdbId", "createdAt", "updatedAt")
+       VALUES ($1, 'series', 'published', $2, 2024, '', ARRAY['Drama'], 'Canada', 'English', 'https://picsum.photos/seed/e2e/500/750', 'tv/990009', now(), now())`,
+      [seriesId, `E2E Series Public ${uid}`]
+    );
+    try {
+      await page.goto(`/admin/library/series/${seriesId}`);
+      await page.getByRole("button", { name: /import episodes/i }).click();
+      const modal = page.getByRole("dialog", { name: /import episodes/i });
+      const s1 = modal.getByRole("checkbox", { name: /season 1/i });
+      if (!(await s1.isChecked())) await s1.check();
+      const s2 = modal.getByRole("checkbox", { name: /season 2/i });
+      if (await s2.isChecked()) await s2.uncheck();
+      await modal.getByRole("button", { name: /import/i }).click();
+      await expect(modal).toHaveCount(0);
+
+      // Check public page
+      await page.goto(`/series/${seriesId}`);
+      await expect(page.getByRole("heading", { level: 1 })).toContainText(`E2E Series Public ${uid}`);
+      await expect(page.getByText(/episode 1/i).first()).toBeVisible();
+      await expect(page.getByText(/episode 10/i).first()).toBeVisible();
+    } finally {
+      await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
+    }
+  });
+
+  // Tier 4: End-to-End Real-World Workflow
+
+  test("T4-Import-1: complete multi-season ingestion workflow", async ({
+    page,
+    consoleProblems,
+  }) => {
+    void consoleProblems;
+    const title = "E2E Series Import";
+    const tmdbId = "tv/990009";
+    try {
+      // 1. Search on import page
+      await page.goto("/admin/import");
+      const main = page.locator("main");
+      await main.getByLabel("Title", { exact: true }).fill(title);
+      await main.getByLabel("Media type").selectOption("series");
+      await main.getByRole("button", { name: "Search" }).click();
+      await expect(main.getByText("1 result on TMDB")).toBeVisible();
+
+      // 2. Import series draft
+      await card(page, title).getByRole("button", { name: /import e2e series import/i }).click();
+      await expect(page).toHaveURL(/\/admin\/library\/series\/e2e-series-import(-\d+)?\?imported=1$/);
+
+      // Extract generated series ID from URL
+      const url = new URL(page.url());
+      const seriesId = url.pathname.split("/").pop() ?? "";
+
+      // 3. Open TMDB import episodes modal
+      await page.getByRole("button", { name: /import episodes/i }).click();
+      const modal = page.getByRole("dialog", { name: /import episodes/i });
+      await expect(modal).toBeVisible();
+
+      // 4. Select both Season 1 and Season 2
+      const s1 = modal.getByRole("checkbox", { name: /season 1/i });
+      const s2 = modal.getByRole("checkbox", { name: /season 2/i });
+      if (!(await s1.isChecked())) await s1.check();
+      if (!(await s2.isChecked())) await s2.check();
+
+      // 5. Submit import
+      await modal.getByRole("button", { name: /import/i }).click();
+      await expect(modal).toHaveCount(0);
+
+      // 6. Verify database state
+      const eps = await sql(`SELECT id FROM episode WHERE "mediaId" = $1`, [seriesId]);
+      expect(eps).toHaveLength(18); // 10 from S1 + 8 from S2
+      const [media] = await sql<{ duration: string }>(`SELECT duration FROM media WHERE id = $1`, [seriesId]);
+      expect(media.duration).toMatch(/2 Seasons/);
+    } finally {
+      await cleanUp(tmdbId);
+    }
+  });
+});
+

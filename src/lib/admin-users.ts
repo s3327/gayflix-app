@@ -5,6 +5,7 @@ import { pageWindow } from "@/lib/paginate";
 import { escapeLike, normalizeQuery } from "@/lib/search";
 import { requireAdmin } from "@/lib/session";
 import { isUserId, type UserFilter } from "@/lib/user-admin";
+import { trendingSince } from "@/lib/views";
 
 /*
  * Reads for the admin Users page. Server code only, admins only (each
@@ -121,7 +122,7 @@ export async function getUserForAdmin(id: string) {
 export async function getUserOverview() {
   await requireAdmin();
   await connection();
-  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const weekAgo = new Date(trendingSince(new Date()) + "T00:00:00.000Z");
   const [total, joinedThisWeek] = await Promise.all([
     db.user.count(),
     db.user.count({ where: { createdAt: { gte: weekAgo } } }),

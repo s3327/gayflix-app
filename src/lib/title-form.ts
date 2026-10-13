@@ -327,9 +327,13 @@ export function movieDuration(minutes: number) {
   return hours > 0 ? `${hours}h ${String(rest).padStart(2, "0")}m` : `${rest}m`;
 }
 
-/** Back from "1h 52m" (or "48m", "2h") to minutes, or null. */
+/** Back from "1h 52m" (or "48m", "2h", "90 min") to minutes, or null. */
 export function movieDurationMinutes(duration: string): number | null {
-  const match = /^(?:(\d+)h)?\s*(?:(\d+)m)?$/.exec(duration.trim());
+  const trimmed = duration.trim();
+  if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  const minMatch = /^(\d+)\s*min$/i.exec(trimmed);
+  if (minMatch) return Number(minMatch[1]);
+  const match = /^(?:(\d+)h)?\s*(?:(\d+)m)?$/.exec(trimmed);
   if (!match || (!match[1] && !match[2])) return null;
   return Number(match[1] ?? 0) * 60 + Number(match[2] ?? 0);
 }

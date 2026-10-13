@@ -80,6 +80,7 @@ export async function insertTitle(
           id,
           type,
           ...titleData(type, input),
+          publishedAt: input.status === "published" ? new Date() : null,
           // A series' seasons come from its episodes, and it has none yet.
           duration: type === "movie" ? movieDuration(input.runtimeMinutes!) : seriesDuration(0),
           gradient: gradientFor(id),

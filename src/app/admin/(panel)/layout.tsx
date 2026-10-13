@@ -1,9 +1,17 @@
+import type { Metadata } from "next";
 import Sidebar from "@/components/admin/Sidebar";
 import AdminFlashBanner from "@/components/admin/AdminFlashBanner";
 import SessionWarningBanner from "@/components/admin/SessionWarningBanner";
 import { ADMIN_SESSION_MAX_AGE_MS } from "@/lib/admin-access";
 import { getAdminFlash } from "@/lib/admin-flash";
 import { requireAdmin } from "@/lib/session";
+
+export const metadata: Metadata = {
+  title: {
+    template: "%s · Gayflix Admin",
+    default: "Gayflix Admin",
+  },
+};
 
 /**
  * Wraps every "real" admin page (dashboard, import, library, upload,

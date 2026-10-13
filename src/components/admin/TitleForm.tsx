@@ -36,6 +36,7 @@ export default function TitleForm({
   currentHero,
   currentTitleId,
   initialUpdatedAt,
+  existingTitles,
 }: {
   type: MediaType;
   action: Action;
@@ -57,6 +58,8 @@ export default function TitleForm({
   currentTitleId?: string;
   /** Last updated timestamp for optimistic concurrency / save conflict check */
   initialUpdatedAt?: Date | string | null;
+  /** Existing titles in the library to check for duplicates */
+  existingTitles?: string[];
 }) {
   const [state, formAction, pending] = useActionState(action, {});
   const values = { ...initialValues, ...state.values };
@@ -69,7 +72,14 @@ export default function TitleForm({
   const linkHosts = imageHosts.filter((host) => host !== uploadHost).join(", ");
   const formRef = useRef<HTMLFormElement>(null);
   const [dirty, setDirty] = useState(false);
+  const [enteredTitle, setEnteredTitle] = useState(values.title || "");
   const submittedRef = useRef(false);
+
+  const trimmedTitle = enteredTitle.trim().toLowerCase();
+  const duplicateMatch =
+    existingTitles && trimmedTitle
+      ? existingTitles.find((t) => t.trim().toLowerCase() === trimmedTitle)
+      : null;
 
   // Warn on unsaved changes when leaving
   useEffect(() => {
@@ -133,6 +143,14 @@ export default function TitleForm({
           name="title"
           label="Title"
           defaultValue={values.title}
+          onChange={(e) => setEnteredTitle(e.target.value)}
+          hint={
+            duplicateMatch ? (
+              <span className="font-medium text-status-warning">
+                A title named “{duplicateMatch}” already exists.
+              </span>
+            ) : undefined
+          }
           error={errors.title}
           maxLength={200}
           className="sm:col-span-2"

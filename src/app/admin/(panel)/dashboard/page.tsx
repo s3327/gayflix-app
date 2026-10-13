@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Flag } from "lucide-react";
 import Badge from "@/components/Badge";
+import NeedsAttentionPanel from "@/components/admin/NeedsAttentionPanel";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -103,6 +104,8 @@ export default async function DashboardPage() {
           detail={`${formatCount(accounts.joinedThisWeek)} joined in the ${week}`}
         />
       </ul>
+
+      <NeedsAttentionPanel />
 
       <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Panel title={`Most played, ${week}`}>
