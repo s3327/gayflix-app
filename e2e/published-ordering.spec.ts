@@ -536,6 +536,8 @@ test.describe("publication timestamp and ordering", () => {
       await page.goto("/admin/trash");
       const item = page.getByRole("listitem").filter({ hasText: uid });
       await item.getByRole("button", { name: /^Restore/ }).click();
+      await expect(page.getByText("Title restored.")).toBeVisible();
+      await expect(item).toHaveCount(0);
 
       // 8. Verify title restored with preserved publishedAt and reappears on /new-releases
       await page.goto("/new-releases");
