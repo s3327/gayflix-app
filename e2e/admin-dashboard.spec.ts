@@ -509,8 +509,8 @@ test.describe("signed in as an admin", () => {
       for (let dayOffset = 0; dayOffset < 10; dayOffset++) {
         await sql(
           `INSERT INTO media_view ("mediaId", viewer, day)
-           VALUES ($1, 'v-pub-' || $3 || '-' || $4, (now() AT TIME ZONE 'UTC')::date - $4),
-                  ($2, 'v-drf-' || $3 || '-' || $4, (now() AT TIME ZONE 'UTC')::date - $4)`,
+           VALUES ($1, 'v-pub-' || $3 || '-' || $4, (now() AT TIME ZONE 'UTC')::date - $4::integer),
+                  ($2, 'v-drf-' || $3 || '-' || $4, (now() AT TIME ZONE 'UTC')::date - $4::integer)`,
           [pubId, draftId, uid, dayOffset]
         );
       }

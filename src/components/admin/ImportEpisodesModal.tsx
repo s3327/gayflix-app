@@ -195,6 +195,7 @@ export default function ImportEpisodesModal({
 
                           <button
                             type="button"
+                            aria-label={`Preview ${season.name || `Season ${season.season_number}`}`}
                             onClick={() => togglePreview(season.season_number)}
                             disabled={loadingPreview === season.season_number}
                             className="text-xs text-ink-brand hover:underline disabled:opacity-50"
@@ -203,7 +204,7 @@ export default function ImportEpisodesModal({
                               ? "Loading..."
                               : isExpanded
                               ? "Hide preview"
-                              : `Preview ${season.name || `Season ${season.season_number}`}`}
+                              : "Preview"}
                           </button>
                         </div>
 

@@ -22,7 +22,8 @@ export default async function NeedsAttentionPanel() {
           videoSources: { none: { enabled: true } },
         },
         select: { id: true, title: true, type: true },
-        take: 20,
+        orderBy: { createdAt: "desc" },
+        take: 50,
       }),
       db.media.findMany({
         where: {
@@ -32,7 +33,8 @@ export default async function NeedsAttentionPanel() {
           episodes: { none: {} },
         },
         select: { id: true, title: true, type: true },
-        take: 20,
+        orderBy: { createdAt: "desc" },
+        take: 50,
       }),
       db.media.findMany({
         where: {
@@ -41,7 +43,8 @@ export default async function NeedsAttentionPanel() {
           OR: [{ posterUrl: "/brand/no-poster.jpg" }, { posterUrl: "" }],
         },
         select: { id: true, title: true, type: true },
-        take: 20,
+        orderBy: { createdAt: "desc" },
+        take: 50,
       }),
       db.media.findFirst({
         where: {

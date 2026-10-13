@@ -137,7 +137,9 @@ export default function TitleDetail({
                 episodes.length > 0 && (
                   <>
                     <dt className="text-ink-muted">Seasons</dt>
-                    <dd className="text-ink-primary">{seasonCount}</dd>
+                    <dd className="text-ink-primary">
+                      {seasonCount === 1 ? "1 Season" : `${seasonCount} Seasons`}
+                    </dd>
 
                     <dt className="text-ink-muted">Episodes</dt>
                     <dd className="text-ink-primary">{episodes.length}</dd>
