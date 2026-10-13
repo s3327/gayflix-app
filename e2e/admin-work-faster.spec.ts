@@ -172,6 +172,7 @@ test.describe("Phase 3: Work Faster", () => {
 
       // Click "Restore checked"
       await page.getByRole("button", { name: "Restore checked" }).click();
+      await expect(row).toHaveCount(0);
 
       // Title should be restored (trashedAt = null)
       const [restored] = await sql<{ trashedAt: Date | null }>(

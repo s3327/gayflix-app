@@ -104,7 +104,7 @@ export default async function TrashPage({
           {query ? "Nothing matches that search in trash." : "The trash is empty."}
         </p>
       ) : (
-        <form className="mt-6">
+        <form action={bulkRestoreTrash} className="mt-6">
           {/* Bulk Actions Header */}
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">

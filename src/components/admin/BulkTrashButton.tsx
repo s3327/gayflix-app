@@ -21,7 +21,7 @@ export default function BulkTrashButton({
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     const form = e.currentTarget.form;
-    const checked = form ? form.querySelectorAll<HTMLInputElement>('input[name="id"]:checked') : [];
+    const checked = form ? form.querySelectorAll<HTMLInputElement>('input[name="ids"]:checked') : [];
     if (checked.length > 1) {
       setCount(checked.length);
       setIsOpen(true);
