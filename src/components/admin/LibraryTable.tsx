@@ -148,7 +148,9 @@ export default function LibraryTable({
 
         {/* Desktop & Tablet Table (md and up) */}
         <div className="mx-6 overflow-x-auto rounded-card border border-border-subtle sm:mx-10">
-          <table className="w-full table-fixed text-sm">
+          <table
+            className={`w-full table-fixed text-sm ${showEpisodes ? "min-w-[1000px]" : "min-w-[840px]"}`}
+          >
             <thead>
               <tr className="border-b border-border-subtle bg-bg-surface text-xs font-semibold uppercase tracking-wide text-ink-muted">
                 <th className="w-10 px-4 py-3 text-left">

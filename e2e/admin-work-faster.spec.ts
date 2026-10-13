@@ -113,6 +113,8 @@ test.describe("Phase 3: Work Faster", () => {
 
   test("command palette Cmd+K and shortcuts modal '?'", async ({ page }) => {
     await page.goto("/admin/dashboard");
+    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+    await page.locator("[data-command-menu-ready]").waitFor();
 
     // 1. Press '?' to trigger shortcuts dialog
     await page.keyboard.press("?");
@@ -193,7 +195,7 @@ test.describe("Phase 3: Work Faster", () => {
     };
     try {
       await sql(
-        `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "createdAt", "updatedAt", cast, tags)
+        `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "createdAt", "updatedAt", "cast", "tags")
          VALUES ($1, 'movie', 'draft', $2, 2024, '2h 00m', ARRAY['Sci-Fi'], 'USA', 'English', $3, now(), now(), ARRAY[]::text[], ARRAY[]::text[])`,
         [draftTitle.id, draftTitle.title, POSTER]
       );

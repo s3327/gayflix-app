@@ -377,6 +377,7 @@ export async function quickUpdateTitle({
   duration,
   genres,
   tagline,
+  rating,
 }: {
   id: string;
   title: string;
@@ -385,6 +386,7 @@ export async function quickUpdateTitle({
   duration?: string;
   genres?: string[];
   tagline?: string | null;
+  rating?: number | null;
 }): Promise<{ ok: boolean; message?: string }> {
   await requireAdmin();
   if (!isMediaId(id)) return { ok: false, message: "Invalid title ID" };
@@ -406,6 +408,7 @@ export async function quickUpdateTitle({
       ...(duration ? { duration } : {}),
       ...(genres ? { genres } : {}),
       ...(tagline !== undefined ? { tagline } : {}),
+      ...(rating !== undefined ? { rating } : {}),
       ...(shouldSetPublishedAt ? { publishedAt: new Date() } : {}),
     },
   });

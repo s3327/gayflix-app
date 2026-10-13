@@ -25,6 +25,7 @@ export default function QuickEditDrawer({
   const [duration, setDuration] = useState(item?.duration ?? "");
   const [genres, setGenres] = useState(item?.genres?.join(", ") ?? "");
   const [tagline, setTagline] = useState(item?.tagline ?? "");
+  const [rating, setRating] = useState(item?.rating != null ? String(item.rating) : "");
 
   if (!item) return null;
 
@@ -43,6 +44,12 @@ export default function QuickEditDrawer({
       return;
     }
 
+    const parsedRating = rating.trim() ? Number(rating) : undefined;
+    if (parsedRating !== undefined && (isNaN(parsedRating) || parsedRating < 0 || parsedRating > 5)) {
+      setError("Rating must be between 0.0 and 5.0.");
+      return;
+    }
+
     startTransition(async () => {
       const parsedGenres = genres
         .split(",")
@@ -57,6 +64,7 @@ export default function QuickEditDrawer({
         duration: duration.trim() || undefined,
         genres: parsedGenres.length > 0 ? parsedGenres : undefined,
         tagline: tagline.trim() || null,
+        rating: parsedRating,
       });
 
       if (!res.ok) {
@@ -70,6 +78,7 @@ export default function QuickEditDrawer({
           duration: duration.trim() || undefined,
           genres: parsedGenres,
           tagline: tagline.trim() || null,
+          rating: parsedRating,
         });
         setTimeout(() => {
           onClose();
@@ -82,7 +91,7 @@ export default function QuickEditDrawer({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`Quick Edit ${item.title}`}
+      aria-label="Quick edit title"
       className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs animate-in fade-in duration-150"
       onClick={onClose}
     >
@@ -187,14 +196,32 @@ export default function QuickEditDrawer({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase text-ink-secondary mb-1">
+            <label htmlFor="quick-edit-tagline" className="block text-xs font-semibold uppercase text-ink-secondary mb-1">
               Tagline
             </label>
             <input
+              id="quick-edit-tagline"
               type="text"
               placeholder="Catchphrase or short logline"
               value={tagline}
               onChange={(e) => setTagline(e.target.value)}
+              className="w-full rounded-md border border-border-subtle bg-bg-elevated px-3 py-2 text-sm text-ink-primary focus:border-brand-pink focus:outline-hidden"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="quick-edit-rating" className="block text-xs font-semibold uppercase text-ink-secondary mb-1">
+              Rating (0.0 to 5.0)
+            </label>
+            <input
+              id="quick-edit-rating"
+              type="number"
+              step="0.1"
+              min="0"
+              max="5"
+              placeholder="e.g. 4.8"
+              value={rating}
+              onChange={(e) => setRating(e.target.value)}
               className="w-full rounded-md border border-border-subtle bg-bg-elevated px-3 py-2 text-sm text-ink-primary focus:border-brand-pink focus:outline-hidden"
             />
           </div>

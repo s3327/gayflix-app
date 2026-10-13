@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useTransition } from "react";
+import { useEffect, useState, useRef, useTransition, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -47,6 +47,8 @@ const STATIC_ACTIONS: SearchResultItem[] = [
   { id: "a-exp-r", title: "Export Reports CSV", href: "/api/admin/export?type=reports", category: "Actions" },
 ];
 
+const emptySubscribe = () => () => {};
+
 export default function CommandMenu() {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -79,6 +81,12 @@ export default function CommandMenu() {
     }
   };
 
+  const isMounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+
   // Keyboard navigation & sequences
   useEffect(() => {
     let lastKey = "";
@@ -106,8 +114,8 @@ export default function CommandMenu() {
         return;
       }
 
-      // '?' for Shortcuts modal
-      if (!isInput && e.key === "?" && !isOpen) {
+      // '?' for Shortcuts modal (matches ?, Shift+/, or Shift+Slash)
+      if (!isInput && (e.key === "?" || (e.key === "/" && e.shiftKey) || (e.code === "Slash" && e.shiftKey)) && !isOpen) {
         e.preventDefault();
         setShowShortcuts((prev) => !prev);
         return;
@@ -264,6 +272,7 @@ export default function CommandMenu() {
 
   return (
     <>
+      {isMounted && <div data-command-menu-ready className="sr-only" aria-hidden="true" />}
       {/* Command Palette Modal */}
       {isOpen && (
         <div
