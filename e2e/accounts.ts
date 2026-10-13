@@ -71,7 +71,7 @@ export async function createVerifiedAccount(request: APIRequestContext, account:
 }
 
 /** Runs one statement against the test database; returns the rows it selects. */
-export async function sql<Row = Record<string, unknown>>(query: string, params: unknown[]) {
+export async function sql<Row = Record<string, unknown>>(query: string, params: unknown[] = []) {
   const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   try {

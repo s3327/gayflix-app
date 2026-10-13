@@ -33,6 +33,13 @@ export async function requireAdmin() {
   const session = await getSession();
   const access = adminAccess(session);
   if (access === "setup-2fa") redirect("/admin/setup-2fa");
-  if (access !== "ok") redirect("/admin/login");
+  if (access !== "ok") {
+    const h = await headers();
+    const pathname = h.get("x-pathname");
+    if (pathname && pathname.startsWith("/admin") && !pathname.startsWith("/admin/login")) {
+      redirect(`/admin/login?next=${encodeURIComponent(pathname)}`);
+    }
+    redirect("/admin/login");
+  }
   return session!;
 }

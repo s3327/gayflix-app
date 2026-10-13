@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Pencil, Eye, EyeOff, Trash2 } from "lucide-react";
 import Badge from "@/components/Badge";
+import BulkTrashButton from "@/components/admin/BulkTrashButton";
 import SelectAllCheckbox from "@/components/admin/SelectAllCheckbox";
 import {
   setSelectedStatus,
@@ -32,7 +33,7 @@ export default function LibraryTable({
         <span className="text-sm text-ink-muted">With the checked rows:</span>
         <BulkButton formAction={setSelectedStatus.bind(null, "published")}>Publish</BulkButton>
         <BulkButton formAction={setSelectedStatus.bind(null, "draft")}>Unpublish</BulkButton>
-        <BulkButton formAction={trashSelected}>Move to trash</BulkButton>
+        <BulkTrashButton formAction={trashSelected}>Move to trash</BulkTrashButton>
       </div>
 
       {/* On a narrow screen the table scrolls sideways on its own, as the

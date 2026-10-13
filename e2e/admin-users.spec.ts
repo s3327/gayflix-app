@@ -36,9 +36,9 @@ test.describe("regular users", () => {
 
   test("can't reach the Users page", async ({ page }) => {
     await page.goto("/admin/users");
-    await expect(page).toHaveURL(/\/admin\/login$/);
+    await expect(page).toHaveURL(/\/admin\/login(\?.*)?$/);
     await page.goto(`/admin/users/${await userId(accounts().admin.email)}`);
-    await expect(page).toHaveURL(/\/admin\/login$/);
+    await expect(page).toHaveURL(/\/admin\/login(\?.*)?$/);
   });
 });
 
@@ -116,6 +116,9 @@ test.describe("signed in as an admin", () => {
     await page.getByLabel("Reason").fill("e2e: spam in reports");
     await page.getByLabel("How long").selectOption({ label: "7 days" });
     await page.getByRole("button", { name: "Ban", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Ban this account?" });
+    await expect(dialog).toContainText(user.email);
+    await dialog.getByRole("button", { name: "Ban" }).click();
     const ban = page.getByRole("region", { name: "Ban" });
     await expect(ban).toContainText(/Banned until .+ UTC\./);
     await expect(ban).toContainText("Reason: e2e: spam in reports");
@@ -136,6 +139,8 @@ test.describe("signed in as an admin", () => {
     const { user, userPage } = await signedInUser(browser, request, "signout");
     await page.goto(`/admin/users/${await userId(user.email)}`);
     await page.getByRole("button", { name: "Sign out everywhere" }).click();
+    const dialog = page.getByRole("dialog", { name: "Sign out everywhere?" });
+    await dialog.getByRole("button", { name: "Sign out everywhere" }).click();
     await expect(page.getByText("Not signed in anywhere.")).toBeVisible();
     await expectSignedOut(userPage);
     // It can sign straight back in.

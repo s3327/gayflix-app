@@ -18,7 +18,7 @@ test.describe("regular users", () => {
 
   test("can't reach the dashboard", async ({ page }) => {
     await page.goto("/admin/dashboard");
-    await expect(page).toHaveURL(/\/admin\/login$/);
+    await expect(page).toHaveURL(/\/admin\/login(\?.*)?$/);
   });
 });
 

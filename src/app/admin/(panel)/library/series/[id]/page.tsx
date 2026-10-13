@@ -1,6 +1,18 @@
+import type { Metadata } from "next";
 import TitleEditPage from "@/components/admin/TitleEditPage";
+import { getTitleForEdit } from "@/lib/catalog";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 import { requireAdmin } from "@/lib/session";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const title = await getTitleForEdit(id);
+  return { title: title?.title ?? "Series" };
+}
 
 export default async function EditSeriesPage({
   params,

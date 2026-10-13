@@ -170,6 +170,19 @@ async function trendingRows(limit: number) {
 /** The home page hero. */
 export type Featured = Media & { synopsis: string; backdropUrl?: string };
 
+/** The currently active home page hero (the featured published title or fallback newest). */
+export async function getLiveHero(): Promise<{ id: string; title: string; type: MediaType } | null> {
+  await connection();
+  const heroSelect = { id: true, title: true, type: true } satisfies Prisma.MediaSelect;
+  const featured = await db.media.findFirst({
+    where: { ...PUBLISHED, featured: true },
+    orderBy: ORDER.updated,
+    select: heroSelect,
+  });
+  if (featured) return featured;
+  return db.media.findFirst({ where: PUBLISHED, orderBy: ORDER.added, select: heroSelect });
+}
+
 /**
  * The home page: the hero (the most recently updated featured title, or
  * else the newest one) and the Trending Now, New Releases, Movies and

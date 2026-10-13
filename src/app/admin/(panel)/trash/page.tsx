@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import ConfirmSubmitButton from "@/components/admin/ConfirmSubmitButton";
 import { BUTTON_DANGER, BUTTON_SECONDARY } from "@/components/admin/FormFields";
+
+export const metadata: Metadata = {
+  title: "Trash",
+};
 import Pagination from "@/components/Pagination";
 import { deleteTitle, restoreTitle } from "@/lib/admin-catalog-actions";
 import { listTrash } from "@/lib/catalog";

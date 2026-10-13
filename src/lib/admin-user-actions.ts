@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { setAdminFlash } from "@/lib/admin-flash";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
@@ -39,6 +40,7 @@ export async function makeAdmin(userId: unknown): Promise<void> {
   const user = await allowedTarget("make-admin", userId);
   await auth.api.setRole({ body: { userId: user.id, role: "admin" }, headers: await headers() });
   refresh(user.id);
+  await setAdminFlash({ message: "Admin access granted." });
 }
 
 /** Back to a regular account; its sessions keep working on the site. */
@@ -46,6 +48,7 @@ export async function removeAdmin(userId: unknown): Promise<void> {
   const user = await allowedTarget("remove-admin", userId);
   await auth.api.setRole({ body: { userId: user.id, role: "user" }, headers: await headers() });
   refresh(user.id);
+  await setAdminFlash({ message: "Admin access removed." });
 }
 
 /** Signs the account out everywhere and stops it signing in, for good or for a while. */
@@ -58,12 +61,14 @@ export async function banUser(userId: unknown, form: FormData): Promise<void> {
     headers: await headers(),
   });
   refresh(user.id);
+  await setAdminFlash({ message: "Account banned." });
 }
 
 export async function unbanUser(userId: unknown): Promise<void> {
   const user = await allowedTarget("unban", userId);
   await auth.api.unbanUser({ body: { userId: user.id }, headers: await headers() });
   refresh(user.id);
+  await setAdminFlash({ message: "Account unbanned." });
 }
 
 /** Ends every session the account has; it can sign in again. */
@@ -71,4 +76,5 @@ export async function signOutEverywhere(userId: unknown): Promise<void> {
   const user = await allowedTarget("sign-out", userId);
   await auth.api.revokeUserSessions({ body: { userId: user.id }, headers: await headers() });
   refresh(user.id);
+  await setAdminFlash({ message: "Signed out of all devices." });
 }

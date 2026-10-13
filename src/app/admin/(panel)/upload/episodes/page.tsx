@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { BUTTON_PRIMARY } from "@/components/admin/FormFields";
 import EpisodeForm from "@/components/admin/EpisodeForm";
@@ -6,6 +7,10 @@ import { getLastEpisode, listSeriesChoices } from "@/lib/catalog";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 import { requireAdmin } from "@/lib/session";
 import type { EpisodeValues } from "@/lib/title-form";
+
+export const metadata: Metadata = {
+  title: "Add Episode",
+};
 
 /**
  * Adds episodes to a series. ?series=<id> (the "Add an episode" button on

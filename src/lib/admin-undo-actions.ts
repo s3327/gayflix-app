@@ -1,0 +1,61 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { setAdminFlash, type AdminFlashUndo } from "@/lib/admin-flash";
+import { restoreTitle, updateMediaStatusBatch } from "@/lib/admin-catalog-actions";
+import { reopenReport, resolveReport } from "@/lib/admin-report-actions";
+import { requireAdmin } from "@/lib/session";
+
+/**
+ * Server action to execute reversible admin actions triggered from the Undo banner (A7).
+ */
+export async function performUndo(
+  action: AdminFlashUndo["action"],
+  ids: string[]
+): Promise<void> {
+  await requireAdmin();
+  if (!ids || ids.length === 0) return;
+
+  switch (action) {
+    case "restore_media": {
+      for (const id of ids) {
+        await restoreTitle(id);
+      }
+      await setAdminFlash({
+        message: `${ids.length === 1 ? "Title" : `${ids.length} titles`} restored.`,
+      });
+      break;
+    }
+    case "publish_media": {
+      await updateMediaStatusBatch(ids, "published");
+      await setAdminFlash({
+        message: `${ids.length === 1 ? "Title" : `${ids.length} titles`} published.`,
+      });
+      break;
+    }
+    case "unpublish_media": {
+      await updateMediaStatusBatch(ids, "draft");
+      await setAdminFlash({
+        message: `${ids.length === 1 ? "Title" : `${ids.length} titles`} unpublished.`,
+      });
+      break;
+    }
+    case "resolve_report": {
+      for (const id of ids) {
+        await resolveReport(id);
+      }
+      await setAdminFlash({ message: "Report resolved." });
+      break;
+    }
+    case "reopen_report": {
+      for (const id of ids) {
+        await reopenReport(id);
+      }
+      await setAdminFlash({ message: "Report reopened." });
+      break;
+    }
+  }
+
+  revalidatePath("/admin", "layout");
+}
+

@@ -20,12 +20,14 @@ export default function EpisodeForm({
   initialValues,
   seriesChoices,
   submitLabel,
+  initialUpdatedAt,
 }: {
   action: Action;
   initialValues: EpisodeValues;
   /** The series to choose from; leave out when editing an episode. */
   seriesChoices?: { id: string; title: string }[];
   submitLabel: string;
+  initialUpdatedAt?: Date | string | null;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
   const values = { ...initialValues, ...state.values };
@@ -39,7 +41,16 @@ export default function EpisodeForm({
 
   return (
     // A new key after each reply re-creates the fields from `values`.
-    <form ref={formRef} key={state.version ?? 0} action={formAction} className="flex max-w-xl flex-col gap-6">
+    <form
+      ref={formRef}
+      key={state.version ?? 0}
+      action={formAction}
+      noValidate
+      className="flex max-w-xl flex-col gap-6"
+    >
+      {initialUpdatedAt && (
+        <input type="hidden" name="loadedAt" value={new Date(initialUpdatedAt).toISOString()} />
+      )}
       <div className="grid gap-5 sm:grid-cols-2">
         {seriesChoices && (
           <SelectField

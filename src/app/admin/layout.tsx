@@ -4,7 +4,10 @@ import { notFound } from "next/navigation";
 import { checkAdminAccess } from "@/lib/admin-auth";
 
 export const metadata: Metadata = {
-  title: "Gayflix Admin",
+  title: {
+    template: "%s · Gayflix Admin",
+    default: "Gayflix Admin",
+  },
   description: "Internal admin panel for Gayflix.",
   robots: { index: false, follow: false },
 };

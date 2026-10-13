@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   BUTTON_PRIMARY,
   BUTTON_SECONDARY,
@@ -33,6 +33,9 @@ export default function TitleForm({
   lastYear,
   submitLabel,
   cancelHref,
+  currentHero,
+  currentTitleId,
+  initialUpdatedAt,
 }: {
   type: MediaType;
   action: Action;
@@ -48,6 +51,12 @@ export default function TitleForm({
   lastYear: number;
   submitLabel: string;
   cancelHref?: string;
+  /** The current home page hero title to inform about replacements */
+  currentHero?: { id: string; title: string } | null;
+  /** ID of the title being edited */
+  currentTitleId?: string;
+  /** Last updated timestamp for optimistic concurrency / save conflict check */
+  initialUpdatedAt?: Date | string | null;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
   const values = { ...initialValues, ...state.values };
@@ -59,16 +68,50 @@ export default function TitleForm({
   // The Blob store's long host isn't one to paste links from.
   const linkHosts = imageHosts.filter((host) => host !== uploadHost).join(", ");
   const formRef = useRef<HTMLFormElement>(null);
+  const [dirty, setDirty] = useState(false);
+  const submittedRef = useRef(false);
+
+  // Warn on unsaved changes when leaving
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (dirty && !submittedRef.current) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [dirty]);
 
   // Problems to fix: start at the first one.
   useEffect(() => {
     if (hasErrors) formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
   }, [state, hasErrors]);
 
+  const isCurrentHero = Boolean(currentHero && currentTitleId && currentHero.id === currentTitleId);
+  const featuredHint = isCurrentHero
+    ? "Currently featured as the home page hero."
+    : currentHero
+      ? `Replaces "${currentHero.title}" as the home page hero when published.`
+      : "Features this title as the hero on the home page when published.";
+
   return (
     // A new key after each reply re-creates the fields from `values`:
     // React clears a form once it's submitted.
-    <form ref={formRef} key={state.version ?? 0} action={formAction} className="flex max-w-3xl flex-col gap-6">
+    <form
+      ref={formRef}
+      key={state.version ?? 0}
+      action={(formData) => {
+        submittedRef.current = true;
+        setDirty(false);
+        formAction(formData);
+      }}
+      onChange={() => setDirty(true)}
+      noValidate
+      className="flex max-w-3xl flex-col gap-6"
+    >
+      {initialUpdatedAt && (
+        <input type="hidden" name="loadedAt" value={new Date(initialUpdatedAt).toISOString()} />
+      )}
       {Object.entries(hiddenFields).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
@@ -81,7 +124,7 @@ export default function TitleForm({
           <CheckboxField
             name="featured"
             label="Feature on the home page"
-            hint="It replaces the title featured now."
+            hint={featuredHint}
             defaultChecked={values.featured === "on"}
           />
         </div>

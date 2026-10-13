@@ -1,7 +1,12 @@
+import type { Metadata } from "next";
 import ImportButton, { ImportedLink } from "@/components/admin/ImportButton";
 import ImportSearchBar from "@/components/admin/ImportSearchBar";
 import MediaCoverThumb from "@/components/MediaCoverThumb";
 import Pagination from "@/components/Pagination";
+
+export const metadata: Metadata = {
+  title: "Import",
+};
 import { importTitle } from "@/lib/admin-import-actions";
 import { imageHosts } from "@/lib/image-hosts.mjs";
 import { omdbConfigured } from "@/lib/omdb";

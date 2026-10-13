@@ -7,7 +7,7 @@ import { BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY } from "@/components/ad
 import TitleForm from "@/components/admin/TitleForm";
 import VideoSources from "@/components/admin/VideoSources";
 import { restoreTitle, trashTitle, updateTitle } from "@/lib/admin-catalog-actions";
-import { getTitleForEdit } from "@/lib/catalog";
+import { getLiveHero, getTitleForEdit } from "@/lib/catalog";
 import { imageHosts, uploadHost } from "@/lib/image-hosts.mjs";
 import type { MediaType } from "@/lib/media";
 import { imageUrlProblem, libraryPath, NO_POSTER, titleValues } from "@/lib/title-form";
@@ -32,7 +32,7 @@ export default async function TitleEditPage({
   /** Just imported: the Import page opens it with ?imported=1. */
   imported: boolean;
 }) {
-  const row = await getTitleForEdit(id);
+  const [row, currentHero] = await Promise.all([getTitleForEdit(id), getLiveHero()]);
   if (!row) notFound();
   // A series opened under /movies (or the other way round).
   if (row.type !== type) redirect(`${libraryPath(row.type)}/${row.id}`);
@@ -90,24 +90,31 @@ export default async function TitleEditPage({
       </div>
 
       {(added || imported) && !isTrashed && (
-        <p role="status" className="mt-8 max-w-3xl text-sm font-medium text-status-success">
-          {imported
-            ? isPublished
-              ? "Imported and published."
-              : "Imported as a draft. Check it, then set its status to Published when it's ready."
-            : isPublished
-              ? "Added and published."
-              : "Added as a draft. Set its status to Published when it's ready."}
-          {isSeries && " Next, add its episodes below."}
-        </p>
+        <>
+          <p role="status" className="mt-8 max-w-3xl text-sm font-medium text-status-success">
+            {imported
+              ? isPublished
+                ? "Imported and published."
+                : "Imported as a draft. Check it, then set its status to Published when it's ready."
+              : isPublished
+                ? "Added and published."
+                : "Added as a draft. Set its status to Published when it's ready."}
+            {isSeries && " Next, add its episodes below."}
+          </p>
+          <script
+            dangerouslySetInnerHTML={{
+              __html:
+                'if (typeof window !== "undefined" && window.history.replaceState) { const u = new URL(window.location.href); if (u.searchParams.has("added") || u.searchParams.has("imported")) { u.searchParams.delete("added"); u.searchParams.delete("imported"); window.history.replaceState({}, "", u.pathname + (u.search ? u.search : "")); } }',
+            }}
+          />
+        </>
       )}
 
       <div className="mt-8">
         {isTrashed ? (
           <div className="max-w-xl rounded-card border border-border-subtle bg-bg-surface p-5">
             <p className="text-sm text-ink-secondary">
-              This title is in the trash, so it&apos;s off the site. Restore it to edit it. It
-              comes back as a draft.
+              This title is in the trash, so it&apos;s off the site. Restore it to edit it.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <form action={restoreTitle.bind(null, row.id)}>
@@ -129,6 +136,9 @@ export default async function TitleEditPage({
             uploadHost={uploadHost()}
             lastYear={new Date().getUTCFullYear() + 5}
             submitLabel="Save changes"
+            currentHero={currentHero}
+            currentTitleId={row.id}
+            initialUpdatedAt={row.updatedAt}
           />
         )}
       </div>

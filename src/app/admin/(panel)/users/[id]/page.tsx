@@ -1,7 +1,18 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import ConfirmSubmitButton from "@/components/admin/ConfirmSubmitButton";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const user = await getUserForAdmin(id);
+  return { title: user?.name ? `${user.name} (${user.email})` : user?.email ?? "User" };
+}
 import {
   BUTTON_DANGER,
   BUTTON_SECONDARY,
@@ -164,9 +175,14 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
                       ))}
                     </SelectField>
                     <div>
-                      <button type="submit" className={BUTTON_DANGER}>
+                      <ConfirmSubmitButton
+                        confirmTitle="Ban this account?"
+                        confirmDescription={`Banning ${user.email} will sign them out of all devices and prevent them from signing in.`}
+                        confirmLabel="Ban"
+                        className={BUTTON_DANGER}
+                      >
                         Ban
-                      </button>
+                      </ConfirmSubmitButton>
                     </div>
                   </form>
                 </Action>
@@ -184,9 +200,14 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
           {!isSelf && user.openSessions > 0 && (
             <Action problem={problem("sign-out")}>
               <form action={signOutEverywhere.bind(null, user.id)}>
-                <button type="submit" className={BUTTON_SECONDARY}>
+                <ConfirmSubmitButton
+                  confirmTitle="Sign out everywhere?"
+                  confirmDescription={`This will end all ${user.openSessions} active sessions for ${user.email}.`}
+                  confirmLabel="Sign out everywhere"
+                  className={BUTTON_SECONDARY}
+                >
                   Sign out everywhere
-                </button>
+                </ConfirmSubmitButton>
               </form>
             </Action>
           )}
