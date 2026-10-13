@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { BUTTON_SECONDARY, TextField } from "@/components/admin/FormFields";
-import { uploadTitleImage, type UploadResult } from "@/lib/admin-image-actions";
+import type { UploadResult } from "@/lib/admin-image-actions";
 import { IMAGE_ACCEPT, IMAGE_SIZE_PROBLEM, MAX_IMAGE_BYTES } from "@/lib/image-upload";
 
 type Upload =
@@ -60,7 +60,8 @@ export default function ImageField({
     form.set("file", file);
     let result: UploadResult;
     try {
-      result = await uploadTitleImage(form);
+      const res = await fetch("/api/admin/upload-image", { method: "POST", body: form });
+      result = await res.json();
     } catch {
       result = { error: "The upload didn't go through. Try again." };
     }

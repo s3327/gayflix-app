@@ -56,18 +56,25 @@ export default function SettingsTabs() {
   const [active, setActive] = useState<TabKey>("general");
   const activeTab = TABS.find((t) => t.key === active)!;
 
-  const [badgeEnabled, setBadgeEnabled] = useState(newBadgeConfig.enabled);
-  const [periodDays, setPeriodDays] = useState(newBadgeConfig.periodDays);
+  const [badgeEnabled] = useState(newBadgeConfig.enabled);
+  const [periodDays] = useState(newBadgeConfig.periodDays);
 
   return (
     <div>
-      <div className="flex gap-1 overflow-x-auto border-b border-border-subtle px-6 scrollbar-none sm:px-10">
+      <div
+        role="tablist"
+        aria-label="Settings sections"
+        className="flex gap-1 overflow-x-auto border-b border-border-subtle px-6 scrollbar-none sm:px-10"
+      >
         {TABS.map((tab) => (
           <button
             key={tab.key}
+            id={`tab-${tab.key}`}
+            role="tab"
+            aria-selected={active === tab.key}
+            aria-controls={`panel-${tab.key}`}
             type="button"
             onClick={() => setActive(tab.key)}
-            aria-current={active === tab.key ? "page" : undefined}
             className={`shrink-0 border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
               active === tab.key
                 ? "border-brand-pink text-ink-brand"
@@ -79,7 +86,12 @@ export default function SettingsTabs() {
         ))}
       </div>
 
-      <div className="px-6 py-8 sm:px-10">
+      <div
+        id={`panel-${activeTab.key}`}
+        role="tabpanel"
+        aria-labelledby={`tab-${activeTab.key}`}
+        className="px-6 py-8 sm:px-10"
+      >
         <h2 className="font-display text-lg font-semibold">
           {activeTab.label}
         </h2>
@@ -89,11 +101,16 @@ export default function SettingsTabs() {
 
         {active === "site" && (
           <div className="mt-6 max-w-md rounded-card border border-border-subtle p-5">
-            <h3 className="font-display text-sm font-semibold">
-              New Releases — &quot;NEW&quot; badge
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-sm font-semibold">
+                New Releases — &quot;NEW&quot; badge
+              </h3>
+              <span className="rounded-full bg-bg-elevated px-2 py-0.5 text-xs text-ink-muted">
+                Read-only
+              </span>
+            </div>
 
-            <div className="mt-4 flex items-center justify-between gap-4">
+            <div className="mt-4 flex items-center justify-between gap-4 opacity-60">
               <label
                 htmlFor="new-badge-toggle"
                 className="text-sm text-ink-secondary"
@@ -104,9 +121,9 @@ export default function SettingsTabs() {
                 id="new-badge-toggle"
                 type="button"
                 role="switch"
+                disabled
                 aria-checked={badgeEnabled}
-                onClick={() => setBadgeEnabled((v) => !v)}
-                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                className={`relative h-6 w-11 shrink-0 cursor-not-allowed rounded-full transition-colors ${
                   badgeEnabled ? "bg-brand-pink" : "bg-bg-elevated"
                 }`}
               >
@@ -118,7 +135,7 @@ export default function SettingsTabs() {
               </button>
             </div>
 
-            <div className="mt-5">
+            <div className="mt-5 opacity-60">
               <label
                 htmlFor="new-badge-period"
                 className="block text-sm text-ink-secondary"
@@ -129,9 +146,8 @@ export default function SettingsTabs() {
                 <select
                   id="new-badge-period"
                   value={periodDays}
-                  onChange={(e) => setPeriodDays(Number(e.target.value))}
-                  disabled={!badgeEnabled}
-                  className="w-full appearance-none rounded-md border border-border-subtle bg-bg-elevated py-2.5 pl-4 pr-10 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-hidden disabled:opacity-50"
+                  disabled
+                  className="w-full cursor-not-allowed appearance-none rounded-md border border-border-subtle bg-bg-elevated py-2.5 pl-4 pr-10 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-hidden"
                 >
                   {PERIOD_OPTIONS.map((opt) => (
                     <option key={opt.days} value={opt.days}>
@@ -144,10 +160,9 @@ export default function SettingsTabs() {
               </div>
             </div>
 
-            <p className="mt-4 text-xs text-ink-muted">
-              UI only — not yet wired to the public site. New Releases
-              currently reads this from a static default (enabled, last 7
-              days), regardless of what&apos;s selected here.
+            <p className="mt-4 rounded-md border border-border-subtle bg-bg-elevated p-3 text-xs text-ink-muted">
+              Persistent settings storage in the database is planned for Phase 4.
+              The live site currently reads defaults from the code (enabled, last 7 days).
             </p>
           </div>
         )}

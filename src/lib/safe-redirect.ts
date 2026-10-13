@@ -12,3 +12,14 @@ export function safeNextPath(raw: string | null | undefined, fallback = "/accoun
   if (/[\u0000-\u001f\u007f]/.test(raw)) return fallback;
   return raw;
 }
+
+/**
+ * Validates a post-login destination for the admin panel. Only paths
+ * starting with `/admin` are allowed (and `/admin/login` itself is rejected),
+ * falling back to `/admin/dashboard`.
+ */
+export function safeAdminNextPath(raw: string | null | undefined, fallback = "/admin/dashboard"): string {
+  const path = safeNextPath(raw, fallback);
+  if (!path.startsWith("/admin") || path.startsWith("/admin/login")) return fallback;
+  return path;
+}

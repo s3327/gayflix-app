@@ -1,9 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronDown, Plus } from "lucide-react";
 import Pagination from "@/components/Pagination";
 import { listEpisodes, listSeriesChoices } from "@/lib/catalog";
 import { firstParam, pageParam, type SearchParams } from "@/lib/search-params";
 import { requireAdmin } from "@/lib/session";
+
+export const metadata: Metadata = {
+  title: "Episodes",
+};
 
 /**
  * Every episode, or one series' (?series=<id>), by series then season

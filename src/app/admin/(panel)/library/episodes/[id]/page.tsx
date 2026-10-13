@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -9,6 +10,16 @@ import { deleteEpisode, updateEpisode } from "@/lib/admin-catalog-actions";
 import { getEpisodeForEdit } from "@/lib/catalog";
 import { requireAdmin } from "@/lib/session";
 import { episodeValues } from "@/lib/title-form";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const row = await getEpisodeForEdit(id);
+  return { title: row ? `${row.media.title} S${row.seasonNumber}E${row.episodeNumber}` : "Episode" };
+}
 
 /**
  * An episode's edit page, with its video. Episodes don't go to the trash:

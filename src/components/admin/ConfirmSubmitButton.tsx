@@ -14,6 +14,7 @@ export default function ConfirmSubmitButton({
   confirmLabel,
   className,
   ariaLabel,
+  formAction,
 }: {
   children: React.ReactNode;
   confirmTitle: string;
@@ -21,6 +22,7 @@ export default function ConfirmSubmitButton({
   confirmLabel: string;
   className?: string;
   ariaLabel?: string;
+  formAction?: (form: FormData) => Promise<void>;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -30,6 +32,7 @@ export default function ConfirmSubmitButton({
       <button
         ref={buttonRef}
         type="button"
+        formAction={formAction}
         aria-label={ariaLabel}
         onClick={() => setIsOpen(true)}
         className={className}
@@ -41,7 +44,7 @@ export default function ConfirmSubmitButton({
           title={confirmTitle}
           description={confirmDescription}
           confirmLabel={confirmLabel}
-          onConfirm={() => buttonRef.current?.form?.requestSubmit()}
+          onConfirm={() => buttonRef.current?.form?.requestSubmit(buttonRef.current)}
           onClose={() => setIsOpen(false)}
         />
       )}

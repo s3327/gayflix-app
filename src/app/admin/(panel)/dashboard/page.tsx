@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Flag } from "lucide-react";
 import Badge from "@/components/Badge";
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+};
 import { getUserOverview } from "@/lib/admin-users";
-import { getCatalogOverview } from "@/lib/catalog";
+import { getCatalogOverview, getLiveHero } from "@/lib/catalog";
 import { db } from "@/lib/db";
 import { formatCount } from "@/lib/format-count";
 import type { MediaType } from "@/lib/media";
@@ -31,16 +36,37 @@ function byType({ movie, series }: Record<MediaType, number>) {
  */
 export default async function DashboardPage() {
   await requireAdmin();
-  const [catalog, accounts, openReports] = await Promise.all([
+  const [catalog, accounts, openReports, liveHero] = await Promise.all([
     getCatalogOverview(),
     getUserOverview(),
     db.report.count({ where: { resolvedAt: null } }),
+    getLiveHero(),
   ]);
   const week = `last ${TRENDING_DAYS} days`;
 
   return (
     <div className="px-6 py-10 sm:px-10">
       <h1 className="font-display text-2xl font-bold">Dashboard</h1>
+
+      {liveHero && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-card border border-border-subtle bg-bg-surface px-5 py-3 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-ink-muted">Home page hero:</span>
+            <Link
+              href={`${libraryPath(liveHero.type)}/${liveHero.id}`}
+              className="font-medium text-ink-primary hover:text-ink-brand"
+            >
+              {liveHero.title}
+            </Link>
+          </div>
+          <Link
+            href={`${libraryPath(liveHero.type)}/${liveHero.id}`}
+            className="text-xs text-ink-muted hover:text-ink-primary"
+          >
+            Edit hero →
+          </Link>
+        </div>
+      )}
 
       <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-border-subtle bg-bg-surface px-5 py-4 text-sm">
         <Flag

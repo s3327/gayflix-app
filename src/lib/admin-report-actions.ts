@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { setAdminFlash } from "@/lib/admin-flash";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 
@@ -18,18 +19,28 @@ function requireReportId(id: unknown): string {
 
 export async function resolveReport(id: unknown): Promise<void> {
   const session = await requireAdmin();
+  const reportId = requireReportId(id);
   await db.report.updateMany({
-    where: { id: requireReportId(id), resolvedAt: null },
+    where: { id: reportId, resolvedAt: null },
     data: { resolvedAt: new Date(), resolvedBy: session.user.email },
   });
   revalidatePath("/admin/reports");
+  await setAdminFlash({
+    message: "Report resolved.",
+    undo: { label: "Undo", action: "reopen_report", ids: [reportId] },
+  });
 }
 
 export async function reopenReport(id: unknown): Promise<void> {
   await requireAdmin();
+  const reportId = requireReportId(id);
   await db.report.updateMany({
-    where: { id: requireReportId(id) },
+    where: { id: reportId },
     data: { resolvedAt: null, resolvedBy: null },
   });
   revalidatePath("/admin/reports");
+  await setAdminFlash({
+    message: "Report reopened.",
+    undo: { label: "Undo", action: "resolve_report", ids: [reportId] },
+  });
 }

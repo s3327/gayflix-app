@@ -74,7 +74,7 @@ export async function insertTitle(
   const id = await freeId(slugify(input.title) || type);
   try {
     await db.$transaction(async (tx) => {
-      if (input.featured) await unfeatureOthers(tx, id);
+      if (input.featured && input.status === "published") await unfeatureOthers(tx, id);
       await tx.media.create({
         data: {
           id,

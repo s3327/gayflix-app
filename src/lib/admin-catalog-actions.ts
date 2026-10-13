@@ -8,6 +8,7 @@ import { isImdbId, isTmdbId } from "@/lib/import-mapping";
 import { isMediaId } from "@/lib/library-types";
 import type { MediaStatus, MediaType } from "@/lib/media";
 import { requireAdmin } from "@/lib/session";
+import { setAdminFlash } from "@/lib/admin-flash";
 import {
   EPISODE_FIELDS,
   TITLE_FIELDS,
@@ -121,9 +122,26 @@ export async function updateTitle(
   await requireAdmin();
   const id = itemId(idArg);
   const values = formValues(form, TITLE_FIELDS);
+  const loadedAt = form.get("loadedAt");
   const gone = { message: "This title is in the trash or was deleted.", values, version: Date.now() };
-  const existing = await db.media.findUnique({ where: { id }, select: { type: true, trashedAt: true } });
+  const existing = await db.media.findUnique({
+    where: { id },
+    select: { type: true, trashedAt: true, updatedAt: true },
+  });
   if (!existing || existing.trashedAt) return gone;
+
+  if (typeof loadedAt === "string" && loadedAt) {
+    const loadedDate = new Date(loadedAt);
+    if (!isNaN(loadedDate.getTime()) && existing.updatedAt.getTime() > loadedDate.getTime()) {
+      return {
+        ok: false,
+        message:
+          "Another admin edited this title while you had it open. Review the current version before saving to avoid overwriting their changes.",
+        values,
+        version: Date.now(),
+      };
+    }
+  }
 
   const parsed = parseTitle(existing.type, values);
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
@@ -133,7 +151,9 @@ export async function updateTitle(
       where: { id, trashedAt: null },
       data: titleData(existing.type, parsed.data),
     });
-    if (count > 0 && parsed.data.featured) await unfeatureOthers(tx, id);
+    if (count > 0 && parsed.data.featured && parsed.data.status === "published") {
+      await unfeatureOthers(tx, id);
+    }
     return count > 0;
   });
   if (!saved) return gone;
@@ -141,22 +161,56 @@ export async function updateTitle(
   return { ok: true, message: "Saved.", values, version: Date.now() };
 }
 
-async function updateStatus(ids: string[], status: MediaStatus) {
+export async function updateMediaStatusBatch(ids: string[], status: MediaStatus) {
   if (ids.length === 0) return;
-  await db.media.updateMany({ where: { id: { in: ids }, trashedAt: null }, data: { status } });
+  await db.$transaction(async (tx) => {
+    await tx.media.updateMany({ where: { id: { in: ids }, trashedAt: null }, data: { status } });
+    if (status === "published") {
+      const featured = await tx.media.findFirst({
+        where: { id: { in: ids }, featured: true, trashedAt: null },
+        select: { id: true },
+      });
+      if (featured) {
+        await unfeatureOthers(tx, featured.id);
+      }
+    }
+  });
   refreshPages();
 }
 
 /** Publish or unpublish one title (a library row's button). */
 export async function setTitleStatus(idArg: unknown, statusArg: unknown): Promise<void> {
   await requireAdmin();
-  await updateStatus([itemId(idArg)], mediaStatus(statusArg));
+  const id = itemId(idArg);
+  const status = mediaStatus(statusArg);
+  await updateMediaStatusBatch([id], status);
+  const isPub = status === "published";
+  await setAdminFlash({
+    message: isPub ? "Title published." : "Title unpublished.",
+    undo: {
+      label: "Undo",
+      action: isPub ? "unpublish_media" : "publish_media",
+      ids: [id],
+    },
+  });
 }
 
 /** Publish or unpublish the checked rows. */
 export async function setSelectedStatus(statusArg: unknown, form: FormData): Promise<void> {
   await requireAdmin();
-  await updateStatus(selectedIds(form), mediaStatus(statusArg));
+  const ids = selectedIds(form);
+  if (ids.length === 0) return;
+  const status = mediaStatus(statusArg);
+  await updateMediaStatusBatch(ids, status);
+  const isPub = status === "published";
+  await setAdminFlash({
+    message: `${ids.length} ${ids.length === 1 ? "title" : "titles"} ${isPub ? "published" : "unpublished"}.`,
+    undo: {
+      label: "Undo",
+      action: isPub ? "unpublish_media" : "publish_media",
+      ids,
+    },
+  });
 }
 
 /**
@@ -166,31 +220,78 @@ export async function setSelectedStatus(statusArg: unknown, form: FormData): Pro
  */
 async function moveToTrash(ids: string[]) {
   if (ids.length === 0) return;
-  await db.media.updateMany({
-    where: { id: { in: ids }, trashedAt: null },
-    data: { status: "draft", featured: false, trashedAt: new Date() },
+  await db.$transaction(async (tx) => {
+    const items = await tx.media.findMany({
+      where: { id: { in: ids }, trashedAt: null },
+      select: { id: true, status: true, featured: true },
+    });
+    for (const item of items) {
+      await tx.media.update({
+        where: { id: item.id },
+        data: {
+          statusBeforeTrash: item.status,
+          featuredBeforeTrash: item.featured,
+          status: "draft",
+          featured: false,
+          trashedAt: new Date(),
+        },
+      });
+    }
   });
   refreshPages();
 }
 
 export async function trashTitle(idArg: unknown): Promise<void> {
   await requireAdmin();
-  await moveToTrash([itemId(idArg)]);
+  const id = itemId(idArg);
+  await moveToTrash([id]);
+  await setAdminFlash({
+    message: "Moved to trash.",
+    undo: { label: "Undo", action: "restore_media", ids: [id] },
+  });
 }
 
 export async function trashSelected(form: FormData): Promise<void> {
   await requireAdmin();
-  await moveToTrash(selectedIds(form));
+  const ids = selectedIds(form);
+  if (ids.length === 0) return;
+  await moveToTrash(ids);
+  await setAdminFlash({
+    message: `${ids.length} ${ids.length === 1 ? "title" : "titles"} moved to trash.`,
+    undo: { label: "Undo", action: "restore_media", ids },
+  });
 }
 
-/** Back from the trash, as a draft. */
+/** Back from the trash, restoring its previous status and featured flag. */
 export async function restoreTitle(idArg: unknown): Promise<void> {
   await requireAdmin();
-  await db.media.updateMany({
-    where: { id: itemId(idArg), trashedAt: { not: null } },
-    data: { trashedAt: null },
+  const id = itemId(idArg);
+  await db.$transaction(async (tx) => {
+    const item = await tx.media.findUnique({
+      where: { id },
+      select: { statusBeforeTrash: true, featuredBeforeTrash: true, trashedAt: true },
+    });
+    if (!item || !item.trashedAt) return;
+    const restoredStatus = item.statusBeforeTrash ?? "draft";
+    const restoredFeatured = item.featuredBeforeTrash ?? false;
+
+    await tx.media.update({
+      where: { id },
+      data: {
+        status: restoredStatus,
+        featured: restoredFeatured,
+        statusBeforeTrash: null,
+        featuredBeforeTrash: null,
+        trashedAt: null,
+      },
+    });
+
+    if (restoredFeatured && restoredStatus === "published") {
+      await unfeatureOthers(tx, id);
+    }
   });
   refreshPages();
+  await setAdminFlash({ message: "Title restored." });
 }
 
 /** For good, with its episodes. Only titles already in the trash. */
@@ -198,6 +299,7 @@ export async function deleteTitle(idArg: unknown): Promise<void> {
   await requireAdmin();
   await db.media.deleteMany({ where: { id: itemId(idArg), trashedAt: { not: null } } });
   refreshPages();
+  await setAdminFlash({ message: "Title deleted permanently." });
 }
 
 // --- Episodes -----------------------------------------------------------------
@@ -320,5 +422,6 @@ export async function deleteEpisode(idArg: unknown): Promise<void> {
     await refreshSeasons(tx, episode.mediaId);
   });
   refreshPages();
+  await setAdminFlash({ message: "Episode deleted." });
   redirect(`/admin/library/series/${episode.mediaId}`);
 }

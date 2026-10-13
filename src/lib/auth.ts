@@ -9,6 +9,7 @@ import { adminAccess } from "@/lib/admin-access";
 import { db } from "@/lib/db";
 import { sendEmail, type Email } from "@/lib/email";
 import { siteUrl } from "@/lib/site-url";
+import { userActionProblem } from "@/lib/user-admin";
 
 /** Length of the email verification code; the /verify-email boxes match it. */
 export const OTP_LENGTH = 6;
@@ -101,11 +102,19 @@ export const auth = betterAuth({
       twoFactorVerified: { type: "boolean", required: false, defaultValue: false, input: false },
     },
   },
+  advanced: {
+    ipAddress: { disableIpTracking: true },
+  },
   databaseHooks: {
     session: {
       create: {
         before: async (session, ctx) => ({
-          data: { ...session, twoFactorVerified: TWO_FACTOR_VERIFY_PATHS.has(ctx?.path ?? "") },
+          data: {
+            ...session,
+            ipAddress: null,
+            userAgent: null,
+            twoFactorVerified: TWO_FACTOR_VERIFY_PATHS.has(ctx?.path ?? ""),
+          },
         }),
       },
     },
@@ -125,23 +134,53 @@ export const auth = betterAuth({
         if (problem) throw new APIError("BAD_REQUEST", { message: problem });
         return;
       }
-      // The admin plugin's own endpoints (/api/auth/admin/*: list users,
-      // set roles, impersonate, ...) get the same check as the admin panel.
-      // Stopping impersonation runs as the impersonated user, so it's exempt.
+      // The admin plugin's own endpoints (/api/auth/admin/*) get the same check as the admin panel.
       if (!ctx.path.startsWith("/admin/") || ctx.path === "/admin/stop-impersonating") return;
       const session = await getSessionFromCtx(ctx);
       if (adminAccess(session) !== "ok") {
         throw new APIError("FORBIDDEN", { message: "Admin access needs a two-factor sign-in." });
       }
+
+      // Check rules on allowed Better Auth admin endpoints
+      const targetUserId = typeof ctx.body?.userId === "string" ? ctx.body.userId : null;
+      if (targetUserId) {
+        let action: "make-admin" | "remove-admin" | "ban" | "unban" | "sign-out" | null = null;
+        if (ctx.path === "/admin/set-role") {
+          action = ctx.body?.role === "admin" ? "make-admin" : "remove-admin";
+        } else if (ctx.path === "/admin/ban-user") {
+          action = "ban";
+        } else if (ctx.path === "/admin/unban-user") {
+          action = "unban";
+        } else if (ctx.path === "/admin/revoke-user-sessions") {
+          action = "sign-out";
+        }
+
+        if (action) {
+          const target = await db.user.findUnique({
+            where: { id: targetUserId },
+            select: { id: true, role: true, emailVerified: true, banned: true, banExpires: true },
+          });
+          if (!target) throw new APIError("BAD_REQUEST", { message: "No such user." });
+          const problem = userActionProblem(action, session!.user.id, target);
+          if (problem) throw new APIError("BAD_REQUEST", { message: problem });
+        }
+      }
     }),
   },
-  // Sign-in and password reset by emailed code: the UI doesn't use them,
+  // Disabled Better Auth endpoints: the panel uses its own server actions and rules,
   // and code sign-in would skip two-factor.
   disabledPaths: [
     "/sign-in/email-otp",
     "/email-otp/request-password-reset",
     "/forget-password/email-otp",
     "/email-otp/reset-password",
+    "/admin/remove-user",
+    "/admin/set-user-password",
+    "/admin/impersonate-user",
+    "/admin/stop-impersonating",
+    "/admin/list-users",
+    "/admin/list-user-sessions",
+    "/admin/revoke-user-session",
   ],
   rateLimit: {
     // On in production by default. AUTH_RATE_LIMIT=off exists only for

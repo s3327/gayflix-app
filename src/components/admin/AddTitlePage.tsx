@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BUTTON_SECONDARY } from "@/components/admin/FormFields";
 import TitleForm from "@/components/admin/TitleForm";
 import { createTitle } from "@/lib/admin-catalog-actions";
+import { getLiveHero } from "@/lib/catalog";
 import { imageHosts, uploadHost } from "@/lib/image-hosts.mjs";
 import { parseTmdbRef } from "@/lib/import-mapping";
 import type { MediaType } from "@/lib/media";
@@ -19,7 +20,10 @@ import { prepareImport } from "@/lib/title-import";
 export default async function AddTitlePage({ type, tmdbId }: { type: MediaType; tmdbId?: string }) {
   const isMovie = type === "movie";
   const ref = parseTmdbRef(tmdbId);
-  const plan = ref ? await prepareImport(ref, type) : null;
+  const [plan, currentHero] = await Promise.all([
+    ref ? prepareImport(ref, type) : null,
+    getLiveHero(),
+  ]);
   const heading = isMovie ? "Add a movie" : "Add a series";
 
   if (plan?.status === "exists") {
@@ -82,6 +86,7 @@ export default async function AddTitlePage({ type, tmdbId }: { type: MediaType; 
           lastYear={new Date().getUTCFullYear() + 5}
           submitLabel={isMovie ? "Add movie" : "Add series"}
           cancelHref={ready ? "/admin/import" : libraryPath(type)}
+          currentHero={currentHero}
         />
       </div>
     </div>

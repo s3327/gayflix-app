@@ -29,6 +29,25 @@ export default function SetupTwoFactor() {
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [copiedCodes, setCopiedCodes] = useState(false);
+
+  function handleCopyCodes() {
+    if (!enrollment?.backupCodes) return;
+    navigator.clipboard.writeText(enrollment.backupCodes.join("\n"));
+    setCopiedCodes(true);
+    setTimeout(() => setCopiedCodes(false), 2000);
+  }
+
+  function handleDownloadCodes() {
+    if (!enrollment?.backupCodes) return;
+    const blob = new Blob([enrollment.backupCodes.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "gayflix-backup-codes.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   useEffect(() => {
     if (!enrollment) return;
@@ -160,6 +179,22 @@ export default function SetupTwoFactor() {
                   <li key={backupCode}>{backupCode}</li>
                 ))}
               </ul>
+              <div className="mt-2.5 flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyCodes}
+                  className="rounded-md border border-border-strong bg-bg-surface px-3 py-1.5 text-xs font-semibold text-ink-primary transition-colors hover:bg-bg-elevated"
+                >
+                  {copiedCodes ? "Copied to clipboard" : "Copy codes"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadCodes}
+                  className="rounded-md border border-border-strong bg-bg-surface px-3 py-1.5 text-xs font-semibold text-ink-primary transition-colors hover:bg-bg-elevated"
+                >
+                  Download (.txt)
+                </button>
+              </div>
             </section>
 
             <section className="flex flex-col gap-3">

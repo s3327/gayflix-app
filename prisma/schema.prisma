@@ -166,9 +166,12 @@ model Media {
   /// "tt0133093". Set when an import matched the title on IMDb (through
   /// OMDb); an import that couldn't be checked has none.
   imdbId         String?       @unique
-  /// Set while the title is in the admin panel's trash. Trashing also
-  /// makes it a draft, so the public site never shows a trashed title.
-  trashedAt      DateTime?
+  /// Set while the title is in the admin panel's trash.
+  trashedAt           DateTime?
+  /// Remembered status before being moved to the trash, restored on restore.
+  statusBeforeTrash   MediaStatus?
+  /// Remembered featured flag before being moved to the trash.
+  featuredBeforeTrash Boolean?     @default(false)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   episodes       Episode[]

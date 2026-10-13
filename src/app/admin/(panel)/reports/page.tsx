@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Pagination from "@/components/Pagination";
 import { reopenReport, resolveReport } from "@/lib/admin-report-actions";
@@ -5,6 +6,10 @@ import { findEpisodeIds } from "@/lib/catalog";
 import { db } from "@/lib/db";
 import { firstParam, pageParam, type SearchParams } from "@/lib/search-params";
 import { requireAdmin } from "@/lib/session";
+
+export const metadata: Metadata = {
+  title: "Reports",
+};
 
 const PER_PAGE = 50;
 
@@ -22,6 +27,9 @@ function when(date: Date) {
  * "Report an issue" submissions from the player, newest first. Open
  * reports can be resolved; resolved ones show who closed them and can be
  * reopened.
+ *
+ * F15: Links the reported title to its admin edit page (/admin/library/...)
+ * instead of the public player, and links the sender's email to their user account.
  */
 export default async function ReportsPage({
   searchParams,
@@ -44,12 +52,28 @@ export default async function ReportsPage({
     orderBy: { createdAt: "desc" },
     skip: (page - 1) * PER_PAGE,
     take: PER_PAGE,
-    include: { user: { select: { email: true } } },
+    include: { user: { select: { id: true, email: true } } },
   });
-  // Reports come from the player on /watch/[id] and /episode/[id].
-  const episodeIds = await findEpisodeIds(reports.map((report) => report.mediaId));
-  const playerHref = (mediaId: string) =>
-    episodeIds.has(mediaId) ? `/episode/${mediaId}` : `/watch/${mediaId}`;
+
+  // F15: Link title to its admin edit page rather than the public player.
+  const allMediaIds = reports.map((report) => report.mediaId);
+  const episodeIds = await findEpisodeIds(allMediaIds);
+  const nonEpisodeMediaIds = allMediaIds.filter((id) => !episodeIds.has(id));
+  const mediaRows =
+    nonEpisodeMediaIds.length > 0
+      ? await db.media.findMany({
+          where: { id: { in: nonEpisodeMediaIds } },
+          select: { id: true, type: true },
+        })
+      : [];
+  const mediaTypeMap = new Map(mediaRows.map((m) => [m.id, m.type]));
+
+  const adminEditHref = (mediaId: string) => {
+    if (episodeIds.has(mediaId)) return `/admin/library/episodes/${mediaId}`;
+    const mediaType = mediaTypeMap.get(mediaId);
+    if (mediaType === "series") return `/admin/library/series/${mediaId}`;
+    return `/admin/library/movies/${mediaId}`;
+  };
 
   const tabHref = (resolved: boolean) => (resolved ? "/admin/reports?status=resolved" : "/admin/reports");
 
@@ -88,8 +112,8 @@ export default async function ReportsPage({
             <li key={report.id} className="flex flex-wrap items-start gap-4 px-5 py-4">
               <div className="min-w-0 flex-1">
                 <Link
-                  href={playerHref(report.mediaId)}
-                  className="font-medium text-ink-primary transition-colors hover:text-ink-brand"
+                  href={adminEditHref(report.mediaId)}
+                  className="font-medium text-ink-primary transition-colors hover:text-ink-brand hover:underline"
                 >
                   {report.mediaTitle}
                 </Link>
@@ -100,7 +124,17 @@ export default async function ReportsPage({
                   </p>
                 )}
                 <p className="mt-2 text-xs text-ink-muted">
-                  {report.user?.email ?? "Guest"} · {when(report.createdAt)}
+                  {report.user ? (
+                    <Link
+                      href={`/admin/users/${report.user.id}`}
+                      className="font-medium text-ink-secondary transition-colors hover:text-ink-brand hover:underline"
+                    >
+                      {report.user.email}
+                    </Link>
+                  ) : (
+                    "Guest"
+                  )}{" "}
+                  · {when(report.createdAt)}
                   {report.resolvedAt &&
                     ` · Resolved by ${report.resolvedBy ?? "an admin"} on ${when(report.resolvedAt)}`}
                 </p>

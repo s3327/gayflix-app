@@ -240,4 +240,23 @@ test.describe("admin title editor", () => {
     await page.goto("/admin/library/movies/no-such-title");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Not in the library");
   });
+
+  test("featuring a draft does not replace the live home page hero", async ({ page }) => {
+    const uid = uniqueId();
+    const id = `e2e-draft-hero-${uid}`;
+    const title = `E2E Draft Hero ${uid}`;
+    try {
+      await page.goto("/admin/upload/movies");
+      await fillTitle(page, title, "90");
+      await page.getByLabel("Feature on the home page").check();
+      await page.getByRole("button", { name: "Add movie" }).click();
+
+      await expect(page).toHaveURL(new RegExp(`/admin/library/movies/${id}`));
+      const hero = await sql<{ id: string }>(`SELECT id FROM media WHERE status = 'published' AND featured = true LIMIT 1`, []);
+      expect(hero.length).toBeGreaterThan(0);
+      expect(hero[0].id).not.toBe(id);
+    } finally {
+      await sql(`DELETE FROM media WHERE id = $1`, [id]);
+    }
+  });
 });
