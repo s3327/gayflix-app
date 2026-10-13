@@ -789,7 +789,7 @@ export async function getCatalogOverview() {
     trendingRows(DASHBOARD_LIST_SIZE),
     db.media.findMany({
       where: live,
-      orderBy: ORDER.added,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: DASHBOARD_LIST_SIZE,
       select: { id: true, type: true, title: true, status: true, createdAt: true },
     }),

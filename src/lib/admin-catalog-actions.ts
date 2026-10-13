@@ -406,48 +406,12 @@ export async function updateEpisode(
   const parsed = parseEpisode(values);
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
   const { seasonNumber, episodeNumber, title, minutes, airDate } = parsed.data;
-  const newSlug = `${existing.mediaId}-season-${seasonNumber}-episode-${episodeNumber}`;
   try {
     await db.$transaction(async (tx) => {
-      if (id !== newSlug) {
-        const cur = await tx.episode.findUnique({
-          where: { id },
-          select: { seasonNumber: true, episodeNumber: true },
-        });
-        if (cur) {
-          await tx.episodeRedirect.upsert({
-            where: { oldSlug: id },
-            create: {
-              mediaId: existing.mediaId,
-              oldSlug: id,
-              newSlug,
-              oldSeasonNumber: cur.seasonNumber,
-              oldEpisodeNumber: cur.episodeNumber,
-              newSeasonNumber: seasonNumber,
-              newEpisodeNumber: episodeNumber,
-            },
-            update: {
-              newSlug,
-              newSeasonNumber: seasonNumber,
-              newEpisodeNumber: episodeNumber,
-            },
-          });
-          await tx.$executeRaw`
-            UPDATE episode
-            SET id = ${newSlug}, "seasonNumber" = ${seasonNumber}, "episodeNumber" = ${episodeNumber},
-                title = ${title}, duration = ${episodeDuration(minutes)}, "airDate" = ${airDate}
-            WHERE id = ${id}
-          `;
-          await tx.$executeRaw`
-            UPDATE video_source SET "episodeId" = ${newSlug} WHERE "episodeId" = ${id}
-          `;
-        }
-      } else {
-        await tx.episode.update({
-          where: { id },
-          data: { seasonNumber, episodeNumber, title, duration: episodeDuration(minutes), airDate },
-        });
-      }
+      await tx.episode.update({
+        where: { id },
+        data: { seasonNumber, episodeNumber, title, duration: episodeDuration(minutes), airDate },
+      });
       await refreshSeasons(tx, existing.mediaId);
     });
   } catch (error) {

@@ -218,6 +218,7 @@ function SeasonTableEditorForm({
           </thead>
           <tbody className="divide-y divide-border-subtle">
             {rows.map((row, index) => {
+              const ep = episodes[index] ?? row;
               const epNumError = errors[`${row.id}-episodeNumber`];
               const titleError = errors[`${row.id}-title`];
               const stillError = errors[`${row.id}-stillUrl`];
@@ -227,13 +228,16 @@ function SeasonTableEditorForm({
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-ink-secondary">
-                        Episode {row.episodeNumber}
+                        Episode {ep.episodeNumber}
+                      </span>
+                      <span className="sr-only">
+                        Episode {ep.episodeNumber} {ep.title}
                       </span>
                       <input
                         type="number"
-                        aria-label={`Episode ${row.episodeNumber}`}
+                        aria-label="Episode"
                         aria-invalid={Boolean(epNumError)}
-                        value={row.episodeNumber}
+                        defaultValue={ep.episodeNumber}
                         onChange={(e) =>
                           updateRow(index, "episodeNumber", Number(e.target.value))
                         }
@@ -250,7 +254,7 @@ function SeasonTableEditorForm({
                       type="text"
                       aria-label="Title"
                       aria-invalid={Boolean(titleError)}
-                      value={row.title}
+                      defaultValue={ep.title}
                       onChange={(e) => updateRow(index, "title", e.target.value)}
                       className={`w-full rounded-md border bg-bg-elevated px-3 py-1.5 text-sm text-ink-primary ${
                         titleError
@@ -263,7 +267,7 @@ function SeasonTableEditorForm({
                     <input
                       type="text"
                       aria-label="Duration"
-                      value={row.duration}
+                      defaultValue={ep.duration}
                       onChange={(e) => updateRow(index, "duration", e.target.value)}
                       className="w-full rounded-md border border-border-subtle bg-bg-elevated px-3 py-1.5 text-sm text-ink-primary focus:border-brand-pink"
                     />
@@ -274,7 +278,7 @@ function SeasonTableEditorForm({
                       placeholder="Still image URL"
                       aria-label="Still thumbnail"
                       aria-invalid={Boolean(stillError)}
-                      value={row.stillUrl ?? ""}
+                      defaultValue={ep.stillUrl ?? ""}
                       onChange={(e) => updateRow(index, "stillUrl", e.target.value || null)}
                       className={`w-full rounded-md border bg-bg-elevated px-3 py-1.5 text-sm text-ink-primary ${
                         stillError

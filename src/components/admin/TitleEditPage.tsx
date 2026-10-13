@@ -149,7 +149,6 @@ export default async function TitleEditPage({
         <>
           {row.videoSources.length === 0 && (
             <div
-              role="status"
               className="mt-6 max-w-3xl rounded-card border border-status-warning/40 bg-status-warning/10 p-4 text-sm font-medium text-status-warning"
             >
               Warning: This title has no video sources.
