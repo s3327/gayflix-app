@@ -84,7 +84,7 @@ test.describe("admin title editor", () => {
       await trashed.getByRole("button", { name: /^Restore / }).click();
       await expect(trashed).toHaveCount(0);
       await page.goto(`/admin/library/movies/${id}`);
-      await expect(main.getByText("Published", { exact: true })).toBeVisible();
+      await expect(main.locator("span").filter({ hasText: "Published" })).toBeVisible();
 
       // In the trash, a title can only be restored or deleted.
       await main.getByRole("button", { name: "Move to trash", exact: true }).click();

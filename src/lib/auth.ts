@@ -178,7 +178,6 @@ export const auth = betterAuth({
     "/admin/set-user-password",
     "/admin/impersonate-user",
     "/admin/stop-impersonating",
-    "/admin/list-users",
     "/admin/list-user-sessions",
     "/admin/revoke-user-session",
   ],
