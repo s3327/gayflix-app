@@ -31,6 +31,9 @@ export default async function MaintenancePage() {
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-status-warning/15 text-status-warning border border-status-warning/30">
           <Wrench className="h-8 w-8" />
         </div>
+        <div className="mb-3 inline-block rounded-full bg-status-warning/15 px-3 py-1 text-xs font-semibold text-status-warning border border-status-warning/30 uppercase tracking-wider">
+          Under Maintenance
+        </div>
         <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
           Scheduled Maintenance
         </h1>

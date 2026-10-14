@@ -82,36 +82,64 @@ export async function updateSiteSettings(
   }
 
   const isForm = typeof (input as FormData)?.get === "function";
-  const getField = (name: string): string | null => {
+  const rawObj: Record<string, unknown> = isForm
+    ? {}
+    : Array.isArray(input)
+    ? (input[0] as Record<string, unknown>) || {}
+    : input && typeof input === "object"
+    ? (input as Record<string, unknown>)
+    : {};
+
+  const getFormField = (name: string): string | null => {
     if (!isForm) return null;
     const form = input as FormData;
-    const v = form.get(name) ?? form.get(`_1_${name}`);
-    return typeof v === "string" ? v : null;
+    for (const [k, v] of form.entries()) {
+      if (typeof v === "string" && (k === name || k.endsWith(`_${name}`))) {
+        return v;
+      }
+    }
+    return null;
   };
-  const obj = !isForm ? (input as UpdateSiteSettingsInput) : {};
 
-  const siteTitle = (isForm ? getField("siteTitle") : obj.siteTitle)?.trim() || DEFAULT_SETTINGS.siteTitle;
-  const tagline = (isForm ? getField("tagline") : obj.tagline)?.trim() || DEFAULT_SETTINGS.tagline;
-  const contactEmail = (isForm ? getField("contactEmail") : obj.contactEmail)?.trim() || null;
+  const siteTitle = (
+    (isForm ? getFormField("siteTitle") : (rawObj.siteTitle as string | undefined))
+  )?.trim() || DEFAULT_SETTINGS.siteTitle;
 
-  const registrationOpen = isForm
-    ? (getField("registrationOpen") === "on" || getField("registrationOpen") === "true")
-    : Boolean(obj.registrationOpen ?? DEFAULT_SETTINGS.registrationOpen);
+  const tagline = (
+    (isForm ? getFormField("tagline") : (rawObj.tagline as string | undefined))
+  )?.trim() || DEFAULT_SETTINGS.tagline;
 
-  const maintenanceMode = isForm
-    ? (getField("maintenanceMode") === "on" || getField("maintenanceMode") === "true")
-    : Boolean(obj.maintenanceMode ?? DEFAULT_SETTINGS.maintenanceMode);
+  const contactEmail = (
+    (isForm ? getFormField("contactEmail") : (rawObj.contactEmail as string | undefined))
+  )?.trim() || null;
 
-  const defaultPageSizeVal = isForm ? getField("defaultPageSize") : obj.defaultPageSize;
+  const getBool = (name: string, fallback: boolean): boolean => {
+    if (isForm) {
+      const val = getFormField(name);
+      if (val === null) return false;
+      return val === "on" || val === "true" || val === "1";
+    }
+    const val = rawObj[name];
+    if (typeof val === "boolean") return val;
+    if (typeof val === "string") return val === "true" || val === "on" || val === "1";
+    return fallback;
+  };
+
+  const registrationOpen = getBool("registrationOpen", DEFAULT_SETTINGS.registrationOpen);
+  const maintenanceMode = getBool("maintenanceMode", DEFAULT_SETTINGS.maintenanceMode);
+
+  const defaultPageSizeVal = isForm ? getFormField("defaultPageSize") : rawObj.defaultPageSize;
   const defaultPageSize = defaultPageSizeVal ? Math.max(12, Math.min(100, Number(defaultPageSizeVal))) : 24;
 
-  const webhookUrl = (isForm ? getField("webhookUrl") : obj.webhookUrl)?.trim() || null;
+  const webhookUrl = (
+    (isForm ? getFormField("webhookUrl") : (rawObj.webhookUrl as string | undefined))
+  )?.trim() || null;
 
   const allowedHostsRaw = isForm
-    ? (getField("allowedEmbedHosts") ?? "")
-    : Array.isArray(obj.allowedEmbedHosts)
-    ? obj.allowedEmbedHosts.join("\n")
-    : (obj.allowedEmbedHosts ?? "");
+    ? (getFormField("allowedEmbedHosts") ?? "")
+    : Array.isArray(rawObj.allowedEmbedHosts)
+    ? (rawObj.allowedEmbedHosts as string[]).join("\n")
+    : ((rawObj.allowedEmbedHosts as string | undefined) ?? "");
   const allowedEmbedHosts = allowedHostsRaw
     .split(/[\n,]+/)
     .map((h) => h.trim().toLowerCase())
