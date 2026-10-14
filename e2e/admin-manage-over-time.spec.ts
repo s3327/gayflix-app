@@ -158,9 +158,16 @@ test.describe("Phase 4: Manage Over Time", () => {
       const jsonRes = await page.request.get("/api/admin/export?type=catalog-json");
       expect(jsonRes.status()).toBe(200);
       const jsonBody = await jsonRes.json();
-      expect(jsonBody).toHaveProperty("totalTitles");
-      expect(Array.isArray(jsonBody.movies)).toBe(true);
-      expect(Array.isArray(jsonBody.series)).toBe(true);
+      expect(jsonBody.version).toBe("1.0");
+      expect(typeof jsonBody.exportedAt).toBe("string");
+      expect(Array.isArray(jsonBody.items)).toBe(true);
+      expect(jsonBody.mediaCount).toBe(jsonBody.items.length);
+      expect(jsonBody.items.length).toBeGreaterThan(0);
+      for (const item of jsonBody.items) {
+        expect(["movie", "series"]).toContain(item.type);
+        expect(Array.isArray(item.episodes)).toBe(true);
+        expect(Array.isArray(item.videoSources)).toBe(true);
+      }
     } finally {
       // Reset maintenance mode in DB just in case
       await sql(
