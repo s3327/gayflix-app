@@ -109,6 +109,7 @@ export default function SettingsTabs({
 
         {statusMessage && (
           <div
+            role="status"
             className={`mt-4 flex items-center gap-2 rounded-card p-3 text-sm border ${
               statusMessage.ok
                 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"

@@ -58,7 +58,6 @@ export default function EditUserModal({
         type="button"
         onClick={() => setIsOpen(true)}
         className={BUTTON_SECONDARY}
-        aria-label="Edit user details"
       >
         <Edit2 className="h-3.5 w-3.5" />
         Edit Profile
