@@ -192,7 +192,7 @@ test.describe("Phase 3: Work Faster", () => {
     const uid = uniqueId();
     const draftTitle = {
       id: `e2e-wf-prev-${uid}`,
-      title: `E2E Draft Preview ${uid}`,
+      title: `E2E Preview Movie ${uid}`,
     };
     try {
       await sql(
@@ -203,7 +203,7 @@ test.describe("Phase 3: Work Faster", () => {
 
       // Admin accesses preview
       await page.goto(`/admin/preview/${draftTitle.id}`);
-      await expect(page.getByText("Draft Preview")).toBeVisible();
+      await expect(page.getByText("Draft Preview", { exact: true })).toBeVisible();
       await expect(page.getByText("Return to editor")).toBeVisible();
       await expect(page.getByRole("heading", { name: draftTitle.title })).toBeVisible();
 
