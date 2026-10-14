@@ -50,14 +50,23 @@ export default function SettingsTabs({
     e.preventDefault();
     setStatusMessage(null);
 
+    const form = e.currentTarget;
+    const maintenanceInput = form.querySelector<HTMLInputElement>("#maintenanceMode");
+    const registrationInput = form.querySelector<HTMLInputElement>("#registrationOpen");
+    const currentMaintenanceMode = maintenanceInput ? maintenanceInput.checked : maintenanceMode;
+    const currentRegistrationOpen = registrationInput ? registrationInput.checked : registrationOpen;
+
+    setMaintenanceMode(currentMaintenanceMode);
+    setRegistrationOpen(currentRegistrationOpen);
+
     const payload = {
       siteTitle,
       tagline,
       contactEmail,
       defaultPageSize: Number(defaultPageSize),
       webhookUrl,
-      maintenanceMode,
-      registrationOpen,
+      maintenanceMode: currentMaintenanceMode,
+      registrationOpen: currentRegistrationOpen,
       allowedEmbedHosts,
     };
 

@@ -98,8 +98,15 @@ test.describe("Phase 4: Manage Over Time", () => {
 
       // Enable maintenance mode
       await maintenanceCheckbox.check();
+      await expect(maintenanceCheckbox).toBeChecked();
       await page.getByRole("button", { name: "Save Settings" }).click();
       await expect(page.getByRole("status")).toContainText("Settings saved successfully.");
+
+      // Verify persistence directly in DB after save
+      const dbSettings = await sql<{ maintenanceMode: boolean }>(
+        `SELECT "maintenanceMode" FROM site_setting WHERE id = 'default'`
+      );
+      expect(dbSettings[0]?.maintenanceMode).toBe(true);
 
       // 4. Test unauthenticated visitor is redirected to /maintenance
       const visitorContext = await browser.newContext();
@@ -119,9 +126,16 @@ test.describe("Phase 4: Manage Over Time", () => {
       // 6. Restore maintenance mode to false
       await page.goto("/admin/settings");
       await page.getByRole("tab", { name: "Access & Maintenance" }).click();
-      await page.getByLabel("Enable Maintenance Mode").uncheck();
+      const restoreCheckbox = page.getByLabel("Enable Maintenance Mode");
+      await restoreCheckbox.uncheck();
+      await expect(restoreCheckbox).not.toBeChecked();
       await page.getByRole("button", { name: "Save Settings" }).click();
       await expect(page.getByRole("status")).toContainText("Settings saved successfully.");
+
+      const restoredSettings = await sql<{ maintenanceMode: boolean }>(
+        `SELECT "maintenanceMode" FROM site_setting WHERE id = 'default'`
+      );
+      expect(restoredSettings[0]?.maintenanceMode).toBe(false);
 
       // 7. Verify JSON backup export
       const jsonRes = await page.request.get("/api/admin/export?type=catalog-json");
