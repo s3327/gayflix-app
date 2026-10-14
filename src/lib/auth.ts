@@ -3,7 +3,6 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { admin, emailOTP, twoFactor } from "better-auth/plugins";
-import { role } from "better-auth/plugins/access";
 import { after } from "next/server";
 import { accountDeletionProblem } from "@/lib/account-deletion";
 import { adminAccess } from "@/lib/admin-access";
@@ -207,17 +206,7 @@ export const auth = betterAuth({
         });
       },
     }),
-    admin({
-      defaultRole: "user",
-      adminRoles: ["admin", "owner", "editor", "moderator"],
-      roles: {
-        user: role({}),
-        admin: role({}),
-        owner: role({}),
-        editor: role({}),
-        moderator: role({}),
-      },
-    }),
+    admin({ defaultRole: "user", adminRoles: ["admin"] }),
     twoFactor({ issuer: "Gayflix" }),
     // Must stay last: lets server actions set auth cookies.
     nextCookies(),

@@ -55,20 +55,20 @@ test.describe("Phase 4: Manage Over Time", () => {
       await expect(page.getByRole("heading", { name: "Activity Log" })).toBeVisible();
 
       // 4. Verify search by action or actor works
-      await page.getByLabel("Filter by action").fill("title.quick_edit");
-      await page.getByRole("button", { name: "Filter" }).click();
-      await expect(page).toHaveURL(/action=title\.quick_edit/);
+      await page.getByPlaceholder("Filter by actor email...").fill("admin");
+      await page.getByRole("button", { name: "Apply Filters" }).click();
+      await expect(page).toHaveURL(/actor=admin/);
 
       // Verify the activity row is present in the table
       await expect(page.getByText(`Quick edited "${movie.title}"`)).toBeVisible();
 
       // 5. Check CSV export link is present and valid
-      const exportLink = page.getByRole("link", { name: "Export CSV" });
+      const exportLink = page.getByRole("link", { name: "Export Activity CSV" });
       await expect(exportLink).toBeVisible();
       await expect(exportLink).toHaveAttribute("href", "/api/admin/export?type=activity");
     } finally {
-      await sql(`DELETE FROM "ActivityLog" WHERE "entityId" = $1`, [movie.id]);
-      await sql(`DELETE FROM "TitleRevision" WHERE "mediaId" = $1`, [movie.id]);
+      await sql(`DELETE FROM activity_log WHERE "entityId" = $1`, [movie.id]);
+      await sql(`DELETE FROM title_revision WHERE "mediaId" = $1`, [movie.id]);
       await sql(`DELETE FROM media WHERE id = $1`, [movie.id]);
     }
   });
@@ -134,7 +134,7 @@ test.describe("Phase 4: Manage Over Time", () => {
     } finally {
       // Reset maintenance mode in DB just in case
       await sql(
-        `UPDATE "SiteSetting" SET "maintenanceMode" = false WHERE id = 'default'`
+        `UPDATE site_setting SET "maintenanceMode" = false WHERE id = 'default'`
       );
     }
   });
@@ -211,8 +211,8 @@ test.describe("Phase 4: Manage Over Time", () => {
       );
       expect(restored.title).toBe(movie.title);
     } finally {
-      await sql(`DELETE FROM "TitleRevision" WHERE "mediaId" = $1`, [movie.id]);
-      await sql(`DELETE FROM "ActivityLog" WHERE "entityId" = $1`, [movie.id]);
+      await sql(`DELETE FROM title_revision WHERE "mediaId" = $1`, [movie.id]);
+      await sql(`DELETE FROM activity_log WHERE "entityId" = $1`, [movie.id]);
       await sql(`DELETE FROM media WHERE id = $1`, [movie.id]);
     }
   });
@@ -263,7 +263,7 @@ test.describe("Phase 4: Manage Over Time", () => {
       );
       expect(dbUser.role).toBe("editor");
     } finally {
-      await sql(`DELETE FROM "ActivityLog" WHERE "entityId" = $1`, [testUser.id]);
+      await sql(`DELETE FROM activity_log WHERE "entityId" = $1`, [testUser.id]);
       await sql(`DELETE FROM "user" WHERE id = $1`, [testUser.id]);
     }
   });
