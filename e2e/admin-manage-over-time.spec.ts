@@ -109,7 +109,9 @@ test.describe("Phase 4: Manage Over Time", () => {
       expect(dbSettings[0]?.maintenanceMode).toBe(true);
 
       // 4. Test unauthenticated visitor is redirected to /maintenance
-      const visitorContext = await browser.newContext();
+      const visitorContext = await browser.newContext({
+        storageState: { cookies: [], origins: [] },
+      });
       const visitorPage = await visitorContext.newPage();
       try {
         await visitorPage.goto("/");
@@ -136,6 +138,19 @@ test.describe("Phase 4: Manage Over Time", () => {
         `SELECT "maintenanceMode" FROM site_setting WHERE id = 'default'`
       );
       expect(restoredSettings[0]?.maintenanceMode).toBe(false);
+
+      // Verify unauthenticated visitor can access site normally when maintenance mode is off
+      const restoredVisitorContext = await browser.newContext({
+        storageState: { cookies: [], origins: [] },
+      });
+      const restoredVisitorPage = await restoredVisitorContext.newPage();
+      try {
+        await restoredVisitorPage.goto("/");
+        await expect(restoredVisitorPage).not.toHaveURL(/.*\/maintenance/);
+        await expect(restoredVisitorPage.getByText("Start Browsing")).toBeVisible();
+      } finally {
+        await restoredVisitorContext.close();
+      }
 
       // 7. Verify JSON backup export
       const jsonRes = await page.request.get("/api/admin/export?type=catalog-json");
