@@ -50,18 +50,19 @@ export default function SettingsTabs({
     e.preventDefault();
     setStatusMessage(null);
 
-    const formData = new FormData();
-    formData.set("siteTitle", siteTitle);
-    formData.set("tagline", tagline);
-    formData.set("contactEmail", contactEmail);
-    formData.set("defaultPageSize", defaultPageSize);
-    formData.set("webhookUrl", webhookUrl);
-    formData.set("maintenanceMode", String(maintenanceMode));
-    formData.set("registrationOpen", String(registrationOpen));
-    formData.set("allowedEmbedHosts", allowedEmbedHosts);
+    const payload = {
+      siteTitle,
+      tagline,
+      contactEmail,
+      defaultPageSize: Number(defaultPageSize),
+      webhookUrl,
+      maintenanceMode,
+      registrationOpen,
+      allowedEmbedHosts,
+    };
 
     startTransition(async () => {
-      const res = await updateSiteSettingsAction(formData);
+      const res = await updateSiteSettingsAction(payload);
       if (res.ok) {
         setStatusMessage({ ok: true, text: res.message || "Settings saved successfully." });
         router.refresh();

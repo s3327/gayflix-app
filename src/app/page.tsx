@@ -76,16 +76,16 @@ function Actions({ signedIn }: { signedIn: boolean }) {
 }
 
 export default async function LandingPage() {
-  const [session, settings, { items: newest }, genres] = await Promise.all([
-    getSession(),
-    getSiteSettings(),
-    listTitles({ sort: "added", page: 1 }),
-    listFilterValues("genre"),
-  ]);
+  const [session, settings] = await Promise.all([getSession(), getSiteSettings()]);
 
   if (settings.maintenanceMode && !isStaffRole(session?.user?.role)) {
     redirect("/maintenance");
   }
+
+  const [{ items: newest }, genres] = await Promise.all([
+    listTitles({ sort: "added", page: 1 }),
+    listFilterValues("genre"),
+  ]);
 
   const signedIn = Boolean(session);
   // Repeats the newest titles when there are fewer than the wall holds.

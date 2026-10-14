@@ -1,7 +1,9 @@
 "use server";
 
-import { updateSiteSettings } from "@/lib/site-settings";
+import { updateSiteSettings, type UpdateSiteSettingsInput } from "@/lib/site-settings";
 
-export async function updateSiteSettingsAction(form: FormData): Promise<{ ok: boolean; message?: string }> {
-  return updateSiteSettings(form);
+export async function updateSiteSettingsAction(
+  formOrData: FormData | UpdateSiteSettingsInput
+): Promise<{ ok: boolean; message?: string }> {
+  return updateSiteSettings(formOrData);
 }

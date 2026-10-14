@@ -61,23 +61,57 @@ export const getSiteSettings = cache(async (): Promise<SiteSettingsData> => {
   }
 });
 
+export type UpdateSiteSettingsInput = {
+  siteTitle?: string;
+  tagline?: string;
+  contactEmail?: string | null;
+  registrationOpen?: boolean;
+  maintenanceMode?: boolean;
+  defaultPageSize?: number;
+  webhookUrl?: string | null;
+  allowedEmbedHosts?: string[] | string;
+};
+
 /** Server action to update site settings. */
-export async function updateSiteSettings(form: FormData): Promise<{ ok: boolean; message?: string }> {
+export async function updateSiteSettings(
+  input: FormData | UpdateSiteSettingsInput
+): Promise<{ ok: boolean; message?: string }> {
   const session = await requireAdmin();
   if (!canManageSettings(session.user.role)) {
     return { ok: false, message: "Forbidden: You do not have permission to manage site settings." };
   }
 
-  const siteTitle = (form.get("siteTitle") as string)?.trim() || DEFAULT_SETTINGS.siteTitle;
-  const tagline = (form.get("tagline") as string)?.trim() || DEFAULT_SETTINGS.tagline;
-  const contactEmail = (form.get("contactEmail") as string)?.trim() || null;
-  const registrationOpen = form.get("registrationOpen") === "on" || form.get("registrationOpen") === "true";
-  const maintenanceMode = form.get("maintenanceMode") === "on" || form.get("maintenanceMode") === "true";
-  const defaultPageSizeStr = form.get("defaultPageSize") as string;
-  const defaultPageSize = defaultPageSizeStr ? Math.max(12, Math.min(100, Number(defaultPageSizeStr))) : 24;
-  const webhookUrl = (form.get("webhookUrl") as string)?.trim() || null;
+  const isForm = typeof (input as FormData)?.get === "function";
+  const getField = (name: string): string | null => {
+    if (!isForm) return null;
+    const form = input as FormData;
+    const v = form.get(name) ?? form.get(`_1_${name}`);
+    return typeof v === "string" ? v : null;
+  };
+  const obj = !isForm ? (input as UpdateSiteSettingsInput) : {};
 
-  const allowedHostsRaw = (form.get("allowedEmbedHosts") as string) ?? "";
+  const siteTitle = (isForm ? getField("siteTitle") : obj.siteTitle)?.trim() || DEFAULT_SETTINGS.siteTitle;
+  const tagline = (isForm ? getField("tagline") : obj.tagline)?.trim() || DEFAULT_SETTINGS.tagline;
+  const contactEmail = (isForm ? getField("contactEmail") : obj.contactEmail)?.trim() || null;
+
+  const registrationOpen = isForm
+    ? (getField("registrationOpen") === "on" || getField("registrationOpen") === "true")
+    : Boolean(obj.registrationOpen ?? DEFAULT_SETTINGS.registrationOpen);
+
+  const maintenanceMode = isForm
+    ? (getField("maintenanceMode") === "on" || getField("maintenanceMode") === "true")
+    : Boolean(obj.maintenanceMode ?? DEFAULT_SETTINGS.maintenanceMode);
+
+  const defaultPageSizeVal = isForm ? getField("defaultPageSize") : obj.defaultPageSize;
+  const defaultPageSize = defaultPageSizeVal ? Math.max(12, Math.min(100, Number(defaultPageSizeVal))) : 24;
+
+  const webhookUrl = (isForm ? getField("webhookUrl") : obj.webhookUrl)?.trim() || null;
+
+  const allowedHostsRaw = isForm
+    ? (getField("allowedEmbedHosts") ?? "")
+    : Array.isArray(obj.allowedEmbedHosts)
+    ? obj.allowedEmbedHosts.join("\n")
+    : (obj.allowedEmbedHosts ?? "");
   const allowedEmbedHosts = allowedHostsRaw
     .split(/[\n,]+/)
     .map((h) => h.trim().toLowerCase())
