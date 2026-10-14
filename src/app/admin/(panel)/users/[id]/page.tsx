@@ -3,6 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import ConfirmSubmitButton from "@/components/admin/ConfirmSubmitButton";
+import EditUserModal from "@/components/admin/EditUserModal";
+import UserRoleSection from "@/components/admin/UserRoleSection";
+import Reset2FaButton from "@/components/admin/Reset2FaButton";
 import {
   BUTTON_DANGER,
   BUTTON_SECONDARY,
@@ -18,6 +21,8 @@ import {
   unbanUser,
 } from "@/lib/admin-user-actions";
 import { getUserForAdmin } from "@/lib/admin-users";
+import { getEntityActivity } from "@/lib/activity-logger";
+import { isOwner } from "@/lib/admin-roles";
 import { requireAdmin } from "@/lib/session";
 import {
   BAN_LENGTHS,
@@ -58,7 +63,7 @@ function devices(count: number) {
 export default async function UserPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireAdmin();
   const { id } = await params;
-  const user = await getUserForAdmin(id);
+  const [user, userActivity] = await Promise.all([getUserForAdmin(id), getEntityActivity("user", id, 10)]);
   if (!user) notFound();
 
   const isSelf = user.id === session.user.id;
@@ -77,11 +82,23 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
         Users
       </Link>
 
-      <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
-        <h1 className="min-w-0 break-words font-display text-2xl font-bold">{user.name}</h1>
-        <UserBadges user={user} />
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <h1 className="min-w-0 break-words font-display text-2xl font-bold">{user.name}</h1>
+            <UserBadges user={user} />
+          </div>
+          <p className="mt-1 break-all text-sm text-ink-secondary">{user.email}</p>
+        </div>
+        <EditUserModal
+          user={{
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            emailVerified: user.emailVerified,
+          }}
+        />
       </div>
-      <p className="mt-1 break-all text-sm text-ink-secondary">{user.email}</p>
 
       {isSelf && (
         <p className="mt-6 max-w-2xl text-sm text-ink-secondary">
@@ -103,6 +120,15 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
       </dl>
 
       <div className="mt-10 flex max-w-2xl flex-col gap-6">
+        <Section title="Role & Permissions">
+          <UserRoleSection
+            userId={user.id}
+            currentRole={user.role ?? "user"}
+            isSelf={isSelf}
+            isViewerOwner={isOwner(session.user.role)}
+          />
+        </Section>
+
         <Section title="Admin access">
           {admin ? (
             <p>This account can use the admin panel.</p>
@@ -210,6 +236,37 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
                 </ConfirmSubmitButton>
               </form>
             </Action>
+          )}
+        </Section>
+
+        {user.twoFactorEnabled && (
+          <Section title="Two-Factor Authentication">
+            <p>Two-factor authentication is active on this account.</p>
+            {!isSelf && (
+              <div className="mt-4">
+                <Reset2FaButton userId={user.id} userEmail={user.email} />
+              </div>
+            )}
+          </Section>
+        )}
+
+        <Section title="Recent activity">
+          {userActivity.length === 0 ? (
+            <p className="text-xs text-ink-muted">No activity recorded for this user yet.</p>
+          ) : (
+            <ul className="divide-y divide-border-subtle/50 text-xs">
+              {userActivity.map((act) => (
+                <li key={act.id} className="py-2.5 flex items-start justify-between gap-3">
+                  <div>
+                    <span className="font-medium text-ink">{act.summary}</span>
+                    <span className="block text-2xs text-ink-secondary">by {act.actorEmail}</span>
+                  </div>
+                  <span className="shrink-0 text-2xs text-ink-muted">
+                    {dateTime.format(new Date(act.createdAt))}
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </Section>
       </div>

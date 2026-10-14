@@ -1,66 +1,78 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
-import { newBadgeConfig } from "@/lib/new-badge-config";
+import { useState, useTransition } from "react";
+import { Save, Check, AlertCircle } from "lucide-react";
+import type { SiteSettingsData } from "@/lib/site-settings";
+import { updateSiteSettingsAction } from "@/lib/admin-setting-actions";
 
-type TabKey = "general" | "site" | "user" | "ads";
+type TabKey = "general" | "access" | "playback";
 
 const TABS: { key: TabKey; label: string; description: string }[] = [
   {
     key: "general",
     label: "General",
-    description:
-      "Site name, default timezone, default language, and maintenance mode go here.",
+    description: "Site title, tagline, support contact, and notification webhooks.",
   },
   {
-    key: "site",
-    label: "Site",
-    description:
-      "Branding (logo/favicon), theme colors, SEO/meta defaults, and the Trending page's time range (This Week / This Month) go here — plus the New Releases badge setting below.",
+    key: "access",
+    label: "Access & Maintenance",
+    description: "Maintenance mode and public account registration controls.",
   },
   {
-    key: "user",
-    label: "User",
-    description:
-      "Registration rules, roles & permissions, and account defaults go here.",
-  },
-  {
-    key: "ads",
-    label: "Ads",
-    description: "Ad network configuration and placement settings go here.",
+    key: "playback",
+    label: "Playback & Embeds",
+    description: "Whitelisted embed provider hosts and stream player defaults.",
   },
 ];
 
-const PERIOD_OPTIONS = [
-  { days: 3, label: "Last 3 days" },
-  { days: 7, label: "Last 7 days" },
-  { days: 14, label: "Last 14 days" },
-  { days: 30, label: "Last month" },
-];
-
-/**
- * UI-only — tab switching is real (local state). Most tabs still just
- * name what will eventually live there, but Site now has one real
- * control group (the New Releases "NEW" badge) as a concrete example of
- * what a settings form looks like — the rest are still placeholders.
- *
- * The toggle/dropdown below control their own local state, seeded from
- * new-badge-config.ts's current values, but don't write back to that
- * file — there's no persistence layer yet. The public New Releases page
- * reads new-badge-config.ts directly, so changing these controls here
- * doesn't actually affect it. Once real settings storage exists, both
- * sides read from the same source instead of just sharing a default.
- */
-export default function SettingsTabs() {
+export default function SettingsTabs({
+  initialSettings,
+}: {
+  initialSettings: SiteSettingsData;
+}) {
   const [active, setActive] = useState<TabKey>("general");
-  const activeTab = TABS.find((t) => t.key === active)!;
+  const [isPending, startTransition] = useTransition();
+  const [statusMessage, setStatusMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const [badgeEnabled] = useState(newBadgeConfig.enabled);
-  const [periodDays] = useState(newBadgeConfig.periodDays);
+  // Form states
+  const [siteTitle, setSiteTitle] = useState(initialSettings.siteTitle);
+  const [tagline, setTagline] = useState(initialSettings.tagline);
+  const [contactEmail, setContactEmail] = useState(initialSettings.contactEmail ?? "");
+  const [defaultPageSize, setDefaultPageSize] = useState(String(initialSettings.defaultPageSize));
+  const [webhookUrl, setWebhookUrl] = useState(initialSettings.webhookUrl ?? "");
+  const [maintenanceMode, setMaintenanceMode] = useState(initialSettings.maintenanceMode);
+  const [registrationOpen, setRegistrationOpen] = useState(initialSettings.registrationOpen);
+  const [allowedEmbedHosts, setAllowedEmbedHosts] = useState(initialSettings.allowedEmbedHosts.join("\n"));
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setStatusMessage(null);
+
+    const formData = new FormData();
+    formData.set("siteTitle", siteTitle);
+    formData.set("tagline", tagline);
+    formData.set("contactEmail", contactEmail);
+    formData.set("defaultPageSize", defaultPageSize);
+    formData.set("webhookUrl", webhookUrl);
+    formData.set("maintenanceMode", String(maintenanceMode));
+    formData.set("registrationOpen", String(registrationOpen));
+    formData.set("allowedEmbedHosts", allowedEmbedHosts);
+
+    startTransition(async () => {
+      const res = await updateSiteSettingsAction(formData);
+      if (res.ok) {
+        setStatusMessage({ ok: true, text: res.message || "Settings saved successfully." });
+      } else {
+        setStatusMessage({ ok: false, text: res.message || "Failed to save settings." });
+      }
+    });
+  };
+
+  const activeTab = TABS.find((t) => t.key === active)!;
 
   return (
     <div>
+      {/* Tab Navigation */}
       <div
         role="tablist"
         aria-label="Settings sections"
@@ -90,82 +102,176 @@ export default function SettingsTabs() {
         id={`panel-${activeTab.key}`}
         role="tabpanel"
         aria-labelledby={`tab-${activeTab.key}`}
-        className="px-6 py-8 sm:px-10"
+        className="px-6 py-8 sm:px-10 max-w-3xl"
       >
-        <h2 className="font-display text-lg font-semibold">
-          {activeTab.label}
-        </h2>
-        <p className="mt-2 max-w-lg text-sm text-ink-muted">
-          {activeTab.description}
-        </p>
+        <h2 className="font-display text-lg font-semibold">{activeTab.label}</h2>
+        <p className="mt-1 text-sm text-ink-muted">{activeTab.description}</p>
 
-        {active === "site" && (
-          <div className="mt-6 max-w-md rounded-card border border-border-subtle p-5">
-            <div className="flex items-center justify-between">
-              <h3 className="font-display text-sm font-semibold">
-                New Releases — &quot;NEW&quot; badge
-              </h3>
-              <span className="rounded-full bg-bg-elevated px-2 py-0.5 text-xs text-ink-muted">
-                Read-only
-              </span>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between gap-4 opacity-60">
-              <label
-                htmlFor="new-badge-toggle"
-                className="text-sm text-ink-secondary"
-              >
-                Show NEW badge on New Releases page
-              </label>
-              <button
-                id="new-badge-toggle"
-                type="button"
-                role="switch"
-                disabled
-                aria-checked={badgeEnabled}
-                className={`relative h-6 w-11 shrink-0 cursor-not-allowed rounded-full transition-colors ${
-                  badgeEnabled ? "bg-brand-pink" : "bg-bg-elevated"
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-                    badgeEnabled ? "translate-x-5" : "translate-x-0.5"
-                  }`}
-                />
-              </button>
-            </div>
-
-            <div className="mt-5 opacity-60">
-              <label
-                htmlFor="new-badge-period"
-                className="block text-sm text-ink-secondary"
-              >
-                Period
-              </label>
-              <div className="relative mt-1.5">
-                <select
-                  id="new-badge-period"
-                  value={periodDays}
-                  disabled
-                  className="w-full cursor-not-allowed appearance-none rounded-md border border-border-subtle bg-bg-elevated py-2.5 pl-4 pr-10 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-hidden"
-                >
-                  {PERIOD_OPTIONS.map((opt) => (
-                    <option key={opt.days} value={opt.days}>
-                      {opt.label}
-                      {opt.days === 7 ? " (default)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-              </div>
-            </div>
-
-            <p className="mt-4 rounded-md border border-border-subtle bg-bg-elevated p-3 text-xs text-ink-muted">
-              Persistent settings storage in the database is planned for Phase 4.
-              The live site currently reads defaults from the code (enabled, last 7 days).
-            </p>
+        {statusMessage && (
+          <div
+            className={`mt-4 flex items-center gap-2 rounded-card p-3 text-sm border ${
+              statusMessage.ok
+                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                : "bg-status-error/10 text-status-error border-status-error/30"
+            }`}
+          >
+            {statusMessage.ok ? <Check className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            <span>{statusMessage.text}</span>
           </div>
         )}
+
+        <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+          {active === "general" && (
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="siteTitle" className="block text-xs font-semibold uppercase text-ink-secondary mb-1">
+                  Site Title
+                </label>
+                <input
+                  id="siteTitle"
+                  type="text"
+                  required
+                  value={siteTitle}
+                  onChange={(e) => setSiteTitle(e.target.value)}
+                  className="w-full rounded-md border border-border-subtle bg-bg-surface px-3 py-2 text-sm text-ink-primary focus:border-brand-pink focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="tagline" className="block text-xs font-semibold uppercase text-ink-secondary mb-1">
+                  Tagline
+                </label>
+                <input
+                  id="tagline"
+                  type="text"
+                  value={tagline}
+                  onChange={(e) => setTagline(e.target.value)}
+                  className="w-full rounded-md border border-border-subtle bg-bg-surface px-3 py-2 text-sm text-ink-primary focus:border-brand-pink focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="contactEmail" className="block text-xs font-semibold uppercase text-ink-secondary mb-1">
+                  Support Contact Email
+                </label>
+                <input
+                  id="contactEmail"
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="e.g. support@gayflix.com"
+                  className="w-full rounded-md border border-border-subtle bg-bg-surface px-3 py-2 text-sm text-ink-primary focus:border-brand-pink focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="defaultPageSize" className="block text-xs font-semibold uppercase text-ink-secondary mb-1">
+                  Default Browse / Catalog Page Size
+                </label>
+                <select
+                  id="defaultPageSize"
+                  value={defaultPageSize}
+                  onChange={(e) => setDefaultPageSize(e.target.value)}
+                  className="w-full rounded-md border border-border-subtle bg-bg-surface px-3 py-2 text-sm text-ink-primary focus:border-brand-pink focus:outline-hidden"
+                >
+                  <option value="12">12 items</option>
+                  <option value="24">24 items (Default)</option>
+                  <option value="48">48 items</option>
+                  <option value="96">96 items</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="webhookUrl" className="block text-xs font-semibold uppercase text-ink-secondary mb-1">
+                  Activity Alert Webhook URL (Discord / Telegram / Slack)
+                </label>
+                <input
+                  id="webhookUrl"
+                  type="url"
+                  placeholder="https://discord.com/api/webhooks/..."
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  className="w-full rounded-md border border-border-subtle bg-bg-surface px-3 py-2 text-sm text-ink-primary focus:border-brand-pink focus:outline-hidden font-mono text-xs"
+                />
+                <p className="mt-1 text-xs text-ink-muted">
+                  Receives asynchronous JSON POST payloads when admin events (title edits, bans) occur.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {active === "access" && (
+            <div className="space-y-6">
+              <div className="flex items-start gap-3 rounded-card border border-border-subtle bg-bg-surface p-4">
+                <input
+                  id="maintenanceMode"
+                  type="checkbox"
+                  checked={maintenanceMode}
+                  onChange={(e) => setMaintenanceMode(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-border-strong accent-brand-pink"
+                />
+                <div>
+                  <label htmlFor="maintenanceMode" className="text-sm font-semibold text-ink-primary cursor-pointer">
+                    Enable Maintenance Mode
+                  </label>
+                  <p className="text-xs text-ink-muted mt-0.5">
+                    When enabled, unauthenticated visitors and regular members are redirected to the friendly
+                    maintenance screen (`/maintenance`). Staff accounts can still browse the full site with an alert banner.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 rounded-card border border-border-subtle bg-bg-surface p-4">
+                <input
+                  id="registrationOpen"
+                  type="checkbox"
+                  checked={registrationOpen}
+                  onChange={(e) => setRegistrationOpen(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-border-strong accent-brand-pink"
+                />
+                <div>
+                  <label htmlFor="registrationOpen" className="text-sm font-semibold text-ink-primary cursor-pointer">
+                    Allow Public User Sign-Ups
+                  </label>
+                  <p className="text-xs text-ink-muted mt-0.5">
+                    Allow new visitors to register accounts. When unchecked, the sign-up page shows registrations are currently closed.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {active === "playback" && (
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="allowedEmbedHosts" className="block text-xs font-semibold uppercase text-ink-secondary mb-1">
+                  Allowed Video Embed Hosts (One per line)
+                </label>
+                <textarea
+                  id="allowedEmbedHosts"
+                  rows={6}
+                  value={allowedEmbedHosts}
+                  onChange={(e) => setAllowedEmbedHosts(e.target.value)}
+                  className="w-full rounded-md border border-border-subtle bg-bg-surface px-3 py-2 text-sm text-ink-primary focus:border-brand-pink focus:outline-hidden font-mono text-xs"
+                />
+                <p className="mt-1 text-xs text-ink-muted">
+                  The Content-Security-Policy iframe whitelist is generated dynamically from these host domains.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="pt-4 border-t border-border-subtle flex justify-end">
+            <button
+              type="submit"
+              disabled={isPending}
+              className="flex items-center gap-2 rounded-card bg-brand-pink px-5 py-2 text-sm font-bold text-ink-onBrand hover:bg-brand-pink-light disabled:opacity-50 transition-colors"
+            >
+              <Save className="h-4 w-4" />
+              {isPending ? "Saving..." : "Save Settings"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

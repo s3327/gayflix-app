@@ -43,6 +43,14 @@ export function isBanned(user: Pick<UserTarget, "banned" | "banExpires">, now = 
 
 export type UserAction = "make-admin" | "remove-admin" | "ban" | "unban" | "sign-out";
 
+export function isOwner(user: Pick<UserTarget, "role">): boolean {
+  return user.role === "owner";
+}
+
+export function isStaff(user: Pick<UserTarget, "role">): boolean {
+  return user.role === "admin" || user.role === "owner" || user.role === "editor" || user.role === "moderator";
+}
+
 /**
  * Why an admin (`actorId`) can't do `action` to `user`, or null if they
  * can. The page only offers allowed actions; the server functions check
@@ -58,6 +66,7 @@ export function userActionProblem(
   now = Date.now()
 ): string | null {
   if (user.id === actorId) return "You can't change your own account here.";
+  if (isOwner(user)) return "The site owner cannot be demoted, banned or changed.";
   const banned = isBanned(user, now);
   switch (action) {
     case "make-admin":

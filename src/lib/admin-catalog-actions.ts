@@ -10,6 +10,8 @@ import type { MediaStatus, MediaType } from "@/lib/media";
 import { requireAdmin } from "@/lib/session";
 import { setAdminFlash } from "@/lib/admin-flash";
 import { imageHosts } from "@/lib/image-hosts.mjs";
+import { createTitleRevision } from "@/lib/title-revisions";
+import { logActivity } from "@/lib/activity-logger";
 import { getTmdbDetails, getTmdbSeasonDetails } from "@/lib/tmdb";
 import {
   EPISODE_FIELDS,
@@ -92,7 +94,7 @@ export async function createTitle(
   _state: FormState,
   form: FormData
 ): Promise<FormState> {
-  await requireAdmin();
+  const session = await requireAdmin();
   const type = mediaType(typeArg);
   const sources = sourceIds(form);
   const values = formValues(form, TITLE_FIELDS);
@@ -112,6 +114,16 @@ export async function createTitle(
   if (!id) {
     return { message: "Another title took that address just now. Add it again.", values, version: Date.now() };
   }
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: "title.create",
+    entityType: "media",
+    entityId: id,
+    summary: `Created ${type} "${parsed.data.title}"`,
+    details: { type, title: parsed.data.title, year: parsed.data.year },
+  });
   refreshPages();
   redirect(`${libraryPath(type)}/${id}?${sources.tmdbId ? "imported" : "added"}=1`);
 }
@@ -122,7 +134,7 @@ export async function updateTitle(
   _state: FormState,
   form: FormData
 ): Promise<FormState> {
-  await requireAdmin();
+  const session = await requireAdmin();
   const id = itemId(idArg);
   const values = formValues(form, TITLE_FIELDS);
   const loadedAt = form.get("loadedAt");
@@ -149,6 +161,14 @@ export async function updateTitle(
   const parsed = parseTitle(existing.type, values);
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
 
+  // Create point-in-time snapshot before modifying
+  await createTitleRevision({
+    mediaId: id,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    summary: `Updated title metadata for "${parsed.data.title}"`,
+  });
+
   const shouldSetPublishedAt =
     parsed.data.status === "published" &&
     (existing.status !== "published" || existing.publishedAt === null);
@@ -168,6 +188,18 @@ export async function updateTitle(
     return count > 0;
   });
   if (!saved) return gone;
+
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: "title.update",
+    entityType: "media",
+    entityId: id,
+    summary: `Updated ${existing.type} "${parsed.data.title}"`,
+    details: { title: parsed.data.title, status: parsed.data.status },
+  });
+
   refreshPages();
   return { ok: true, message: "Saved.", values, version: Date.now() };
 }
@@ -196,11 +228,20 @@ export async function updateMediaStatusBatch(ids: string[], status: MediaStatus)
 
 /** Publish or unpublish one title (a library row's button). */
 export async function setTitleStatus(idArg: unknown, statusArg: unknown): Promise<void> {
-  await requireAdmin();
+  const session = await requireAdmin();
   const id = itemId(idArg);
   const status = mediaStatus(statusArg);
   await updateMediaStatusBatch([id], status);
   const isPub = status === "published";
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: isPub ? "title.publish" : "title.unpublish",
+    entityType: "media",
+    entityId: id,
+    summary: `${isPub ? "Published" : "Unpublished"} title ${id}`,
+  });
   await setAdminFlash({
     message: isPub ? "Title published." : "Title unpublished.",
     undo: {
@@ -213,12 +254,21 @@ export async function setTitleStatus(idArg: unknown, statusArg: unknown): Promis
 
 /** Publish or unpublish the checked rows. */
 export async function setSelectedStatus(statusArg: unknown, form: FormData): Promise<void> {
-  await requireAdmin();
+  const session = await requireAdmin();
   const ids = selectedIds(form);
   if (ids.length === 0) return;
   const status = mediaStatus(statusArg);
   await updateMediaStatusBatch(ids, status);
   const isPub = status === "published";
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: isPub ? "title.publish" : "title.unpublish",
+    entityType: "media",
+    entityId: ids.join(","),
+    summary: `${isPub ? "Published" : "Unpublished"} ${ids.length} titles`,
+  });
   await setAdminFlash({
     message: `${ids.length} ${ids.length === 1 ? "title" : "titles"} ${isPub ? "published" : "unpublished"}.`,
     undo: {
@@ -258,9 +308,18 @@ async function moveToTrash(ids: string[]) {
 }
 
 export async function trashTitle(idArg: unknown): Promise<void> {
-  await requireAdmin();
+  const session = await requireAdmin();
   const id = itemId(idArg);
   await moveToTrash([id]);
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: "title.trash",
+    entityType: "media",
+    entityId: id,
+    summary: `Moved title ${id} to trash`,
+  });
   await setAdminFlash({
     message: "Moved to trash.",
     undo: { label: "Undo", action: "restore_media", ids: [id] },
@@ -268,10 +327,19 @@ export async function trashTitle(idArg: unknown): Promise<void> {
 }
 
 export async function trashSelected(form: FormData): Promise<void> {
-  await requireAdmin();
+  const session = await requireAdmin();
   const ids = selectedIds(form);
   if (ids.length === 0) return;
   await moveToTrash(ids);
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: "title.trash",
+    entityType: "media",
+    entityId: ids.join(","),
+    summary: `Moved ${ids.length} titles to trash`,
+  });
   await setAdminFlash({
     message: `${ids.length} ${ids.length === 1 ? "title" : "titles"} moved to trash.`,
     undo: { label: "Undo", action: "restore_media", ids },
@@ -280,7 +348,7 @@ export async function trashSelected(form: FormData): Promise<void> {
 
 /** Back from the trash, restoring its previous status and featured flag. */
 export async function restoreTitle(idArg: unknown): Promise<void> {
-  await requireAdmin();
+  const session = await requireAdmin();
   const id = itemId(idArg);
   await db.$transaction(async (tx) => {
     const item = await tx.media.findUnique({
@@ -306,14 +374,33 @@ export async function restoreTitle(idArg: unknown): Promise<void> {
       await unfeatureOthers(tx, id);
     }
   });
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: "title.restore",
+    entityType: "media",
+    entityId: id,
+    summary: `Restored title ${id} from trash`,
+  });
   refreshPages();
   await setAdminFlash({ message: "Title restored." });
 }
 
 /** For good, with its episodes. Only titles already in the trash. */
 export async function deleteTitle(idArg: unknown): Promise<void> {
-  await requireAdmin();
-  await db.media.deleteMany({ where: { id: itemId(idArg), trashedAt: { not: null } } });
+  const session = await requireAdmin();
+  const id = itemId(idArg);
+  await db.media.deleteMany({ where: { id, trashedAt: { not: null } } });
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: "title.delete",
+    entityType: "media",
+    entityId: id,
+    summary: `Permanently deleted title ${id}`,
+  });
   refreshPages();
   await setAdminFlash({ message: "Title deleted permanently." });
 }
@@ -388,13 +475,21 @@ export async function quickUpdateTitle({
   tagline?: string | null;
   rating?: number | null;
 }): Promise<{ ok: boolean; message?: string }> {
-  await requireAdmin();
+  const session = await requireAdmin();
   if (!isMediaId(id)) return { ok: false, message: "Invalid title ID" };
   const existing = await db.media.findUnique({
     where: { id },
-    select: { status: true, publishedAt: true, trashedAt: true },
+    select: { type: true, status: true, publishedAt: true, trashedAt: true },
   });
   if (!existing || existing.trashedAt) return { ok: false, message: "Title not found or in trash" };
+
+  // Save revision snapshot before applying quick updates
+  await createTitleRevision({
+    mediaId: id,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    summary: `Quick edited metadata for "${title.trim()}"`,
+  });
 
   const shouldSetPublishedAt =
     status === "published" && (existing.status !== "published" || existing.publishedAt === null);
@@ -411,6 +506,17 @@ export async function quickUpdateTitle({
       ...(rating !== undefined ? { rating } : {}),
       ...(shouldSetPublishedAt ? { publishedAt: new Date() } : {}),
     },
+  });
+
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: "title.quick_edit",
+    entityType: "media",
+    entityId: id,
+    summary: `Quick edited "${title.trim()}"`,
+    details: { title: title.trim(), year, status },
   });
 
   refreshPages();

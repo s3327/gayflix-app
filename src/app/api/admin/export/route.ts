@@ -169,6 +169,54 @@ export async function GET(request: Request) {
         ),
       ];
       csvContent = lines.join("\r\n");
+    } else if (type === "activity") {
+      const logs = await db.activityLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 5000,
+      });
+      const headers = ["ID", "Timestamp", "Actor Email", "Actor Role", "Action", "Entity Type", "Entity ID", "Summary"];
+      const lines = [
+        toCsvRow(headers),
+        ...logs.map((l) =>
+          toCsvRow([
+            l.id,
+            l.createdAt,
+            l.actorEmail,
+            l.actorRole ?? "",
+            l.action,
+            l.entityType,
+            l.entityId ?? "",
+            l.summary,
+          ])
+        ),
+      ];
+      csvContent = lines.join("\r\n");
+    } else if (type === "catalog-json") {
+      const allMedia = await db.media.findMany({
+        include: {
+          episodes: true,
+          videoSources: true,
+        },
+        orderBy: [{ type: "asc" }, { createdAt: "desc" }],
+      });
+      const jsonStr = JSON.stringify(
+        {
+          version: "1.0",
+          exportedAt: new Date().toISOString(),
+          mediaCount: allMedia.length,
+          items: allMedia,
+        },
+        null,
+        2
+      );
+      const jsonFilename = `gayflix-catalog-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      return new NextResponse(jsonStr, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${jsonFilename}"`,
+        },
+      });
     } else {
       return NextResponse.json({ error: "Unsupported export type" }, { status: 400 });
     }
