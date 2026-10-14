@@ -21,7 +21,10 @@ export default async function SettingsPage() {
       </div>
 
       <div className="mt-6">
-        <SettingsTabs initialSettings={settings} />
+        <SettingsTabs
+          key={settings.updatedAt ? new Date(settings.updatedAt).toISOString() : "settings"}
+          initialSettings={settings}
+        />
       </div>
     </div>
   );

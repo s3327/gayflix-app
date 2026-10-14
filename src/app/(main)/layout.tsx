@@ -32,6 +32,8 @@ import { AlertTriangle } from "lucide-react";
 import { getSiteSettings } from "@/lib/site-settings";
 import { isStaffRole } from "@/lib/admin-roles";
 
+export const dynamic = "force-dynamic";
+
 export default async function MainGroupLayout({
   children,
 }: {

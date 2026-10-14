@@ -10,6 +10,8 @@ import { redirect } from "next/navigation";
 import { getSiteSettings } from "@/lib/site-settings";
 import { isStaffRole } from "@/lib/admin-roles";
 
+export const dynamic = "force-dynamic";
+
 /*
  * The landing page, domain.com: what Gayflix is, a look at the catalog,
  * and the way in. The site itself starts at /home (the (main) group), so

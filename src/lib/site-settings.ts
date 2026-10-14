@@ -162,6 +162,9 @@ export async function updateSiteSettings(
     },
   });
 
+  revalidatePath("/", "page");
   revalidatePath("/", "layout");
+  revalidatePath("/(main)", "layout");
+  revalidatePath("/maintenance", "page");
   return { ok: true, message: "Settings saved successfully." };
 }

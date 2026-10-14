@@ -137,6 +137,7 @@ export default function SettingsTabs({
                 </label>
                 <input
                   id="siteTitle"
+                  name="siteTitle"
                   type="text"
                   required
                   value={siteTitle}
@@ -151,6 +152,7 @@ export default function SettingsTabs({
                 </label>
                 <input
                   id="tagline"
+                  name="tagline"
                   type="text"
                   value={tagline}
                   onChange={(e) => setTagline(e.target.value)}
@@ -164,6 +166,7 @@ export default function SettingsTabs({
                 </label>
                 <input
                   id="contactEmail"
+                  name="contactEmail"
                   type="email"
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
@@ -178,6 +181,7 @@ export default function SettingsTabs({
                 </label>
                 <select
                   id="defaultPageSize"
+                  name="defaultPageSize"
                   value={defaultPageSize}
                   onChange={(e) => setDefaultPageSize(e.target.value)}
                   className="w-full rounded-md border border-border-subtle bg-bg-surface px-3 py-2 text-sm text-ink-primary focus:border-brand-pink focus:outline-hidden"
@@ -195,6 +199,7 @@ export default function SettingsTabs({
                 </label>
                 <input
                   id="webhookUrl"
+                  name="webhookUrl"
                   type="url"
                   placeholder="https://discord.com/api/webhooks/..."
                   value={webhookUrl}
@@ -213,6 +218,7 @@ export default function SettingsTabs({
               <div className="flex items-start gap-3 rounded-card border border-border-subtle bg-bg-surface p-4">
                 <input
                   id="maintenanceMode"
+                  name="maintenanceMode"
                   type="checkbox"
                   checked={maintenanceMode}
                   onChange={(e) => setMaintenanceMode(e.target.checked)}
@@ -232,6 +238,7 @@ export default function SettingsTabs({
               <div className="flex items-start gap-3 rounded-card border border-border-subtle bg-bg-surface p-4">
                 <input
                   id="registrationOpen"
+                  name="registrationOpen"
                   type="checkbox"
                   checked={registrationOpen}
                   onChange={(e) => setRegistrationOpen(e.target.checked)}
@@ -257,6 +264,7 @@ export default function SettingsTabs({
                 </label>
                 <textarea
                   id="allowedEmbedHosts"
+                  name="allowedEmbedHosts"
                   rows={6}
                   value={allowedEmbedHosts}
                   onChange={(e) => setAllowedEmbedHosts(e.target.value)}
