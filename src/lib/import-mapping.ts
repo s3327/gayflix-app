@@ -190,6 +190,8 @@ export type SourceCard = {
   year: number | null;
   /** A small poster on TMDB's image host, or "". */
   posterUrl: string;
+  overview?: string;
+  originalTitle?: string;
 };
 
 /** A TMDB search (or find) result as a card, or null when it's unusable. */
@@ -197,12 +199,16 @@ export function tmdbCard(kind: TmdbKind, result: unknown): SourceCard | null {
   const id = field(result, "id");
   const title = text(field(result, kind === "movie" ? "title" : "name"));
   if (typeof id !== "number" || !parseTmdbRef(`${kind}/${id}`) || !title) return null;
+  const overview = text(field(result, "overview"));
+  const originalTitle = text(field(result, kind === "movie" ? "original_title" : "original_name"));
   return {
     tmdbId: formatTmdbRef({ kind, id }),
     type: kindType(kind),
     title,
     year: yearOf(text(field(result, kind === "movie" ? "release_date" : "first_air_date"))),
     posterUrl: tmdbImage(field(result, "poster_path"), "w342"),
+    ...(overview ? { overview } : {}),
+    ...(originalTitle && originalTitle !== title ? { originalTitle } : {}),
   };
 }
 

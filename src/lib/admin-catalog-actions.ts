@@ -318,6 +318,189 @@ export async function deleteTitle(idArg: unknown): Promise<void> {
   await setAdminFlash({ message: "Title deleted permanently." });
 }
 
+/** Restore multiple checked titles from trash. */
+export async function bulkRestoreTrash(form: FormData): Promise<void> {
+  await requireAdmin();
+  const ids = selectedIds(form);
+  if (ids.length === 0) return;
+  await db.$transaction(async (tx) => {
+    for (const id of ids) {
+      const item = await tx.media.findUnique({
+        where: { id },
+        select: { statusBeforeTrash: true, featuredBeforeTrash: true, trashedAt: true },
+      });
+      if (!item || !item.trashedAt) continue;
+      const restoredStatus = item.statusBeforeTrash ?? "draft";
+      const restoredFeatured = item.featuredBeforeTrash ?? false;
+
+      await tx.media.update({
+        where: { id },
+        data: {
+          status: restoredStatus,
+          featured: restoredFeatured,
+          statusBeforeTrash: null,
+          featuredBeforeTrash: null,
+          trashedAt: null,
+        },
+      });
+
+      if (restoredFeatured && restoredStatus === "published") {
+        await unfeatureOthers(tx, id);
+      }
+    }
+  });
+  refreshPages();
+  await setAdminFlash({
+    message: `${ids.length} ${ids.length === 1 ? "title" : "titles"} restored.`,
+    undo: { label: "Undo", action: "restore_media", ids },
+  });
+}
+
+/** Permanently delete multiple checked titles from trash. */
+export async function bulkDeleteForGoodTrash(form: FormData): Promise<void> {
+  await requireAdmin();
+  const ids = selectedIds(form);
+  if (ids.length === 0) return;
+  await db.media.deleteMany({ where: { id: { in: ids }, trashedAt: { not: null } } });
+  refreshPages();
+  await setAdminFlash({
+    message: `${ids.length} ${ids.length === 1 ? "title" : "titles"} deleted permanently.`,
+  });
+}
+
+/** Quick inline metadata update without leaving the library page. */
+export async function quickUpdateTitle({
+  id,
+  title,
+  year,
+  status,
+  duration,
+  genres,
+  tagline,
+  rating,
+}: {
+  id: string;
+  title: string;
+  year: number;
+  status: "draft" | "published";
+  duration?: string;
+  genres?: string[];
+  tagline?: string | null;
+  rating?: number | null;
+}): Promise<{ ok: boolean; message?: string }> {
+  await requireAdmin();
+  if (!isMediaId(id)) return { ok: false, message: "Invalid title ID" };
+  const existing = await db.media.findUnique({
+    where: { id },
+    select: { status: true, publishedAt: true, trashedAt: true },
+  });
+  if (!existing || existing.trashedAt) return { ok: false, message: "Title not found or in trash" };
+
+  const shouldSetPublishedAt =
+    status === "published" && (existing.status !== "published" || existing.publishedAt === null);
+
+  await db.media.update({
+    where: { id },
+    data: {
+      title: title.trim(),
+      year,
+      status,
+      ...(duration ? { duration } : {}),
+      ...(genres ? { genres } : {}),
+      ...(tagline !== undefined ? { tagline } : {}),
+      ...(rating !== undefined ? { rating } : {}),
+      ...(shouldSetPublishedAt ? { publishedAt: new Date() } : {}),
+    },
+  });
+
+  refreshPages();
+  return { ok: true };
+}
+
+/** Batch add or remove tags and genres across multiple selected titles. */
+export async function bulkTagTitles({
+  ids,
+  addTags = [],
+  removeTags = [],
+  addGenres = [],
+  removeGenres = [],
+}: {
+  ids: string[];
+  addTags?: string[];
+  removeTags?: string[];
+  addGenres?: string[];
+  removeGenres?: string[];
+}): Promise<{ ok: boolean; count: number }> {
+  await requireAdmin();
+  if (!ids || ids.length === 0) return { ok: true, count: 0 };
+  const items = await db.media.findMany({
+    where: { id: { in: ids }, trashedAt: null },
+    select: { id: true, tags: true, genres: true },
+  });
+
+  await db.$transaction(async (tx) => {
+    for (const item of items) {
+      let tags = item.tags;
+      let genres = item.genres;
+
+      if (addTags.length > 0) {
+        tags = Array.from(new Set([...tags, ...addTags.map((t) => t.trim()).filter(Boolean)]));
+      }
+      if (removeTags.length > 0) {
+        tags = tags.filter((t) => !removeTags.includes(t));
+      }
+      if (addGenres.length > 0) {
+        genres = Array.from(new Set([...genres, ...addGenres.map((g) => g.trim()).filter(Boolean)]));
+      }
+      if (removeGenres.length > 0) {
+        genres = genres.filter((g) => !removeGenres.includes(g));
+      }
+
+      await tx.media.update({
+        where: { id: item.id },
+        data: { tags, genres },
+      });
+    }
+  });
+
+  refreshPages();
+  await setAdminFlash({
+    message: `Updated tags and genres for ${items.length} ${items.length === 1 ? "title" : "titles"}.`,
+  });
+  return { ok: true, count: items.length };
+}
+
+/** Test video source link reachability. */
+export async function verifyVideoUrl(
+  url: string
+): Promise<{ ok: boolean; status?: number; error?: string }> {
+  await requireAdmin();
+  try {
+    const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return { ok: false, error: "Only HTTP/HTTPS URLs can be verified" };
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(url, {
+      method: "HEAD",
+      signal: controller.signal,
+      headers: { "User-Agent": "Gayflix-Admin-LinkCheck/1.0" },
+    }).catch(async () => {
+      return fetch(url, {
+        method: "GET",
+        signal: controller.signal,
+        headers: { Range: "bytes=0-100", "User-Agent": "Gayflix-Admin-LinkCheck/1.0" },
+      });
+    });
+    clearTimeout(timeout);
+    return { ok: res.ok || res.status < 400, status: res.status };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Network error";
+    return { ok: false, error: msg };
+  }
+}
+
 // --- Episodes -----------------------------------------------------------------
 
 /** A series' card shows how many seasons it has episodes in. */

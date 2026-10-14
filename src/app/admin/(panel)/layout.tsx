@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Sidebar from "@/components/admin/Sidebar";
 import AdminFlashBanner from "@/components/admin/AdminFlashBanner";
+import CommandMenu from "@/components/admin/CommandMenu";
 import SessionWarningBanner from "@/components/admin/SessionWarningBanner";
 import { ADMIN_SESSION_MAX_AGE_MS } from "@/lib/admin-access";
 import { getAdminFlash } from "@/lib/admin-flash";
@@ -49,6 +50,7 @@ export default async function AdminPanelLayout({
       <div className="flex min-w-0 flex-1 flex-col">
         <SessionWarningBanner sessionExpiresAt={sessionExpiresAt} />
         <AdminFlashBanner flash={flash} />
+        <CommandMenu />
         <main className="min-w-0 flex-1">{children}</main>
       </div>
     </div>
