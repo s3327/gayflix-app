@@ -147,7 +147,9 @@ test.describe("Phase 4: Manage Over Time", () => {
       try {
         await restoredVisitorPage.goto("/");
         await expect(restoredVisitorPage).not.toHaveURL(/.*\/maintenance/);
-        await expect(restoredVisitorPage.getByText("Start Browsing")).toBeVisible();
+        await expect(
+          restoredVisitorPage.getByRole("link", { name: "Start Browsing" }).first()
+        ).toBeVisible();
       } finally {
         await restoredVisitorContext.close();
       }
