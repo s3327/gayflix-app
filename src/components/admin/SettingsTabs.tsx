@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Save, Check, AlertCircle } from "lucide-react";
 import type { SiteSettingsData } from "@/lib/site-settings";
 import { updateSiteSettingsAction } from "@/lib/admin-setting-actions";
@@ -30,6 +31,7 @@ export default function SettingsTabs({
 }: {
   initialSettings: SiteSettingsData;
 }) {
+  const router = useRouter();
   const [active, setActive] = useState<TabKey>("general");
   const [isPending, startTransition] = useTransition();
   const [statusMessage, setStatusMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -62,6 +64,7 @@ export default function SettingsTabs({
       const res = await updateSiteSettingsAction(formData);
       if (res.ok) {
         setStatusMessage({ ok: true, text: res.message || "Settings saved successfully." });
+        router.refresh();
       } else {
         setStatusMessage({ ok: false, text: res.message || "Failed to save settings." });
       }
@@ -86,7 +89,10 @@ export default function SettingsTabs({
             aria-selected={active === tab.key}
             aria-controls={`panel-${tab.key}`}
             type="button"
-            onClick={() => setActive(tab.key)}
+            onClick={() => {
+              setActive(tab.key);
+              setStatusMessage(null);
+            }}
             className={`shrink-0 border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
               active === tab.key
                 ? "border-brand-pink text-ink-brand"

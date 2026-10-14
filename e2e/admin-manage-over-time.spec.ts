@@ -93,14 +93,13 @@ test.describe("Phase 4: Manage Over Time", () => {
 
       // 3. Switch to Access & Maintenance tab
       await page.getByRole("tab", { name: "Access & Maintenance" }).click();
+      await expect(page.getByRole("status")).toHaveCount(0);
       const maintenanceCheckbox = page.getByLabel("Enable Maintenance Mode");
 
       // Enable maintenance mode
-      if (!(await maintenanceCheckbox.isChecked())) {
-        await maintenanceCheckbox.check();
-        await page.getByRole("button", { name: "Save Settings" }).click();
-        await expect(page.getByRole("status")).toContainText("Settings saved successfully.");
-      }
+      await maintenanceCheckbox.check();
+      await page.getByRole("button", { name: "Save Settings" }).click();
+      await expect(page.getByRole("status")).toContainText("Settings saved successfully.");
 
       // 4. Test unauthenticated visitor is redirected to /maintenance
       const visitorContext = await browser.newContext();
@@ -255,7 +254,7 @@ test.describe("Phase 4: Manage Over Time", () => {
       await page.getByRole("button", { name: "Update Role" }).click();
 
       // Verify role badge displays Editor
-      await expect(page.getByText("Editor", { exact: true })).toBeVisible();
+      await expect(page.locator(".rounded-pill", { hasText: "Editor" })).toBeVisible();
 
       // Verify DB updated
       const [dbUser] = await sql<{ role: string }>(
