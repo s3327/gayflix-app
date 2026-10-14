@@ -5,8 +5,8 @@
  * in src/lib/admin-user-actions.ts apply them.
  */
 
-/** Better Auth's user ids: 32 letters and digits. */
-const USER_ID = /^[A-Za-z0-9]{16,64}$/;
+/** Better Auth's user ids: 16-64 alphanumeric characters, hyphens or underscores. */
+const USER_ID = /^[A-Za-z0-9_-]{16,64}$/;
 
 export function isUserId(value: unknown): value is string {
   return typeof value === "string" && USER_ID.test(value);

@@ -60,7 +60,6 @@ export default function TitleRevisionsModal({
         type="button"
         onClick={() => setIsOpen(true)}
         className={BUTTON_SECONDARY}
-        aria-label="View revision history"
       >
         <History className="h-4 w-4" />
         Revisions ({initialRevisions.length})

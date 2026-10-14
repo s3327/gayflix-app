@@ -139,7 +139,7 @@ export default function SettingsTabs({
 
               <div>
                 <label htmlFor="tagline" className="block text-xs font-semibold uppercase text-ink-secondary mb-1">
-                  Tagline
+                  Site Tagline
                 </label>
                 <input
                   id="tagline"

@@ -219,8 +219,9 @@ test.describe("Phase 4: Manage Over Time", () => {
 
   test("user management RBAC role assignment and profile update", async ({ page }) => {
     const uid = uniqueId();
+    const cleanId = `e2eu${uid.replace(/[^a-zA-Z0-9]/g, "")}`.padEnd(24, "0").slice(0, 32);
     const testUser = {
-      id: `e2e-u-${uid}`,
+      id: cleanId,
       name: `E2E Test User ${uid}`,
       email: `testuser-${uid}@example.com`,
     };
