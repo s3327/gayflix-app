@@ -6,7 +6,7 @@ import { Save, Check, AlertCircle } from "lucide-react";
 import type { SiteSettingsData } from "@/lib/site-settings";
 import { updateSiteSettingsAction } from "@/lib/admin-setting-actions";
 
-type TabKey = "general" | "access" | "playback";
+type TabKey = "general" | "access";
 
 const TABS: { key: TabKey; label: string; description: string }[] = [
   {
@@ -18,11 +18,6 @@ const TABS: { key: TabKey; label: string; description: string }[] = [
     key: "access",
     label: "Access & Maintenance",
     description: "Maintenance mode and public account registration controls.",
-  },
-  {
-    key: "playback",
-    label: "Playback & Embeds",
-    description: "Whitelisted embed provider hosts and stream player defaults.",
   },
 ];
 
@@ -44,7 +39,6 @@ export default function SettingsTabs({
   const [webhookUrl, setWebhookUrl] = useState(initialSettings.webhookUrl ?? "");
   const [maintenanceMode, setMaintenanceMode] = useState(initialSettings.maintenanceMode);
   const [registrationOpen, setRegistrationOpen] = useState(initialSettings.registrationOpen);
-  const [allowedEmbedHosts, setAllowedEmbedHosts] = useState(initialSettings.allowedEmbedHosts.join("\n"));
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -67,7 +61,6 @@ export default function SettingsTabs({
       webhookUrl,
       maintenanceMode: currentMaintenanceMode,
       registrationOpen: currentRegistrationOpen,
-      allowedEmbedHosts,
     };
 
     startTransition(async () => {
@@ -261,27 +254,6 @@ export default function SettingsTabs({
                     Allow new visitors to register accounts. When unchecked, the sign-up page shows registrations are currently closed.
                   </p>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {active === "playback" && (
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="allowedEmbedHosts" className="block text-xs font-semibold uppercase text-ink-secondary mb-1">
-                  Allowed Video Embed Hosts (One per line)
-                </label>
-                <textarea
-                  id="allowedEmbedHosts"
-                  name="allowedEmbedHosts"
-                  rows={6}
-                  value={allowedEmbedHosts}
-                  onChange={(e) => setAllowedEmbedHosts(e.target.value)}
-                  className="w-full rounded-md border border-border-subtle bg-bg-surface px-3 py-2 text-sm text-ink-primary focus:border-brand-pink focus:outline-hidden font-mono text-xs"
-                />
-                <p className="mt-1 text-xs text-ink-muted">
-                  The Content-Security-Policy iframe whitelist is generated dynamically from these host domains.
-                </p>
               </div>
             </div>
           )}

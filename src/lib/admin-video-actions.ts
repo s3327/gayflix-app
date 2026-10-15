@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { isMediaId } from "@/lib/library-types";
-import { requireAdmin } from "@/lib/session";
+import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
 import { formValues, type FormState } from "@/lib/title-form";
 import { videoHosts } from "@/lib/video-hosts";
 import { MAX_VIDEO_SOURCES, parseVideoSource, VIDEO_SOURCE_FIELDS } from "@/lib/video-source";
@@ -73,9 +73,10 @@ export async function addVideoSource(
   _state: FormState,
   form: FormData
 ): Promise<FormState> {
-  await requireAdmin();
-  const owner = ownerOf(ownerKind, ownerId);
+  const { allowed } = await catalogSession();
   const values = formValues(form, VIDEO_SOURCE_FIELDS);
+  if (!allowed) return { message: FORBIDDEN_CATALOG, values, version: Date.now() };
+  const owner = ownerOf(ownerKind, ownerId);
   if (!(await canChange(owner))) return { message: GONE, values, version: Date.now() };
 
   const parsed = parseVideoSource(values, videoHosts());
@@ -110,9 +111,10 @@ export async function updateVideoSource(
   _state: FormState,
   form: FormData
 ): Promise<FormState> {
-  await requireAdmin();
-  const id = sourceId(idArg);
+  const { allowed } = await catalogSession();
   const values = formValues(form, VIDEO_SOURCE_FIELDS);
+  if (!allowed) return { message: FORBIDDEN_CATALOG, values, version: Date.now() };
+  const id = sourceId(idArg);
   if (!(await changeableSource(id))) return { message: GONE, values, version: Date.now() };
 
   const parsed = parseVideoSource(values, videoHosts());
@@ -126,7 +128,8 @@ export async function updateVideoSource(
 
 /** Turn off: the player stops offering it, and it's kept for later. */
 export async function setVideoSourceEnabled(idArg: unknown, enabledArg: unknown): Promise<void> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return;
   const id = sourceId(idArg);
   if (typeof enabledArg !== "boolean") throw new Error("Invalid value");
   if (!(await changeableSource(id))) return;
@@ -136,7 +139,8 @@ export async function setVideoSourceEnabled(idArg: unknown, enabledArg: unknown)
 
 /** Swaps a source with the one before ("up") or after ("down") it. */
 export async function moveVideoSource(idArg: unknown, directionArg: unknown): Promise<void> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return;
   const id = sourceId(idArg);
   if (directionArg !== "up" && directionArg !== "down") throw new Error("Invalid direction");
   const source = await changeableSource(id);
@@ -164,7 +168,8 @@ export async function moveVideoSource(idArg: unknown, directionArg: unknown): Pr
 
 /** Deletes a source for good, after the page's confirmation. */
 export async function deleteVideoSource(idArg: unknown): Promise<void> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return;
   const id = sourceId(idArg);
   if (!(await changeableSource(id))) return;
   await db.videoSource.deleteMany({ where: { id } });

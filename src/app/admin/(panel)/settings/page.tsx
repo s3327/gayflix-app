@@ -1,14 +1,19 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import SettingsTabs from "@/components/admin/SettingsTabs";
 import { getSiteSettings } from "@/lib/site-settings";
 import { requireAdmin } from "@/lib/session";
+import { canManageSettings } from "@/lib/admin-roles";
 
 export const metadata: Metadata = {
   title: "Settings",
 };
 
 export default async function SettingsPage() {
-  await requireAdmin();
+  const session = await requireAdmin();
+  if (!canManageSettings(session.user.role)) {
+    redirect("/admin");
+  }
   const settings = await getSiteSettings();
 
   return (

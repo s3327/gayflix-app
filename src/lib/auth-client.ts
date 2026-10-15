@@ -38,6 +38,7 @@ type AuthError = { code?: string; message?: string; status?: number };
 /** A readable message from a Better Auth error, for showing in forms. */
 export function authErrorMessage(error: AuthError | null | undefined): string {
   if (!error) return "";
+  if (error.status === 403) return error.message || "Public registration is currently closed.";
   if (error.status === 429) return "Too many attempts. Please wait a minute and try again.";
   return (error.code && MESSAGES[error.code]) || error.message || "Something went wrong. Please try again.";
 }

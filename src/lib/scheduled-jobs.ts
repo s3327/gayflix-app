@@ -22,13 +22,13 @@ export const AVAILABLE_JOBS: {
     name: "publish_due",
     label: "Publish Due Scheduled Drafts",
     description: "Finds draft titles with a scheduled publication timestamp in the past and sets status to published.",
-    schedule: "Every 15 minutes",
+    schedule: "Daily at 03:15 UTC",
   },
   {
     name: "clean_orphans",
-    label: "Scan Unreferenced Uploads",
-    description: "Scans blob storage uploads against active media poster and backdrop URLs.",
-    schedule: "Weekly on Sunday",
+    label: "Scan Unreferenced Uploads (Preview)",
+    description: "Preview scanner for unreferenced blob uploads. Real blob bucket scanning requires dedicated storage worker.",
+    schedule: "Manual only",
   },
 ];
 
@@ -78,31 +78,48 @@ export async function runTrashPurgeJob(triggeredBy = "scheduler") {
   const startTime = Date.now();
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const expired = await db.media.findMany({
-    where: { trashedAt: { lte: thirtyDaysAgo } },
-    select: { id: true, title: true },
-  });
-
-  if (expired.length > 0) {
-    await db.media.deleteMany({
-      where: { id: { in: expired.map((m) => m.id) } },
+  try {
+    const expired = await db.media.findMany({
+      where: { trashedAt: { lte: thirtyDaysAgo } },
+      select: { id: true, title: true },
     });
+
+    if (expired.length > 0) {
+      await db.media.deleteMany({
+        where: { id: { in: expired.map((m) => m.id) } },
+      });
+    }
+
+    const durationMs = Date.now() - startTime;
+    const run = await db.scheduledJobRun.create({
+      data: {
+        jobName: "purge_trash",
+        status: "success",
+        itemsCount: expired.length,
+        details: expired.length > 0 ? `Purged ${expired.length} expired titles.` : "No titles eligible for purge.",
+        durationMs,
+        triggeredBy,
+        finishedAt: new Date(),
+      },
+    });
+
+    return run;
+  } catch (err: unknown) {
+    const durationMs = Date.now() - startTime;
+    const msg = err instanceof Error ? err.message : String(err);
+    await db.scheduledJobRun.create({
+      data: {
+        jobName: "purge_trash",
+        status: "error",
+        itemsCount: 0,
+        details: `Failed: ${msg}`,
+        durationMs,
+        triggeredBy,
+        finishedAt: new Date(),
+      },
+    });
+    throw err;
   }
-
-  const durationMs = Date.now() - startTime;
-  const run = await db.scheduledJobRun.create({
-    data: {
-      jobName: "purge_trash",
-      status: "success",
-      itemsCount: expired.length,
-      details: expired.length > 0 ? `Purged ${expired.length} expired titles.` : "No titles eligible for purge.",
-      durationMs,
-      triggeredBy,
-      finishedAt: new Date(),
-    },
-  });
-
-  return run;
 }
 
 /** Publishes drafts whose scheduled publishedAt timestamp has arrived. */
@@ -110,49 +127,65 @@ export async function runPublishDueJob(triggeredBy = "scheduler") {
   const startTime = Date.now();
   const now = new Date();
 
-  const due = await db.media.findMany({
-    where: {
-      status: "draft",
-      trashedAt: null,
-      publishedAt: { lte: now, not: null },
-    },
-    select: { id: true, title: true },
-  });
-
-  if (due.length > 0) {
-    await db.media.updateMany({
-      where: { id: { in: due.map((m) => m.id) } },
-      data: { status: "published" },
+  try {
+    const due = await db.media.findMany({
+      where: {
+        status: "draft",
+        trashedAt: null,
+        publishedAt: { lte: now, not: null },
+      },
+      select: { id: true, title: true },
     });
+
+    if (due.length > 0) {
+      await db.media.updateMany({
+        where: { id: { in: due.map((m) => m.id) } },
+        data: { status: "published" },
+      });
+    }
+
+    const durationMs = Date.now() - startTime;
+    const run = await db.scheduledJobRun.create({
+      data: {
+        jobName: "publish_due",
+        status: "success",
+        itemsCount: due.length,
+        details: due.length > 0 ? `Auto-published ${due.length} scheduled titles.` : "No scheduled titles due.",
+        durationMs,
+        triggeredBy,
+        finishedAt: new Date(),
+      },
+    });
+
+    return run;
+  } catch (err: unknown) {
+    const durationMs = Date.now() - startTime;
+    const msg = err instanceof Error ? err.message : String(err);
+    await db.scheduledJobRun.create({
+      data: {
+        jobName: "publish_due",
+        status: "error",
+        itemsCount: 0,
+        details: `Failed: ${msg}`,
+        durationMs,
+        triggeredBy,
+        finishedAt: new Date(),
+      },
+    });
+    throw err;
   }
-
-  const durationMs = Date.now() - startTime;
-  const run = await db.scheduledJobRun.create({
-    data: {
-      jobName: "publish_due",
-      status: "success",
-      itemsCount: due.length,
-      details: due.length > 0 ? `Auto-published ${due.length} scheduled titles.` : "No scheduled titles due.",
-      durationMs,
-      triggeredBy,
-      finishedAt: new Date(),
-    },
-  });
-
-  return run;
 }
 
-/** Scans unreferenced uploads. */
+/** Scans unreferenced uploads (preview/skipped). */
 export async function runOrphanImageCleanupJob(triggeredBy = "scheduler") {
   const startTime = Date.now();
-  // Simulates scanning and identifying orphaned blob images
   const durationMs = Date.now() - startTime;
   return db.scheduledJobRun.create({
     data: {
       jobName: "clean_orphans",
-      status: "success",
+      status: "skipped",
       itemsCount: 0,
-      details: "Scan complete: all active image uploads reference catalog titles.",
+      details: "Scan skipped: blob scanning requires dedicated background worker.",
       durationMs,
       triggeredBy,
       finishedAt: new Date(),

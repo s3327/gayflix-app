@@ -1,32 +1,57 @@
 import { NextResponse } from "next/server";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/session";
+import { getSession } from "@/lib/session";
+import { adminAccess } from "@/lib/admin-access";
+import { canManageCatalog, canManageSettings, canManageUsers } from "@/lib/admin-roles";
 import { escapeLike, normalizeQuery } from "@/lib/catalog";
-
-function escapeCsv(val: unknown): string {
-  if (val === null || val === undefined) return "";
-  if (val instanceof Date) return val.toISOString();
-  if (Array.isArray(val)) return `"${val.join(", ").replace(/"/g, '""')}"`;
-  const str = String(val);
-  if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
-
-function toCsvRow(cols: unknown[]): string {
-  return cols.map(escapeCsv).join(",");
-}
+import { toCsvRow } from "@/lib/csv";
 
 export async function GET(request: Request) {
   try {
-    await requireAdmin();
+    const session = await getSession();
+    if (!session || adminAccess(session) !== "ok") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type") ?? "movies";
     const q = normalizeQuery(searchParams.get("q") ?? "");
     const status = searchParams.get("status");
 
+    // Enforce role-based access control per export type
+    if (type === "movies" || type === "series" || type === "episodes") {
+      if (!canManageCatalog(session.user.role)) {
+        return NextResponse.json(
+          { error: "Forbidden: You do not have permission to export catalog data." },
+          { status: 403 }
+        );
+      }
+    } else if (type === "reports") {
+      if (!canManageUsers(session.user.role)) {
+        return NextResponse.json(
+          { error: "Forbidden: You do not have permission to export reports." },
+          { status: 403 }
+        );
+      }
+    } else if (type === "activity") {
+      if (!canManageSettings(session.user.role)) {
+        return NextResponse.json(
+          { error: "Forbidden: You do not have permission to export activity logs." },
+          { status: 403 }
+        );
+      }
+    } else if (type === "catalog-json") {
+      if (!canManageSettings(session.user.role) && !canManageCatalog(session.user.role)) {
+        return NextResponse.json(
+          { error: "Forbidden: You do not have permission to export the catalog backup." },
+          { status: 403 }
+        );
+      }
+    }
+
     let csvContent = "";
+    let isTruncated = false;
     const filename = `gayflix-${type}-${new Date().toISOString().slice(0, 10)}.csv`;
 
     if (type === "movies" || type === "series") {
@@ -170,10 +195,15 @@ export async function GET(request: Request) {
       ];
       csvContent = lines.join("\r\n");
     } else if (type === "activity") {
-      const logs = await db.activityLog.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 5000,
-      });
+      const [logs, totalCount] = await Promise.all([
+        db.activityLog.findMany({
+          orderBy: { createdAt: "desc" },
+          take: 5000,
+        }),
+        db.activityLog.count(),
+      ]);
+      isTruncated = totalCount > 5000;
+
       const headers = ["ID", "Timestamp", "Actor Email", "Actor Role", "Action", "Entity Type", "Entity ID", "Summary"];
       const lines = [
         toCsvRow(headers),
@@ -192,6 +222,8 @@ export async function GET(request: Request) {
       ];
       csvContent = lines.join("\r\n");
     } else if (type === "catalog-json") {
+      // Note: Trashed items are intentionally included (with trashedAt timestamp preserved)
+      // for complete catalog backup and disaster recovery.
       const allMedia = await db.media.findMany({
         include: {
           episodes: true,
@@ -221,15 +253,21 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unsupported export type" }, { status: 400 });
     }
 
+    const resHeaders: Record<string, string> = {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+    };
+    if (isTruncated) {
+      resHeaders["X-Export-Truncated"] = "true";
+    }
+
     return new NextResponse(csvContent, {
       status: 200,
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
+      headers: resHeaders,
     });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (err) {
+    if (isRedirectError(err)) throw err;
+    console.error("Export route error:", err);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
-

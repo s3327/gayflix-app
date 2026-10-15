@@ -23,6 +23,7 @@ import {
 
 export { escapeLike, normalizeQuery };
 import { getSession, requireAdmin } from "@/lib/session";
+import { getSiteSettings } from "@/lib/site-settings";
 import { videoHosts, videoUrlAllowed } from "@/lib/video-hosts";
 import type { VideoSourceEntry } from "@/lib/video-source";
 import { trendingSince } from "@/lib/views";
@@ -311,13 +312,15 @@ export async function listTitles({
     language: filter.language,
     year: filter.year,
   };
+  const settings = await getSiteSettings();
+  const perPage = settings.defaultPageSize || PAGE_SIZE;
   const total = await db.media.count({ where });
-  const { page, totalPages, skip } = pageWindow(total, requestedPage);
+  const { page, totalPages, skip } = pageWindow(total, requestedPage, perPage);
   const rows = await db.media.findMany({
     where,
     orderBy: ORDER[sort],
     skip,
-    take: PAGE_SIZE,
+    take: perPage,
     select: CARD,
   });
   return { items: rows.map(toMedia), page, totalPages, total };
@@ -437,14 +440,16 @@ export async function searchTitles(rawQuery: string, requestedPage: number): Pro
   const query = normalizeQuery(rawQuery);
   if (!query) return { items: [], page: 1, totalPages: 1, total: 0 };
 
+  const settings = await getSiteSettings();
+  const perPage = settings.defaultPageSize || PAGE_SIZE;
   const where = searchCondition(query);
   const [{ total }] = await db.$queryRaw<{ total: number }[]>`
     SELECT count(*)::int AS total FROM media WHERE ${where}`;
-  const { page, totalPages, skip } = pageWindow(total, requestedPage);
+  const { page, totalPages, skip } = pageWindow(total, requestedPage, perPage);
   const rows = await db.$queryRaw<CardRow[]>`
     SELECT ${CARD_COLUMNS} FROM media WHERE ${where}
     ORDER BY ${titleMatchOrder(query)}
-    LIMIT ${PAGE_SIZE} OFFSET ${skip}`;
+    LIMIT ${perPage} OFFSET ${skip}`;
   return { items: rows.map(toMedia), page, totalPages, total };
 }
 

@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
+import { assertPublicHost, isPublicHttpsUrl } from "@/lib/safe-url";
 
 export type LogActivityParams = {
   actorId?: string | null;
@@ -53,7 +54,10 @@ async function dispatchWebhook(entry: {
       where: { id: "default" },
       select: { webhookUrl: true },
     });
-    if (!setting?.webhookUrl || !setting.webhookUrl.startsWith("http")) return;
+    if (!setting?.webhookUrl || !isPublicHttpsUrl(setting.webhookUrl)) return;
+
+    const parsed = new URL(setting.webhookUrl);
+    await assertPublicHost(parsed.hostname);
 
     await fetch(setting.webhookUrl, {
       method: "POST",
@@ -65,6 +69,7 @@ async function dispatchWebhook(entry: {
         actor: entry.actorEmail,
         timestamp: entry.createdAt.toISOString(),
       }),
+      redirect: "manual",
       signal: AbortSignal.timeout(3000),
     });
   } catch {

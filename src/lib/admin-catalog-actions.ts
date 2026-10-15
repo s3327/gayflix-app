@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { isImdbId, isTmdbId, parseTmdbRef, tmdbStill } from "@/lib/import-mapping";
 import { isMediaId } from "@/lib/library-types";
 import type { MediaStatus, MediaType } from "@/lib/media";
-import { requireAdmin } from "@/lib/session";
+import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
 import { setAdminFlash } from "@/lib/admin-flash";
 import { imageHosts } from "@/lib/image-hosts.mjs";
 import { createTitleRevision } from "@/lib/title-revisions";
@@ -94,10 +94,13 @@ export async function createTitle(
   _state: FormState,
   form: FormData
 ): Promise<FormState> {
-  const session = await requireAdmin();
+  const { session, allowed } = await catalogSession();
+  const values = formValues(form, TITLE_FIELDS);
+  if (!allowed) {
+    return { message: FORBIDDEN_CATALOG, values, version: Date.now() };
+  }
   const type = mediaType(typeArg);
   const sources = sourceIds(form);
-  const values = formValues(form, TITLE_FIELDS);
   const parsed = parseTitle(type, values);
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
 
@@ -134,9 +137,12 @@ export async function updateTitle(
   _state: FormState,
   form: FormData
 ): Promise<FormState> {
-  const session = await requireAdmin();
-  const id = itemId(idArg);
+  const { session, allowed } = await catalogSession();
   const values = formValues(form, TITLE_FIELDS);
+  if (!allowed) {
+    return { message: FORBIDDEN_CATALOG, values, version: Date.now() };
+  }
+  const id = itemId(idArg);
   const loadedAt = form.get("loadedAt");
   const gone = { message: "This title is in the trash or was deleted.", values, version: Date.now() };
   const existing = await db.media.findUnique({
@@ -205,7 +211,8 @@ export async function updateTitle(
 }
 
 export async function updateMediaStatusBatch(ids: string[], status: MediaStatus) {
-  if (ids.length === 0) return;
+  const { allowed } = await catalogSession();
+  if (!allowed || ids.length === 0) return;
   await db.$transaction(async (tx) => {
     if (status === "published") {
       await tx.media.updateMany({
@@ -228,7 +235,11 @@ export async function updateMediaStatusBatch(ids: string[], status: MediaStatus)
 
 /** Publish or unpublish one title (a library row's button). */
 export async function setTitleStatus(idArg: unknown, statusArg: unknown): Promise<void> {
-  const session = await requireAdmin();
+  const { session, allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const id = itemId(idArg);
   const status = mediaStatus(statusArg);
   await updateMediaStatusBatch([id], status);
@@ -254,7 +265,11 @@ export async function setTitleStatus(idArg: unknown, statusArg: unknown): Promis
 
 /** Publish or unpublish the checked rows. */
 export async function setSelectedStatus(statusArg: unknown, form: FormData): Promise<void> {
-  const session = await requireAdmin();
+  const { session, allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const ids = selectedIds(form);
   if (ids.length === 0) return;
   const status = mediaStatus(statusArg);
@@ -308,7 +323,11 @@ async function moveToTrash(ids: string[]) {
 }
 
 export async function trashTitle(idArg: unknown): Promise<void> {
-  const session = await requireAdmin();
+  const { session, allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const id = itemId(idArg);
   await moveToTrash([id]);
   await logActivity({
@@ -327,7 +346,11 @@ export async function trashTitle(idArg: unknown): Promise<void> {
 }
 
 export async function trashSelected(form: FormData): Promise<void> {
-  const session = await requireAdmin();
+  const { session, allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const ids = selectedIds(form);
   if (ids.length === 0) return;
   await moveToTrash(ids);
@@ -348,7 +371,11 @@ export async function trashSelected(form: FormData): Promise<void> {
 
 /** Back from the trash, restoring its previous status and featured flag. */
 export async function restoreTitle(idArg: unknown): Promise<void> {
-  const session = await requireAdmin();
+  const { session, allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const id = itemId(idArg);
   await db.$transaction(async (tx) => {
     const item = await tx.media.findUnique({
@@ -389,7 +416,11 @@ export async function restoreTitle(idArg: unknown): Promise<void> {
 
 /** For good, with its episodes. Only titles already in the trash. */
 export async function deleteTitle(idArg: unknown): Promise<void> {
-  const session = await requireAdmin();
+  const { session, allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const id = itemId(idArg);
   await db.media.deleteMany({ where: { id, trashedAt: { not: null } } });
   await logActivity({
@@ -407,7 +438,11 @@ export async function deleteTitle(idArg: unknown): Promise<void> {
 
 /** Restore multiple checked titles from trash. */
 export async function bulkRestoreTrash(form: FormData): Promise<void> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const ids = selectedIds(form);
   if (ids.length === 0) return;
   await db.$transaction(async (tx) => {
@@ -445,7 +480,11 @@ export async function bulkRestoreTrash(form: FormData): Promise<void> {
 
 /** Permanently delete multiple checked titles from trash. */
 export async function bulkDeleteForGoodTrash(form: FormData): Promise<void> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const ids = selectedIds(form);
   if (ids.length === 0) return;
   await db.media.deleteMany({ where: { id: { in: ids }, trashedAt: { not: null } } });
@@ -475,7 +514,8 @@ export async function quickUpdateTitle({
   tagline?: string | null;
   rating?: number | null;
 }): Promise<{ ok: boolean; message?: string }> {
-  const session = await requireAdmin();
+  const { session, allowed } = await catalogSession();
+  if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   if (!isMediaId(id)) return { ok: false, message: "Invalid title ID" };
   const existing = await db.media.findUnique({
     where: { id },
@@ -537,7 +577,8 @@ export async function bulkTagTitles({
   addGenres?: string[];
   removeGenres?: string[];
 }): Promise<{ ok: boolean; count: number }> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, count: 0 };
   if (!ids || ids.length === 0) return { ok: true, count: 0 };
   const items = await db.media.findMany({
     where: { id: { in: ids }, trashedAt: null },
@@ -580,7 +621,8 @@ export async function bulkTagTitles({
 export async function verifyVideoUrl(
   url: string
 ): Promise<{ ok: boolean; status?: number; error?: string }> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, error: FORBIDDEN_CATALOG };
   try {
     const parsed = new URL(url);
     if (!["http:", "https:"].includes(parsed.protocol)) {
@@ -626,8 +668,11 @@ function takenMessage(season: number, episode: number) {
  * same season.
  */
 export async function createEpisode(_state: FormState, form: FormData): Promise<FormState> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
   const values = formValues(form, EPISODE_FIELDS);
+  if (!allowed) {
+    return { message: FORBIDDEN_CATALOG, values, version: Date.now() };
+  }
   const parsed = parseEpisode(values);
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
   const { seriesId, seasonNumber, episodeNumber, title, minutes, airDate } = parsed.data;
@@ -682,13 +727,16 @@ export async function updateEpisode(
   _state: FormState,
   form: FormData
 ): Promise<FormState> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
   const id = itemId(idArg);
   const existing = await db.episode.findUnique({
     where: { id },
     select: { mediaId: true, media: { select: { trashedAt: true } } },
   });
   const values = { ...formValues(form, EPISODE_FIELDS), series: existing?.mediaId ?? "" };
+  if (!allowed) {
+    return { message: FORBIDDEN_CATALOG, values, version: Date.now() };
+  }
   if (!existing) return { message: "This episode was deleted.", values, version: Date.now() };
   if (existing.media.trashedAt) return { message: SERIES_IN_TRASH, values, version: Date.now() };
 
@@ -713,7 +761,11 @@ export async function updateEpisode(
 
 /** Deletes an episode for good, then opens its series' edit page. */
 export async function deleteEpisode(idArg: unknown): Promise<void> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const id = itemId(idArg);
   const episode = await db.episode.findUnique({
     where: { id },
@@ -742,7 +794,8 @@ export type TmdbSeasonInfo = {
 export async function getSeriesTmdbSeasonsAction(
   seriesId: string
 ): Promise<{ ok: boolean; seasons?: TmdbSeasonInfo[]; message?: string }> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   const series = await db.media.findUnique({
     where: { id: seriesId },
     select: { tmdbId: true },
@@ -782,7 +835,8 @@ export async function getTmdbSeasonPreviewAction(
   episodes?: { episodeNumber: number; title: string; runtime: string; stillUrl: string | null }[];
   message?: string;
 }> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   const series = await db.media.findUnique({
     where: { id: seriesId },
     select: { tmdbId: true },
@@ -815,7 +869,8 @@ export async function importSeriesSeasonsAction(
   seriesId: string,
   seasonNumbers: number[]
 ): Promise<{ ok: boolean; count?: number; message?: string }> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   if (!Array.isArray(seasonNumbers) || seasonNumbers.length === 0) {
     return { ok: false, message: "Select at least one season." };
   }
@@ -895,7 +950,8 @@ export async function saveSeasonEpisodesAction(
   seasonNumber: number,
   episodes: SeasonEpisodeRow[]
 ): Promise<{ ok: boolean; message?: string; errors?: Record<string, string> }> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   if (!isMediaId(seriesId)) throw new Error("Invalid series ID");
 
   const errors: Record<string, string> = {};

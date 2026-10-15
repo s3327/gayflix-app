@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { parseTmdbRef } from "@/lib/import-mapping";
-import { requireAdmin } from "@/lib/session";
+import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
 import { libraryPath, uploadPath } from "@/lib/title-form";
 import { prepareImport, type ImportState } from "@/lib/title-import";
 import { insertTitle } from "@/lib/title-store";
@@ -25,7 +25,8 @@ export async function importTitle(
   _state: ImportState,
   form: FormData
 ): Promise<ImportState> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { message: FORBIDDEN_CATALOG };
   const ref = parseTmdbRef(tmdbIdArg);
   if (!ref) throw new Error("Invalid TMDB id");
   const as = form.get("as");
@@ -49,7 +50,8 @@ export async function importTitle(
 export async function importMultipleTitles(
   tmdbIds: string[]
 ): Promise<{ ok: boolean; imported: number; skipped: number; errors: string[] }> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, imported: 0, skipped: 0, errors: [FORBIDDEN_CATALOG] };
   let imported = 0;
   let skipped = 0;
   const errors: string[] = [];
@@ -87,7 +89,8 @@ export async function refreshTitleFromTmdb({
   id: string;
   overwriteUnlocked: boolean;
 }): Promise<{ ok: boolean; message?: string; updatedFields?: string[] }> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   const { db } = await import("@/lib/db");
   const existing = await db.media.findUnique({
     where: { id },
@@ -175,7 +178,8 @@ export async function fixTitleMatch({
   tmdbId?: string;
   imdbId?: string;
 }): Promise<{ ok: boolean; message?: string }> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   const { db } = await import("@/lib/db");
   const existing = await db.media.findUnique({ where: { id } });
   if (!existing) return { ok: false, message: "Title not found" };

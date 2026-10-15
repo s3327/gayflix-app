@@ -3,7 +3,9 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import { canManageSettings } from "@/lib/admin-roles";
+import { FORBIDDEN_SETTINGS } from "@/lib/admin-guard";
 import { logActivity } from "@/lib/activity-logger";
+import { isPublicHttpsUrl } from "@/lib/safe-url";
 
 export type SiteSettingsData = {
   id: string;
@@ -26,14 +28,7 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   contactEmail: "support@gayflix.com",
   registrationOpen: true,
   maintenanceMode: false,
-  allowedEmbedHosts: [
-    "vidsrc.to",
-    "superembed.stream",
-    "2embed.cc",
-    "multiembed.mov",
-    "autoembed.to",
-    "player.vidsrc.me",
-  ],
+  allowedEmbedHosts: [],
   defaultPageSize: 24,
   webhookUrl: null,
   updatedAt: new Date(),
@@ -61,6 +56,14 @@ export const getSiteSettings = cache(async (): Promise<SiteSettingsData> => {
   }
 });
 
+/**
+ * Helper to check whether public registration is open.
+ */
+export async function isRegistrationOpen(): Promise<boolean> {
+  const settings = await getSiteSettings();
+  return settings.registrationOpen;
+}
+
 export type UpdateSiteSettingsInput = {
   siteTitle?: string;
   tagline?: string;
@@ -72,14 +75,18 @@ export type UpdateSiteSettingsInput = {
   allowedEmbedHosts?: string[] | string;
 };
 
-/** Server action to update site settings. */
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Server action to update site settings with input sanitization and partial update preservation. */
 export async function updateSiteSettings(
   input: FormData | UpdateSiteSettingsInput
 ): Promise<{ ok: boolean; message?: string }> {
   const session = await requireAdmin();
   if (!canManageSettings(session.user.role)) {
-    return { ok: false, message: "Forbidden: You do not have permission to manage site settings." };
+    return { ok: false, message: FORBIDDEN_SETTINGS };
   }
+
+  const existing = (await db.siteSetting.findUnique({ where: { id: "default" } })) ?? DEFAULT_SETTINGS;
 
   const isForm = typeof (input as FormData)?.get === "function";
   const rawObj: Record<string, unknown> = isForm
@@ -101,49 +108,111 @@ export async function updateSiteSettings(
     return null;
   };
 
-  const siteTitle = (
-    (isForm ? getFormField("siteTitle") : (rawObj.siteTitle as string | undefined))
-  )?.trim() || DEFAULT_SETTINGS.siteTitle;
+  let siteTitle = existing.siteTitle;
+  let tagline = existing.tagline;
+  let contactEmail = existing.contactEmail;
+  let defaultPageSize = existing.defaultPageSize;
+  let webhookUrl = existing.webhookUrl;
+  let maintenanceMode = existing.maintenanceMode;
+  let registrationOpen = existing.registrationOpen;
 
-  const tagline = (
-    (isForm ? getFormField("tagline") : (rawObj.tagline as string | undefined))
-  )?.trim() || DEFAULT_SETTINGS.tagline;
-
-  const contactEmail = (
-    (isForm ? getFormField("contactEmail") : (rawObj.contactEmail as string | undefined))
-  )?.trim() || null;
-
-  const getBool = (name: string, fallback: boolean): boolean => {
-    if (isForm) {
-      const val = getFormField(name);
-      if (val === null) return false;
-      return val === "on" || val === "true" || val === "1";
+  if (isForm) {
+    if (getFormField("siteTitle") !== null) {
+      const val = getFormField("siteTitle")!.trim().slice(0, 100);
+      siteTitle = val.length > 0 ? val : existing.siteTitle;
     }
-    const val = rawObj[name];
-    if (typeof val === "boolean") return val;
-    if (typeof val === "string") return val === "true" || val === "on" || val === "1";
-    return fallback;
-  };
+    if (getFormField("tagline") !== null) {
+      tagline = getFormField("tagline")!.trim().slice(0, 250);
+    }
+    if (getFormField("contactEmail") !== null) {
+      const val = getFormField("contactEmail")!.trim();
+      if (val) {
+        if (!EMAIL_REGEX.test(val)) {
+          return { ok: false, message: "Invalid contact email address." };
+        }
+        contactEmail = val;
+      } else {
+        contactEmail = null;
+      }
+    }
+    if (getFormField("defaultPageSize") !== null) {
+      const parsed = Number(getFormField("defaultPageSize"));
+      defaultPageSize = Number.isFinite(parsed)
+        ? Math.max(12, Math.min(100, Math.floor(parsed)))
+        : existing.defaultPageSize;
+    }
+    if (getFormField("webhookUrl") !== null) {
+      const val = getFormField("webhookUrl")!.trim();
+      if (val) {
+        if (!isPublicHttpsUrl(val)) {
+          return { ok: false, message: "Webhook URL must be a valid public HTTPS URL." };
+        }
+        webhookUrl = val;
+      } else {
+        webhookUrl = null;
+      }
+    }
 
-  const registrationOpen = getBool("registrationOpen", DEFAULT_SETTINGS.registrationOpen);
-  const maintenanceMode = getBool("maintenanceMode", DEFAULT_SETTINGS.maintenanceMode);
-
-  const defaultPageSizeVal = isForm ? getFormField("defaultPageSize") : rawObj.defaultPageSize;
-  const defaultPageSize = defaultPageSizeVal ? Math.max(12, Math.min(100, Number(defaultPageSizeVal))) : 24;
-
-  const webhookUrl = (
-    (isForm ? getFormField("webhookUrl") : (rawObj.webhookUrl as string | undefined))
-  )?.trim() || null;
-
-  const allowedHostsRaw = isForm
-    ? (getFormField("allowedEmbedHosts") ?? "")
-    : Array.isArray(rawObj.allowedEmbedHosts)
-    ? (rawObj.allowedEmbedHosts as string[]).join("\n")
-    : ((rawObj.allowedEmbedHosts as string | undefined) ?? "");
-  const allowedEmbedHosts = allowedHostsRaw
-    .split(/[\n,]+/)
-    .map((h) => h.trim().toLowerCase())
-    .filter((h) => h.length > 0 && /^[a-z0-9.-]+\.[a-z]{2,}$/.test(h));
+    const hasAccessTab = getFormField("maintenanceMode") !== null || getFormField("registrationOpen") !== null;
+    if (hasAccessTab) {
+      maintenanceMode =
+        getFormField("maintenanceMode") === "on" ||
+        getFormField("maintenanceMode") === "true" ||
+        getFormField("maintenanceMode") === "1";
+      registrationOpen =
+        getFormField("registrationOpen") === "on" ||
+        getFormField("registrationOpen") === "true" ||
+        getFormField("registrationOpen") === "1";
+    }
+  } else {
+    if (rawObj.siteTitle !== undefined) {
+      const val = String(rawObj.siteTitle).trim().slice(0, 100);
+      siteTitle = val.length > 0 ? val : existing.siteTitle;
+    }
+    if (rawObj.tagline !== undefined) {
+      tagline = String(rawObj.tagline).trim().slice(0, 250);
+    }
+    if (rawObj.contactEmail !== undefined) {
+      const val = rawObj.contactEmail ? String(rawObj.contactEmail).trim() : null;
+      if (val) {
+        if (!EMAIL_REGEX.test(val)) {
+          return { ok: false, message: "Invalid contact email address." };
+        }
+        contactEmail = val;
+      } else {
+        contactEmail = null;
+      }
+    }
+    if (rawObj.defaultPageSize !== undefined) {
+      const parsed = Number(rawObj.defaultPageSize);
+      defaultPageSize = Number.isFinite(parsed)
+        ? Math.max(12, Math.min(100, Math.floor(parsed)))
+        : existing.defaultPageSize;
+    }
+    if (rawObj.webhookUrl !== undefined) {
+      const val = rawObj.webhookUrl ? String(rawObj.webhookUrl).trim() : null;
+      if (val) {
+        if (!isPublicHttpsUrl(val)) {
+          return { ok: false, message: "Webhook URL must be a valid public HTTPS URL." };
+        }
+        webhookUrl = val;
+      } else {
+        webhookUrl = null;
+      }
+    }
+    if (rawObj.maintenanceMode !== undefined) {
+      maintenanceMode =
+        typeof rawObj.maintenanceMode === "boolean"
+          ? rawObj.maintenanceMode
+          : rawObj.maintenanceMode === "true" || rawObj.maintenanceMode === "on" || rawObj.maintenanceMode === "1";
+    }
+    if (rawObj.registrationOpen !== undefined) {
+      registrationOpen =
+        typeof rawObj.registrationOpen === "boolean"
+          ? rawObj.registrationOpen
+          : rawObj.registrationOpen === "true" || rawObj.registrationOpen === "on" || rawObj.registrationOpen === "1";
+    }
+  }
 
   const saved = await db.siteSetting.upsert({
     where: { id: "default" },
@@ -154,7 +223,7 @@ export async function updateSiteSettings(
       contactEmail,
       registrationOpen,
       maintenanceMode,
-      allowedEmbedHosts: allowedEmbedHosts.length > 0 ? allowedEmbedHosts : DEFAULT_SETTINGS.allowedEmbedHosts,
+      allowedEmbedHosts: existing.allowedEmbedHosts ?? [],
       defaultPageSize,
       webhookUrl,
       updatedBy: session.user.email,
@@ -165,7 +234,7 @@ export async function updateSiteSettings(
       contactEmail,
       registrationOpen,
       maintenanceMode,
-      allowedEmbedHosts: allowedEmbedHosts.length > 0 ? allowedEmbedHosts : DEFAULT_SETTINGS.allowedEmbedHosts,
+      allowedEmbedHosts: existing.allowedEmbedHosts ?? [],
       defaultPageSize,
       webhookUrl,
       updatedBy: session.user.email,
@@ -186,7 +255,6 @@ export async function updateSiteSettings(
       registrationOpen,
       maintenanceMode,
       defaultPageSize,
-      allowedEmbedHostsCount: saved.allowedEmbedHosts.length,
     },
   });
 

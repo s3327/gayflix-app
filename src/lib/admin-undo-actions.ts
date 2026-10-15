@@ -5,6 +5,8 @@ import { setAdminFlash, type AdminFlashUndo } from "@/lib/admin-flash";
 import { restoreTitle, updateMediaStatusBatch } from "@/lib/admin-catalog-actions";
 import { reopenReport, resolveReport } from "@/lib/admin-report-actions";
 import { requireAdmin } from "@/lib/session";
+import { canManageCatalog, canManageUsers } from "@/lib/admin-roles";
+import { FORBIDDEN_CATALOG, FORBIDDEN_USERS } from "@/lib/admin-guard";
 
 /**
  * Server action to execute reversible admin actions triggered from the Undo banner (A7).
@@ -13,8 +15,28 @@ export async function performUndo(
   action: AdminFlashUndo["action"],
   ids: string[]
 ): Promise<void> {
-  await requireAdmin();
+  const session = await requireAdmin();
   if (!ids || ids.length === 0) return;
+
+  switch (action) {
+    case "restore_media":
+    case "publish_media":
+    case "unpublish_media": {
+      if (!canManageCatalog(session.user.role)) {
+        await setAdminFlash({ message: FORBIDDEN_CATALOG });
+        return;
+      }
+      break;
+    }
+    case "resolve_report":
+    case "reopen_report": {
+      if (!canManageUsers(session.user.role)) {
+        await setAdminFlash({ message: FORBIDDEN_USERS });
+        return;
+      }
+      break;
+    }
+  }
 
   switch (action) {
     case "restore_media": {

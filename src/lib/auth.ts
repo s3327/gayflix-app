@@ -106,6 +106,22 @@ export const auth = betterAuth({
     ipAddress: { disableIpTracking: true },
   },
   databaseHooks: {
+    user: {
+      create: {
+        before: async (user, ctx) => {
+          if (ctx?.path?.startsWith("/admin/")) {
+            return { data: user };
+          }
+          const { isRegistrationOpen } = await import("@/lib/site-settings");
+          if (!(await isRegistrationOpen())) {
+            throw new APIError("FORBIDDEN", {
+              message: "Public registration is currently closed.",
+            });
+          }
+          return { data: user };
+        },
+      },
+    },
     session: {
       create: {
         before: async (session, ctx) => ({

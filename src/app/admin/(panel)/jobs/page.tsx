@@ -13,8 +13,10 @@ import {
   Wrench,
   XCircle,
 } from "lucide-react";
+import { redirect } from "next/navigation";
 import { AVAILABLE_JOBS, getSystemHealth, listJobRuns } from "@/lib/scheduled-jobs";
 import { requireAdmin } from "@/lib/session";
+import { canManageJobs } from "@/lib/admin-roles";
 import JobRunButton from "@/components/admin/JobRunButton";
 
 export const metadata: Metadata = {
@@ -28,7 +30,10 @@ const dateTime = new Intl.DateTimeFormat("en-US", {
 });
 
 export default async function JobsPage() {
-  await requireAdmin();
+  const session = await requireAdmin();
+  if (!canManageJobs(session.user.role)) {
+    redirect("/admin");
+  }
   const [health, runs] = await Promise.all([getSystemHealth(), listJobRuns(30)]);
 
   return (
