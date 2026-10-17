@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Header from "@/components/Header";
 import NavMenu from "@/components/NavMenu";
+import NavigationProgress from "@/components/NavigationProgress";
 import Footer from "@/components/Footer";
 import LibraryProviders from "@/components/LibraryProviders";
 import { loadLibrary } from "@/lib/library";
@@ -27,6 +28,7 @@ export const metadata: Metadata = {
   title: { default: SITE_TITLE, template: `%s · ${SITE_NAME}` },
 };
 
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { getSiteSettings } from "@/lib/site-settings";
@@ -57,6 +59,10 @@ export default async function MainGroupLayout({
             <span>Maintenance Mode is Active — Public visitors are redirected to the maintenance screen.</span>
           </div>
         )}
+        {/* It reads the query string, which a render waits for. */}
+        <Suspense>
+          <NavigationProgress />
+        </Suspense>
         <Header />
         <NavMenu />
         {children}

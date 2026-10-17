@@ -640,7 +640,8 @@ test.describe("bulk season table editor and slug management", () => {
       expect(media.duration).toMatch(/2 Seasons/);
 
       await page.goto(`/series/${seriesId}`);
-      await expect(page.getByText(/2 Seasons/i)).toBeVisible();
+      // Exact: the related titles below show "2023 · 2 Seasons" too.
+      await expect(page.getByText("2 Seasons", { exact: true })).toBeVisible();
     } finally {
       await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
     }

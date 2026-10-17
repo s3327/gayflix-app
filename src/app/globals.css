@@ -92,6 +92,22 @@
   --radius-pill: 999px;
 }
 
+/* NavigationProgress: the bar creeps towards the end while a page loads.
+   It waits a moment first, so a quick page shows no bar at all. */
+@keyframes nav-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(0.9); }
+}
+
+@utility nav-progress {
+  animation: nav-progress 8s cubic-bezier(0.1, 0.7, 0.3, 1) 150ms both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    transform: scaleX(0.6);
+  }
+}
+
 @utility scrollbar-none {
   /* For horizontally-scrolling content rows — scrollable by drag/swipe/
      trackpad, just without the visible scrollbar track cluttering the UI. */

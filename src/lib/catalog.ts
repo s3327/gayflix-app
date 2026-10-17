@@ -495,25 +495,6 @@ export async function suggestTitles(rawQuery: string): Promise<SearchSuggestion[
  * for the page itself; cache() makes that one query per request.
  */
 
-/**
- * The type of a published title, or null. The title and watch pages'
- * layouts check it before their loading screen streams, so a missing
- * title still answers 404 (a status can't change once streaming starts).
- */
-export async function findTitleType(id: string): Promise<MediaType | null> {
-  await connection();
-  if (!isMediaId(id)) return null;
-  const row = await db.media.findUnique({ where: { id, ...PUBLISHED }, select: { type: true } });
-  return row?.type ?? null;
-}
-
-/** Whether a published series has an episode with this id (see findTitleType). */
-export async function episodeExists(id: string): Promise<boolean> {
-  await connection();
-  if (!isMediaId(id)) return false;
-  return (await db.episode.count({ where: { id, media: PUBLISHED } })) > 0;
-}
-
 /** A published title with its episodes, or null. */
 export const getTitle = cache(async (id: string): Promise<MediaDetail | null> => {
   await connection();
