@@ -478,16 +478,25 @@ export async function searchTitles(rawQuery: string, requestedPage: number): Pro
   return { items: rows.map(toMedia), page, totalPages, total };
 }
 
-/** The header's live search: published titles whose title contains the query. */
-export async function suggestTitles(rawQuery: string): Promise<SearchSuggestion[]> {
+/**
+ * The header's live search: the first few of the titles the search page
+ * finds, in its order, and how many it finds in all.
+ */
+export async function suggestTitles(
+  rawQuery: string
+): Promise<{ items: SearchSuggestion[]; total: number }> {
   await connection();
   const query = normalizeQuery(rawQuery);
-  if (!query) return [];
-  return db.$queryRaw<SearchSuggestion[]>`
-    SELECT id, type::text AS type, title, year, "posterUrl" FROM media
-    WHERE status = 'published' AND title ILIKE ${`%${escapeLike(query)}%`}
-    ORDER BY ${titleMatchOrder(query)}
-    LIMIT ${MAX_SUGGESTIONS}`;
+  if (!query) return { items: [], total: 0 };
+  const where = searchCondition(query);
+  const [items, [{ total }]] = await Promise.all([
+    db.$queryRaw<SearchSuggestion[]>`
+      SELECT id, type::text AS type, title, year, "posterUrl" FROM media WHERE ${where}
+      ORDER BY ${titleMatchOrder(query)}
+      LIMIT ${MAX_SUGGESTIONS}`,
+    db.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total FROM media WHERE ${where}`,
+  ]);
+  return { items, total };
 }
 
 // --- Titles and episodes ------------------------------------------------------

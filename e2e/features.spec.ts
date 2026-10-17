@@ -8,7 +8,28 @@ test("header search suggests titles from /api/search", async ({ page, consolePro
   await page.getByRole("button", { name: "Search" }).click();
   await page.getByPlaceholder("Search titles...").fill("loud");
   expect((await apiCall).ok()).toBe(true);
-  await expect(page.getByRole("link", { name: /Loud Address/ })).toBeVisible();
+  await expect(page.getByRole("option", { name: /Loud Address/ })).toBeVisible();
+});
+
+test("header search finds what the search page finds, and leads to it", async ({ page }) => {
+  await page.goto("/home");
+  await page.getByRole("button", { name: "Search" }).click();
+  await page.getByRole("combobox", { name: "Search titles" }).fill("drama");
+  const options = page.getByRole("listbox", { name: "Suggestions" }).getByRole("option");
+  // Genres match too, not just titles.
+  await expect(options).toHaveCount(7);
+  const seeAll = options.last();
+  await expect(seeAll).toHaveText(/^See all \d+ titles$/);
+  const total = Number(/\d+/.exec((await seeAll.textContent()) ?? "")![0]);
+  await seeAll.click();
+  await expect(page).toHaveURL(/\/search\?q=drama$/);
+  await expect(page.getByRole("main")).toContainText(`${total} titles found`);
+
+  // A title opens its page.
+  await page.getByRole("banner").getByRole("button", { name: "Search" }).click();
+  await page.getByRole("combobox", { name: "Search titles" }).fill("loud");
+  await page.getByRole("option", { name: /^Loud Address/ }).click();
+  await expect(page).toHaveURL(/\/series\/loud-address$/);
 });
 
 test("guests are sent to login and brought back afterwards", async ({ page, consoleProblems }) => {

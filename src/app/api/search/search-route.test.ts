@@ -46,9 +46,12 @@ describe("GET /api/search", () => {
       maintenanceMode: false,
     });
     mockSession.mockResolvedValueOnce(null);
-    mockSuggest.mockResolvedValueOnce([
-      { id: "m1", title: "Heartstopper", year: 2022, type: "series", posterUrl: "/poster1.jpg" },
-    ]);
+    mockSuggest.mockResolvedValueOnce({
+      items: [
+        { id: "m1", title: "Heartstopper", year: 2022, type: "series", posterUrl: "/poster1.jpg" },
+      ],
+      total: 9,
+    });
 
     const req = new NextRequest("http://localhost:3000/api/search?q=heart");
     const res = await GET(req);
@@ -58,6 +61,7 @@ describe("GET /api/search", () => {
     const body = await res.json();
     expect(body.results).toHaveLength(1);
     expect(body.results[0].title).toBe("Heartstopper");
+    expect(body.total).toBe(9);
   });
 
   it("returns 503 during maintenance mode for anonymous visitors", async () => {
@@ -105,9 +109,12 @@ describe("GET /api/search", () => {
       user: { id: "admin1", email: "admin@example.com", role: "admin" },
       session: { id: "s2" },
     } as unknown as NonNullable<Awaited<ReturnType<typeof getSession>>>);
-    mockSuggest.mockResolvedValueOnce([
-      { id: "m2", title: "Fellow Travelers", year: 2023, type: "series", posterUrl: "/poster2.jpg" },
-    ]);
+    mockSuggest.mockResolvedValueOnce({
+      items: [
+        { id: "m2", title: "Fellow Travelers", year: 2023, type: "series", posterUrl: "/poster2.jpg" },
+      ],
+      total: 1,
+    });
 
     const req = new NextRequest("http://localhost:3000/api/search?q=fellow");
     const res = await GET(req);
