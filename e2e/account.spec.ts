@@ -24,17 +24,22 @@ test("edit the profile: name, email (with a code) and password", async ({ page, 
   await main.getByRole("button", { name: "Save" }).click();
   await expect(main.getByText("Renamed Person")).toBeVisible();
 
-  // Email: confirm the current one, then a code goes to the new one.
+  // Email: the password, then a code goes to the new address, and the
+  // old address is told.
   const newEmail = account.email.replace("@", "+new@");
   await main.getByRole("button", { name: "Edit Profile" }).click();
   await main.getByRole("button", { name: "Change Email" }).click();
-  await main.getByLabel("Current email").fill(account.email);
-  await main.getByRole("button", { name: "Continue" }).click();
-  const since = Date.now();
   await main.getByLabel("New email").fill(newEmail);
+  await main.getByLabel("Current password").fill("not-my-password");
+  await main.getByRole("button", { name: "Continue" }).click();
+  await expect(main.getByRole("alert")).toHaveText("That password isn't right.");
+  const since = Date.now();
+  await main.getByLabel("Current password").fill(account.password);
   await main.getByRole("button", { name: "Continue" }).click();
   await main.getByLabel("Digit 1 of 6").fill(codeFrom(await waitForEmail(newEmail, since)));
   await expect(main.getByText(`Email changed to ${newEmail}`)).toBeVisible();
+  const notice = await waitForEmail(account.email, since);
+  expect(notice).toContain(`changed to ${newEmail}`);
 
   // Password: a wrong current password is rejected, the right one works.
   await main.getByRole("button", { name: "Change Password" }).click();
@@ -54,6 +59,18 @@ test("edit the profile: name, email (with a code) and password", async ({ page, 
   await logIn(page, { ...account, email: newEmail, password: "my-new-password" });
   await expect(page).toHaveURL(/\/account$/);
   await expect(page.locator("main").getByText("Renamed Person")).toBeVisible();
+});
+
+test("changing the email can't skip the password", async ({ request }) => {
+  const account = newAccount("email-password");
+  // Confirming the email signs `request` in.
+  await createVerifiedAccount(request, account);
+  const response = await request.post("/api/auth/email-otp/request-email-change", {
+    data: { newEmail: account.email.replace("@", "+stolen@") },
+    headers: { Origin: BASE_URL },
+  });
+  expect(response.status()).toBe(400);
+  expect((await response.json()).message).toBe("Enter your password to change your email.");
 });
 
 test("see where the account is signed in, and sign other devices out", async ({
