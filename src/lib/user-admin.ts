@@ -5,8 +5,8 @@
  * in src/lib/admin-user-actions.ts apply them.
  */
 
-/** Better Auth's user ids: 32 letters and digits. */
-const USER_ID = /^[A-Za-z0-9]{16,64}$/;
+/** Better Auth's user ids: 16-64 alphanumeric characters, hyphens or underscores. */
+const USER_ID = /^[A-Za-z0-9_-]{16,64}$/;
 
 export function isUserId(value: unknown): value is string {
   return typeof value === "string" && USER_ID.test(value);
@@ -43,6 +43,14 @@ export function isBanned(user: Pick<UserTarget, "banned" | "banExpires">, now = 
 
 export type UserAction = "make-admin" | "remove-admin" | "ban" | "unban" | "sign-out";
 
+export function isOwner(user: Pick<UserTarget, "role">): boolean {
+  return user.role === "owner";
+}
+
+export function isStaff(user: Pick<UserTarget, "role">): boolean {
+  return user.role === "admin" || user.role === "owner" || user.role === "editor" || user.role === "moderator";
+}
+
 /**
  * Why an admin (`actorId`) can't do `action` to `user`, or null if they
  * can. The page only offers allowed actions; the server functions check
@@ -58,6 +66,7 @@ export function userActionProblem(
   now = Date.now()
 ): string | null {
   if (user.id === actorId) return "You can't change your own account here.";
+  if (isOwner(user)) return "The site owner cannot be demoted, banned or changed.";
   const banned = isBanned(user, now);
   switch (action) {
     case "make-admin":
@@ -77,6 +86,37 @@ export function userActionProblem(
       return null;
   }
 }
+
+/** Every endpoint of Better Auth's admin plugin (/api/auth/admin/*). */
+export const ADMIN_API_PATHS = [
+  "/admin/set-role",
+  "/admin/get-user",
+  "/admin/create-user",
+  "/admin/update-user",
+  "/admin/list-users",
+  "/admin/list-user-sessions",
+  "/admin/unban-user",
+  "/admin/ban-user",
+  "/admin/impersonate-user",
+  "/admin/stop-impersonating",
+  "/admin/revoke-user-session",
+  "/admin/revoke-user-sessions",
+  "/admin/remove-user",
+  "/admin/set-user-password",
+  "/admin/has-permission",
+] as const;
+
+/**
+ * The admin endpoints the panel's server functions call, and which of
+ * the panel's rules each one is. The guard in src/lib/auth.ts refuses
+ * any other admin endpoint call except list-users.
+ */
+export const ADMIN_ENDPOINT_ACTIONS: Partial<Record<string, UserAction | "set-role">> = {
+  "/admin/set-role": "set-role",
+  "/admin/ban-user": "ban",
+  "/admin/unban-user": "unban",
+  "/admin/revoke-user-sessions": "sign-out",
+};
 
 export const BAN_REASON_MAX = 200;
 

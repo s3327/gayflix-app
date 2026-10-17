@@ -6,6 +6,11 @@ import MediaCard from "@/components/MediaCard";
 import { genreHref } from "@/lib/browse-href";
 import { listFilterValues, listTitles } from "@/lib/catalog";
 import { getSession } from "@/lib/session";
+import { redirect } from "next/navigation";
+import { getSiteSettings } from "@/lib/site-settings";
+import { isStaffRole } from "@/lib/admin-roles";
+
+export const dynamic = "force-dynamic";
 
 /*
  * The landing page, domain.com: what Gayflix is, a look at the catalog,
@@ -73,11 +78,17 @@ function Actions({ signedIn }: { signedIn: boolean }) {
 }
 
 export default async function LandingPage() {
-  const [session, { items: newest }, genres] = await Promise.all([
-    getSession(),
+  const [session, settings] = await Promise.all([getSession(), getSiteSettings()]);
+
+  if (settings.maintenanceMode && !isStaffRole(session?.user?.role)) {
+    redirect("/maintenance");
+  }
+
+  const [{ items: newest }, genres] = await Promise.all([
     listTitles({ sort: "added", page: 1 }),
     listFilterValues("genre"),
   ]);
+
   const signedIn = Boolean(session);
   // Repeats the newest titles when there are fewer than the wall holds.
   const posterWall =

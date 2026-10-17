@@ -9,7 +9,7 @@ import {
   MAX_IMAGE_BYTES,
   sniffImageType,
 } from "@/lib/image-upload";
-import { requireAdmin } from "@/lib/session";
+import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
 import { imageUrlProblem } from "@/lib/title-form";
 
 export type UploadResult = { url: string; error?: undefined } | { url?: undefined; error: string };
@@ -26,7 +26,8 @@ export type UploadResult = { url: string; error?: undefined } | { url?: undefine
  * later, or never saved with a title, stay in the store.
  */
 export async function uploadTitleImage(form: FormData): Promise<UploadResult> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { error: FORBIDDEN_CATALOG };
   const kind = form.get("kind");
   const file = form.get("file");
   if ((kind !== "poster" && kind !== "backdrop") || !(file instanceof Blob)) throw new Error("Invalid upload");

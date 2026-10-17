@@ -7,21 +7,28 @@ import { db } from "@/lib/db";
 import { isImdbId, isTmdbId, parseTmdbRef, tmdbStill } from "@/lib/import-mapping";
 import { isMediaId } from "@/lib/library-types";
 import type { MediaStatus, MediaType } from "@/lib/media";
-import { requireAdmin } from "@/lib/session";
+import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
 import { setAdminFlash } from "@/lib/admin-flash";
 import { imageHosts } from "@/lib/image-hosts.mjs";
+import { createTitleRevision } from "@/lib/title-revisions";
+import { logActivity } from "@/lib/activity-logger";
 import { getTmdbDetails, getTmdbSeasonDetails } from "@/lib/tmdb";
+import { videoHosts, videoUrlAllowed } from "@/lib/video-hosts";
 import {
   EPISODE_FIELDS,
   TITLE_FIELDS,
   episodeDuration,
   episodeId,
   formValues,
-  imageUrlProblem,
+  bulkTagsProblem,
   libraryPath,
+  parseBulkTags,
   parseEpisode,
+  parseQuickEdit,
+  parseSeasonRows,
   parseTitle,
   seriesDuration,
+  splitList,
   type FormState,
 } from "@/lib/title-form";
 import {
@@ -61,7 +68,13 @@ function itemId(value: unknown): string {
 
 /** The checked rows of a library page. */
 function selectedIds(form: FormData) {
-  return [...new Set(form.getAll("ids").filter(isMediaId))].slice(0, MAX_SELECTED);
+  return mediaIds(form.getAll("ids"));
+}
+
+/** Title ids sent by the browser: valid ones only, each once, at most MAX_SELECTED. */
+function mediaIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter(isMediaId))].slice(0, MAX_SELECTED);
 }
 
 /** Titles show up all over the public site and the admin panel. */
@@ -92,10 +105,13 @@ export async function createTitle(
   _state: FormState,
   form: FormData
 ): Promise<FormState> {
-  await requireAdmin();
+  const { session, allowed } = await catalogSession();
+  const values = formValues(form, TITLE_FIELDS);
+  if (!allowed) {
+    return { message: FORBIDDEN_CATALOG, values, version: Date.now() };
+  }
   const type = mediaType(typeArg);
   const sources = sourceIds(form);
-  const values = formValues(form, TITLE_FIELDS);
   const parsed = parseTitle(type, values);
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
 
@@ -112,6 +128,16 @@ export async function createTitle(
   if (!id) {
     return { message: "Another title took that address just now. Add it again.", values, version: Date.now() };
   }
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: "title.create",
+    entityType: "media",
+    entityId: id,
+    summary: `Created ${type} "${parsed.data.title}"`,
+    details: { type, title: parsed.data.title, year: parsed.data.year },
+  });
   refreshPages();
   redirect(`${libraryPath(type)}/${id}?${sources.tmdbId ? "imported" : "added"}=1`);
 }
@@ -122,9 +148,12 @@ export async function updateTitle(
   _state: FormState,
   form: FormData
 ): Promise<FormState> {
-  await requireAdmin();
-  const id = itemId(idArg);
+  const { session, allowed } = await catalogSession();
   const values = formValues(form, TITLE_FIELDS);
+  if (!allowed) {
+    return { message: FORBIDDEN_CATALOG, values, version: Date.now() };
+  }
+  const id = itemId(idArg);
   const loadedAt = form.get("loadedAt");
   const gone = { message: "This title is in the trash or was deleted.", values, version: Date.now() };
   const existing = await db.media.findUnique({
@@ -149,9 +178,16 @@ export async function updateTitle(
   const parsed = parseTitle(existing.type, values);
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
 
-  const shouldSetPublishedAt =
-    parsed.data.status === "published" &&
-    (existing.status !== "published" || existing.publishedAt === null);
+  // Create point-in-time snapshot before modifying
+  await createTitleRevision({
+    mediaId: id,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    summary: `Updated title metadata for "${parsed.data.title}"`,
+  });
+
+  // Kept from the first time it was published.
+  const shouldSetPublishedAt = parsed.data.status === "published" && existing.publishedAt === null;
 
   const saved = await db.$transaction(async (tx) => {
     // Not if it was trashed meanwhile: a trashed title must stay a draft.
@@ -160,6 +196,7 @@ export async function updateTitle(
       data: {
         ...titleData(existing.type, parsed.data),
         ...(shouldSetPublishedAt ? { publishedAt: new Date() } : {}),
+        ...(parsed.data.status === "published" ? { publishAt: null } : {}),
       },
     });
     if (count > 0 && parsed.data.featured && parsed.data.status === "published") {
@@ -168,27 +205,45 @@ export async function updateTitle(
     return count > 0;
   });
   if (!saved) return gone;
+
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: "title.update",
+    entityType: "media",
+    entityId: id,
+    summary: `Updated ${existing.type} "${parsed.data.title}"`,
+    details: { title: parsed.data.title, status: parsed.data.status },
+  });
+
   refreshPages();
   return { ok: true, message: "Saved.", values, version: Date.now() };
 }
 
-export async function updateMediaStatusBatch(ids: string[], status: MediaStatus) {
-  if (ids.length === 0) return;
+/**
+ * Publishes or unpublishes titles that aren't in the trash. A title keeps
+ * the date it was first published.
+ */
+export async function updateMediaStatusBatch(idsArg: unknown, statusArg: unknown) {
+  const { allowed } = await catalogSession();
+  const ids = mediaIds(idsArg);
+  if (!allowed || ids.length === 0) return;
+  const status = mediaStatus(statusArg);
   await db.$transaction(async (tx) => {
+    const where = { id: { in: ids }, trashedAt: null };
     if (status === "published") {
-      await tx.media.updateMany({
-        where: { id: { in: ids }, trashedAt: null },
-        data: { status, publishedAt: new Date() },
-      });
+      await tx.media.updateMany({ where, data: { status, publishAt: null } });
+      await tx.media.updateMany({ where: { ...where, publishedAt: null }, data: { publishedAt: new Date() } });
       const featured = await tx.media.findFirst({
-        where: { id: { in: ids }, featured: true, trashedAt: null },
+        where: { ...where, featured: true },
         select: { id: true },
       });
       if (featured) {
         await unfeatureOthers(tx, featured.id);
       }
     } else {
-      await tx.media.updateMany({ where: { id: { in: ids }, trashedAt: null }, data: { status } });
+      await tx.media.updateMany({ where, data: { status } });
     }
   });
   refreshPages();
@@ -196,11 +251,24 @@ export async function updateMediaStatusBatch(ids: string[], status: MediaStatus)
 
 /** Publish or unpublish one title (a library row's button). */
 export async function setTitleStatus(idArg: unknown, statusArg: unknown): Promise<void> {
-  await requireAdmin();
+  const { session, allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const id = itemId(idArg);
   const status = mediaStatus(statusArg);
   await updateMediaStatusBatch([id], status);
   const isPub = status === "published";
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: isPub ? "title.publish" : "title.unpublish",
+    entityType: "media",
+    entityId: id,
+    summary: `${isPub ? "Published" : "Unpublished"} title ${id}`,
+  });
   await setAdminFlash({
     message: isPub ? "Title published." : "Title unpublished.",
     undo: {
@@ -213,12 +281,25 @@ export async function setTitleStatus(idArg: unknown, statusArg: unknown): Promis
 
 /** Publish or unpublish the checked rows. */
 export async function setSelectedStatus(statusArg: unknown, form: FormData): Promise<void> {
-  await requireAdmin();
+  const { session, allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const ids = selectedIds(form);
   if (ids.length === 0) return;
   const status = mediaStatus(statusArg);
   await updateMediaStatusBatch(ids, status);
   const isPub = status === "published";
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: isPub ? "title.publish" : "title.unpublish",
+    entityType: "media",
+    entityId: ids.join(","),
+    summary: `${isPub ? "Published" : "Unpublished"} ${ids.length} titles`,
+  });
   await setAdminFlash({
     message: `${ids.length} ${ids.length === 1 ? "title" : "titles"} ${isPub ? "published" : "unpublished"}.`,
     undo: {
@@ -258,9 +339,22 @@ async function moveToTrash(ids: string[]) {
 }
 
 export async function trashTitle(idArg: unknown): Promise<void> {
-  await requireAdmin();
+  const { session, allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const id = itemId(idArg);
   await moveToTrash([id]);
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: "title.trash",
+    entityType: "media",
+    entityId: id,
+    summary: `Moved title ${id} to trash`,
+  });
   await setAdminFlash({
     message: "Moved to trash.",
     undo: { label: "Undo", action: "restore_media", ids: [id] },
@@ -268,10 +362,23 @@ export async function trashTitle(idArg: unknown): Promise<void> {
 }
 
 export async function trashSelected(form: FormData): Promise<void> {
-  await requireAdmin();
+  const { session, allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const ids = selectedIds(form);
   if (ids.length === 0) return;
   await moveToTrash(ids);
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: "title.trash",
+    entityType: "media",
+    entityId: ids.join(","),
+    summary: `Moved ${ids.length} titles to trash`,
+  });
   await setAdminFlash({
     message: `${ids.length} ${ids.length === 1 ? "title" : "titles"} moved to trash.`,
     undo: { label: "Undo", action: "restore_media", ids },
@@ -280,7 +387,11 @@ export async function trashSelected(form: FormData): Promise<void> {
 
 /** Back from the trash, restoring its previous status and featured flag. */
 export async function restoreTitle(idArg: unknown): Promise<void> {
-  await requireAdmin();
+  const { session, allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const id = itemId(idArg);
   await db.$transaction(async (tx) => {
     const item = await tx.media.findUnique({
@@ -306,21 +417,48 @@ export async function restoreTitle(idArg: unknown): Promise<void> {
       await unfeatureOthers(tx, id);
     }
   });
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: "title.restore",
+    entityType: "media",
+    entityId: id,
+    summary: `Restored title ${id} from trash`,
+  });
   refreshPages();
   await setAdminFlash({ message: "Title restored." });
 }
 
 /** For good, with its episodes. Only titles already in the trash. */
 export async function deleteTitle(idArg: unknown): Promise<void> {
-  await requireAdmin();
-  await db.media.deleteMany({ where: { id: itemId(idArg), trashedAt: { not: null } } });
+  const { session, allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
+  const id = itemId(idArg);
+  await db.media.deleteMany({ where: { id, trashedAt: { not: null } } });
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: "title.delete",
+    entityType: "media",
+    entityId: id,
+    summary: `Permanently deleted title ${id}`,
+  });
   refreshPages();
   await setAdminFlash({ message: "Title deleted permanently." });
 }
 
 /** Restore multiple checked titles from trash. */
 export async function bulkRestoreTrash(form: FormData): Promise<void> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const ids = selectedIds(form);
   if (ids.length === 0) return;
   await db.$transaction(async (tx) => {
@@ -358,7 +496,11 @@ export async function bulkRestoreTrash(form: FormData): Promise<void> {
 
 /** Permanently delete multiple checked titles from trash. */
 export async function bulkDeleteForGoodTrash(form: FormData): Promise<void> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const ids = selectedIds(form);
   if (ids.length === 0) return;
   await db.media.deleteMany({ where: { id: { in: ids }, trashedAt: { not: null } } });
@@ -369,48 +511,56 @@ export async function bulkDeleteForGoodTrash(form: FormData): Promise<void> {
 }
 
 /** Quick inline metadata update without leaving the library page. */
-export async function quickUpdateTitle({
-  id,
-  title,
-  year,
-  status,
-  duration,
-  genres,
-  tagline,
-  rating,
-}: {
-  id: string;
-  title: string;
-  year: number;
-  status: "draft" | "published";
-  duration?: string;
-  genres?: string[];
-  tagline?: string | null;
-  rating?: number | null;
-}): Promise<{ ok: boolean; message?: string }> {
-  await requireAdmin();
+export async function quickUpdateTitle(input: unknown): Promise<{ ok: boolean; message?: string }> {
+  const { session, allowed } = await catalogSession();
+  if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
+  const id = typeof input === "object" && input !== null ? (input as { id?: unknown }).id : undefined;
   if (!isMediaId(id)) return { ok: false, message: "Invalid title ID" };
   const existing = await db.media.findUnique({
     where: { id },
-    select: { status: true, publishedAt: true, trashedAt: true },
+    select: { type: true, featured: true, publishedAt: true, trashedAt: true },
   });
   if (!existing || existing.trashedAt) return { ok: false, message: "Title not found or in trash" };
+  const parsed = parseQuickEdit(input, existing.type);
+  if (!parsed.ok) return { ok: false, message: parsed.message };
+  const { title, year, status, duration, genres, tagline, rating } = parsed.data;
 
-  const shouldSetPublishedAt =
-    status === "published" && (existing.status !== "published" || existing.publishedAt === null);
+  // Save revision snapshot before applying quick updates
+  await createTitleRevision({
+    mediaId: id,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    summary: `Quick edited metadata for "${title}"`,
+  });
 
-  await db.media.update({
-    where: { id },
-    data: {
-      title: title.trim(),
-      year,
-      status,
-      ...(duration ? { duration } : {}),
-      ...(genres ? { genres } : {}),
-      ...(tagline !== undefined ? { tagline } : {}),
-      ...(rating !== undefined ? { rating } : {}),
-      ...(shouldSetPublishedAt ? { publishedAt: new Date() } : {}),
-    },
+  await db.$transaction(async (tx) => {
+    const { count } = await tx.media.updateMany({
+      where: { id, trashedAt: null },
+      data: {
+        title,
+        year,
+        status,
+        ...(duration ? { duration } : {}),
+        ...(genres ? { genres } : {}),
+        ...(tagline !== undefined ? { tagline } : {}),
+        ...(rating !== undefined ? { rating } : {}),
+        // Kept from the first time it was published.
+        ...(status === "published" && existing.publishedAt === null ? { publishedAt: new Date() } : {}),
+        ...(status === "published" ? { publishAt: null } : {}),
+      },
+    });
+    if (count > 0 && existing.featured && status === "published") await unfeatureOthers(tx, id);
+  });
+
+  await logActivity({
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    actorRole: session.user.role,
+    action: "title.quick_edit",
+    entityType: "media",
+    entityId: id,
+    summary: `Quick edited "${title}"`,
+    details: { title, year, status },
   });
 
   refreshPages();
@@ -418,48 +568,36 @@ export async function quickUpdateTitle({
 }
 
 /** Batch add or remove tags and genres across multiple selected titles. */
-export async function bulkTagTitles({
-  ids,
-  addTags = [],
-  removeTags = [],
-  addGenres = [],
-  removeGenres = [],
-}: {
-  ids: string[];
-  addTags?: string[];
-  removeTags?: string[];
-  addGenres?: string[];
-  removeGenres?: string[];
-}): Promise<{ ok: boolean; count: number }> {
-  await requireAdmin();
-  if (!ids || ids.length === 0) return { ok: true, count: 0 };
+export async function bulkTagTitles(input: unknown): Promise<{ ok: boolean; count: number; message?: string }> {
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, count: 0, message: FORBIDDEN_CATALOG };
+  const raw = typeof input === "object" && input !== null ? (input as { ids?: unknown }) : {};
+  const ids = mediaIds(raw.ids);
+  if (ids.length === 0) return { ok: true, count: 0 };
+  const parsed = parseBulkTags(input);
+  if (!parsed.ok) return { ok: false, count: 0, message: parsed.message };
+  const { addTags, removeTags, addGenres, removeGenres } = parsed.data;
+  const removing = (list: string[]) => new Set(list.map((item) => item.toLowerCase()));
+  const removeTagSet = removing(removeTags);
+  const removeGenreSet = removing(removeGenres);
+
   const items = await db.media.findMany({
     where: { id: { in: ids }, trashedAt: null },
-    select: { id: true, tags: true, genres: true },
+    select: { id: true, title: true, tags: true, genres: true },
   });
+  const changes = items.map((item) => ({
+    item,
+    tags: splitList([...item.tags, ...addTags].join(",")).filter((t) => !removeTagSet.has(t.toLowerCase())),
+    genres: splitList([...item.genres, ...addGenres].join(",")).filter((g) => !removeGenreSet.has(g.toLowerCase())),
+  }));
+  for (const { item, tags, genres } of changes) {
+    const problem = bulkTagsProblem(tags, genres);
+    if (problem) return { ok: false, count: 0, message: `${item.title}: ${problem}` };
+  }
 
   await db.$transaction(async (tx) => {
-    for (const item of items) {
-      let tags = item.tags;
-      let genres = item.genres;
-
-      if (addTags.length > 0) {
-        tags = Array.from(new Set([...tags, ...addTags.map((t) => t.trim()).filter(Boolean)]));
-      }
-      if (removeTags.length > 0) {
-        tags = tags.filter((t) => !removeTags.includes(t));
-      }
-      if (addGenres.length > 0) {
-        genres = Array.from(new Set([...genres, ...addGenres.map((g) => g.trim()).filter(Boolean)]));
-      }
-      if (removeGenres.length > 0) {
-        genres = genres.filter((g) => !removeGenres.includes(g));
-      }
-
-      await tx.media.update({
-        where: { id: item.id },
-        data: { tags, genres },
-      });
+    for (const { item, tags, genres } of changes) {
+      await tx.media.update({ where: { id: item.id }, data: { tags, genres } });
     }
   });
 
@@ -470,34 +608,46 @@ export async function bulkTagTitles({
   return { ok: true, count: items.length };
 }
 
-/** Test video source link reachability. */
+const LINK_CHECK_HEADERS = { "User-Agent": "Gayflix-Admin-LinkCheck/1.0" };
+const LINK_CHECK_REDIRECTS = 3;
+
+/**
+ * "Test" on a video source: whether the link answers. Only links on
+ * VIDEO_HOSTS are fetched, and a redirect is followed only while it stays
+ * on them, so the check can't be pointed at the server's own network.
+ */
 export async function verifyVideoUrl(
-  url: string
+  url: unknown
 ): Promise<{ ok: boolean; status?: number; error?: string }> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, error: FORBIDDEN_CATALOG };
+  if (typeof url !== "string" || url.length > 2048) return { ok: false, error: "That isn't a link." };
+  const hosts = videoHosts();
+  if (!videoUrlAllowed(url, hosts)) {
+    return { ok: false, error: "Only https links on the video hosts (VIDEO_HOSTS) can be tested." };
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
   try {
-    const parsed = new URL(url);
-    if (!["http:", "https:"].includes(parsed.protocol)) {
-      return { ok: false, error: "Only HTTP/HTTPS URLs can be verified" };
+    let current = url;
+    for (let hop = 0; hop <= LINK_CHECK_REDIRECTS; hop++) {
+      const init = { signal: controller.signal, redirect: "manual" as const };
+      const res = await fetch(current, { ...init, method: "HEAD", headers: LINK_CHECK_HEADERS }).catch(() =>
+        fetch(current, { ...init, method: "GET", headers: { ...LINK_CHECK_HEADERS, Range: "bytes=0-100" } })
+      );
+      const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+      if (!location) return { ok: res.status < 400, status: res.status };
+      current = new URL(location, current).toString();
+      if (!videoUrlAllowed(current, hosts)) {
+        return { ok: false, status: res.status, error: "The link redirects off the video hosts." };
+      }
     }
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch(url, {
-      method: "HEAD",
-      signal: controller.signal,
-      headers: { "User-Agent": "Gayflix-Admin-LinkCheck/1.0" },
-    }).catch(async () => {
-      return fetch(url, {
-        method: "GET",
-        signal: controller.signal,
-        headers: { Range: "bytes=0-100", "User-Agent": "Gayflix-Admin-LinkCheck/1.0" },
-      });
-    });
-    clearTimeout(timeout);
-    return { ok: res.ok || res.status < 400, status: res.status };
+    return { ok: false, error: "The link redirects too many times." };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Network error";
-    return { ok: false, error: msg };
+    const timedOut = err instanceof Error && err.name === "AbortError";
+    return { ok: false, error: timedOut ? "The link didn't answer in time." : "The link couldn't be reached." };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -520,8 +670,11 @@ function takenMessage(season: number, episode: number) {
  * same season.
  */
 export async function createEpisode(_state: FormState, form: FormData): Promise<FormState> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
   const values = formValues(form, EPISODE_FIELDS);
+  if (!allowed) {
+    return { message: FORBIDDEN_CATALOG, values, version: Date.now() };
+  }
   const parsed = parseEpisode(values);
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
   const { seriesId, seasonNumber, episodeNumber, title, minutes, airDate } = parsed.data;
@@ -576,13 +729,16 @@ export async function updateEpisode(
   _state: FormState,
   form: FormData
 ): Promise<FormState> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
   const id = itemId(idArg);
   const existing = await db.episode.findUnique({
     where: { id },
     select: { mediaId: true, media: { select: { trashedAt: true } } },
   });
   const values = { ...formValues(form, EPISODE_FIELDS), series: existing?.mediaId ?? "" };
+  if (!allowed) {
+    return { message: FORBIDDEN_CATALOG, values, version: Date.now() };
+  }
   if (!existing) return { message: "This episode was deleted.", values, version: Date.now() };
   if (existing.media.trashedAt) return { message: SERIES_IN_TRASH, values, version: Date.now() };
 
@@ -607,7 +763,11 @@ export async function updateEpisode(
 
 /** Deletes an episode for good, then opens its series' edit page. */
 export async function deleteEpisode(idArg: unknown): Promise<void> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_CATALOG });
+    return;
+  }
   const id = itemId(idArg);
   const episode = await db.episode.findUnique({
     where: { id },
@@ -636,7 +796,8 @@ export type TmdbSeasonInfo = {
 export async function getSeriesTmdbSeasonsAction(
   seriesId: string
 ): Promise<{ ok: boolean; seasons?: TmdbSeasonInfo[]; message?: string }> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   const series = await db.media.findUnique({
     where: { id: seriesId },
     select: { tmdbId: true },
@@ -676,7 +837,8 @@ export async function getTmdbSeasonPreviewAction(
   episodes?: { episodeNumber: number; title: string; runtime: string; stillUrl: string | null }[];
   message?: string;
 }> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   const series = await db.media.findUnique({
     where: { id: seriesId },
     select: { tmdbId: true },
@@ -709,7 +871,8 @@ export async function importSeriesSeasonsAction(
   seriesId: string,
   seasonNumbers: number[]
 ): Promise<{ ok: boolean; count?: number; message?: string }> {
-  await requireAdmin();
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   if (!Array.isArray(seasonNumbers) || seasonNumbers.length === 0) {
     return { ok: false, message: "Select at least one season." };
   }
@@ -784,115 +947,61 @@ export type SeasonEpisodeRow = {
   stillUrl?: string | null;
 };
 
+/**
+ * Saves a season's table editor. Episodes keep their ids (their addresses)
+ * when renumbered, like the episode edit page, so their video sources,
+ * watch history and links stay with them. Numbers can be swapped or
+ * shifted in one save.
+ */
 export async function saveSeasonEpisodesAction(
-  seriesId: string,
-  seasonNumber: number,
-  episodes: SeasonEpisodeRow[]
+  seriesIdArg: unknown,
+  seasonArg: unknown,
+  episodesArg: unknown
 ): Promise<{ ok: boolean; message?: string; errors?: Record<string, string> }> {
-  await requireAdmin();
-  if (!isMediaId(seriesId)) throw new Error("Invalid series ID");
+  const { allowed } = await catalogSession();
+  if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
+  const seriesId = itemId(seriesIdArg);
+  const parsed = parseSeasonRows(seasonArg, episodesArg, imageHosts());
+  if (!parsed.ok) return { ok: false, message: parsed.message, errors: parsed.errors };
+  const { seasonNumber, rows } = parsed;
 
-  const errors: Record<string, string> = {};
-  const hosts = imageHosts();
-  const seen = new Set<number>();
+  const series = await db.media.findUnique({ where: { id: seriesId }, select: { type: true, trashedAt: true } });
+  if (!series || series.type !== "series") return { ok: false, message: "This series was deleted." };
+  if (series.trashedAt) return { ok: false, message: SERIES_IN_TRASH };
 
-  for (const ep of episodes) {
-    if (!ep.title.trim()) {
-      errors[`${ep.id}-title`] = "Enter the title.";
-    }
-    if (!ep.episodeNumber || ep.episodeNumber < 1) {
-      errors[`${ep.id}-episodeNumber`] = "Enter a valid episode number.";
-    } else if (seen.has(ep.episodeNumber)) {
-      errors[`${ep.id}-episodeNumber`] = `Season ${seasonNumber} already has an episode ${ep.episodeNumber}.`;
-    } else {
-      seen.add(ep.episodeNumber);
-    }
-    if (ep.stillUrl) {
-      const prob = imageUrlProblem(ep.stillUrl, hosts);
-      if (prob) {
-        errors[`${ep.id}-stillUrl`] = prob;
+  const OUT_OF_DATE = "This season changed since the page loaded. Reload the page and try again.";
+  try {
+    await db.$transaction(async (tx) => {
+      const existing = await tx.episode.findMany({
+        where: { mediaId: seriesId, seasonNumber, id: { in: rows.map((row) => row.id) } },
+        select: { id: true },
+      });
+      if (existing.length !== rows.length) throw new Error(OUT_OF_DATE);
+
+      // Out of the way first (negative numbers no episode uses), so a swap
+      // or a shift doesn't trip over the one-number-per-episode rule.
+      for (const [index, row] of rows.entries()) {
+        await tx.episode.update({ where: { id: row.id }, data: { episodeNumber: -(index + 1) } });
       }
-    }
-  }
-
-  if (Object.keys(errors).length > 0) {
-    const errorMsg = Object.values(errors)[0] ?? "Some fields need fixing.";
-    return { ok: false, message: errorMsg, errors };
-  }
-
-  await db.$transaction(async (tx) => {
-    const existing = await tx.episode.findMany({
-      where: { mediaId: seriesId, seasonNumber },
-    });
-    const existingById = new Map(existing.map((e) => [e.id, e]));
-
-    for (const ep of episodes) {
-      const newSlug = `${seriesId}-season-${seasonNumber}-episode-${ep.episodeNumber}`;
-      const prev = existingById.get(ep.id);
-
-      if (prev) {
-        if (prev.episodeNumber !== ep.episodeNumber) {
-          await tx.episodeRedirect.upsert({
-            where: { oldSlug: prev.id },
-            create: {
-              mediaId: seriesId,
-              oldSlug: prev.id,
-              newSlug,
-              oldSeasonNumber: prev.seasonNumber,
-              oldEpisodeNumber: prev.episodeNumber,
-              newSeasonNumber: seasonNumber,
-              newEpisodeNumber: ep.episodeNumber,
-            },
-            update: {
-              newSlug,
-              newSeasonNumber: seasonNumber,
-              newEpisodeNumber: ep.episodeNumber,
-            },
-          });
-          await tx.$executeRaw`
-            UPDATE episode
-            SET id = ${newSlug},
-                "episodeNumber" = ${ep.episodeNumber},
-                title = ${ep.title.trim()},
-                duration = ${ep.duration.trim() || '45 min'},
-                "airDate" = ${ep.airDate ? new Date(ep.airDate) : null},
-                "stillUrl" = ${ep.stillUrl?.trim() || null}
-            WHERE id = ${prev.id}
-          `;
-          await tx.$executeRaw`
-            UPDATE video_source
-            SET "episodeId" = ${newSlug}
-            WHERE "episodeId" = ${prev.id}
-          `;
-        } else {
-          await tx.episode.update({
-            where: { id: prev.id },
-            data: {
-              title: ep.title.trim(),
-              duration: ep.duration.trim() || "45 min",
-              airDate: ep.airDate ? new Date(ep.airDate) : null,
-              stillUrl: ep.stillUrl?.trim() || null,
-            },
-          });
-        }
-      } else {
-        await tx.episode.create({
+      for (const row of rows) {
+        await tx.episode.update({
+          where: { id: row.id },
           data: {
-            id: newSlug,
-            mediaId: seriesId,
-            seasonNumber,
-            episodeNumber: ep.episodeNumber,
-            title: ep.title.trim(),
-            duration: ep.duration.trim() || "45 min",
-            airDate: ep.airDate ? new Date(ep.airDate) : null,
-            stillUrl: ep.stillUrl?.trim() || null,
+            episodeNumber: row.episodeNumber,
+            title: row.title,
+            duration: episodeDuration(row.minutes),
+            airDate: row.airDate,
+            stillUrl: row.stillUrl,
           },
         });
       }
-    }
-
-    await refreshSeasons(tx, seriesId);
-  });
+      await refreshSeasons(tx, seriesId);
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === OUT_OF_DATE) return { ok: false, message: OUT_OF_DATE };
+    if (!isUniqueViolation(error)) throw error;
+    return { ok: false, message: "Another episode of this season already has one of those numbers." };
+  }
 
   refreshPages();
   return { ok: true, message: "Saved." };

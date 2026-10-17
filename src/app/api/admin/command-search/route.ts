@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
+import { canManageUsers } from "@/lib/admin-roles";
 import { normalizeQuery, escapeLike } from "@/lib/catalog";
 
 export async function GET(request: Request) {
   try {
-    await requireAdmin();
+    const session = await requireAdmin();
     const { searchParams } = new URL(request.url);
     const q = normalizeQuery(searchParams.get("q") ?? "");
 
@@ -14,6 +16,7 @@ export async function GET(request: Request) {
     }
 
     const like = { contains: escapeLike(q), mode: "insensitive" as const };
+    const allowUsers = canManageUsers(session.user.role);
 
     const [titles, episodes, users] = await Promise.all([
       db.media.findMany({
@@ -35,17 +38,20 @@ export async function GET(request: Request) {
           media: { select: { title: true } },
         },
       }),
-      db.user.findMany({
-        where: {
-          OR: [{ name: like }, { email: like }],
-        },
-        take: 4,
-        select: { id: true, name: true, email: true, role: true },
-      }),
+      allowUsers
+        ? db.user.findMany({
+            where: {
+              OR: [{ name: like }, { email: like }],
+            },
+            take: 4,
+            select: { id: true, name: true, email: true, role: true },
+          })
+        : Promise.resolve([]),
     ]);
 
     return NextResponse.json({ titles, episodes, users });
-  } catch {
+  } catch (err) {
+    if (isRedirectError(err)) throw err;
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 }

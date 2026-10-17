@@ -32,6 +32,7 @@ before you move on.
 - [ ] [Part 9: Check that everything works](#part-9-check-that-everything-works)
 - [ ] [Part 10 (optional): Turn on crash reports](#part-10-optional-turn-on-crash-reports)
 - [ ] [Part 11 (optional): Turn on poster uploads](#part-11-optional-turn-on-poster-uploads)
+- [ ] [Part 12 (optional): Turn on scheduled maintenance jobs](#part-12-optional-turn-on-scheduled-maintenance-jobs)
 
 Then keep [Running the site](#running-the-site),
 [Troubleshooting](#troubleshooting) and
@@ -176,6 +177,7 @@ turned off and says so.
 | `VIDEO_HOSTS` | For video: the hosts sources may come from (see [Video](#video)) | | |
 | `NEXT_PUBLIC_SENTRY_DSN` | Part 10 (optional) | | |
 | `BLOB_READ_WRITE_TOKEN` | Part 11 (optional), added by Vercel | | |
+| `CRON_SECRET` | Part 12 (optional), for automated maintenance jobs | | |
 
 `BETTER_AUTH_URL` isn't needed. It follows `SITE_URL`, or Vercel's
 production address when `SITE_URL` isn't set.
@@ -474,6 +476,24 @@ Uploaded images are public, like any poster, under a random name. An
 image you replace, or upload and never save, stays in the store; delete
 ones you don't need in the store's **Browser** if they pile up. Links
 keep working alongside uploads.
+
+## Part 12 (optional): Turn on scheduled maintenance jobs
+
+The site includes automated maintenance jobs (configured in `vercel.json`):
+- **30-Day Trash Auto-Purge (`/api/cron/purge-trash`):** Daily at 03:00 UTC, permanently deletes movies and series in trash for longer than 30 days.
+- **Publish Due Scheduled Drafts (`/api/cron/publish-due`):** Daily at 03:15 UTC, publishes draft titles whose scheduled publication date has arrived.
+
+Vercel Cron triggers these endpoints automatically using an Authorization bearer header.
+
+1. Generate a secure secret:
+   ```bash
+   openssl rand -hex 32
+   ```
+2. In your Vercel project, open **Settings → Environment Variables**.
+3. Add `CRON_SECRET` with the generated secret for **Production**.
+4. Redeploy for the environment variable to take effect.
+
+Admins can also trigger these background jobs manually anytime at `/admin/jobs`.
 
 ## Running the site
 

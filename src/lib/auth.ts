@@ -3,13 +3,15 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { admin, emailOTP, twoFactor } from "better-auth/plugins";
+import { adminAc, userAc } from "better-auth/plugins/admin/access";
 import { after } from "next/server";
 import { accountDeletionProblem } from "@/lib/account-deletion";
 import { adminAccess } from "@/lib/admin-access";
+import { canManageUsers, roleChangeProblem, staffTargetProblem } from "@/lib/admin-roles";
 import { db } from "@/lib/db";
 import { sendEmail, type Email } from "@/lib/email";
 import { siteUrl } from "@/lib/site-url";
-import { userActionProblem } from "@/lib/user-admin";
+import { ADMIN_API_PATHS, ADMIN_ENDPOINT_ACTIONS, isUserId, userActionProblem } from "@/lib/user-admin";
 
 /** Length of the email verification code; the /verify-email boxes match it. */
 export const OTP_LENGTH = 6;
@@ -127,11 +129,22 @@ export const auth = betterAuth({
       twoFactorVerified: { type: "boolean", required: false, defaultValue: false, input: false },
     },
   },
-  advanced: {
-    ipAddress: { disableIpTracking: true },
-  },
   databaseHooks: {
     user: {
+      create: {
+        before: async (user, ctx) => {
+          if (ctx?.path?.startsWith("/admin/")) {
+            return { data: user };
+          }
+          const { isRegistrationOpen } = await import("@/lib/site-settings");
+          if (!(await isRegistrationOpen())) {
+            throw new APIError("FORBIDDEN", {
+              message: "Public registration is currently closed.",
+            });
+          }
+          return { data: user };
+        },
+      },
       update: {
         // The old address hears about an email change, so a stolen
         // session can't quietly move the account somewhere else.
@@ -150,10 +163,13 @@ export const auth = betterAuth({
     session: {
       create: {
         before: async (session, ctx) => ({
+          // Sessions never keep the IP address. Better Auth still reads it
+          // from the request for its rate limits, which is why IP tracking
+          // stays on (turning it off turns the rate limits off too). The
+          // browser string stays: /account/setting names devices with it.
           data: {
             ...session,
             ipAddress: null,
-            userAgent: null,
             twoFactorVerified: TWO_FACTOR_VERIFY_PATHS.has(ctx?.path ?? ""),
           },
         }),
@@ -191,52 +207,50 @@ export const auth = betterAuth({
         if (problem) throw new APIError("BAD_REQUEST", { message: problem });
         return;
       }
-      // The admin plugin's own endpoints (/api/auth/admin/*) get the same check as the admin panel.
-      if (!ctx.path.startsWith("/admin/") || ctx.path === "/admin/stop-impersonating") return;
+      // The admin plugin's endpoints. Only list-users is open over HTTP
+      // (below); the panel calls the rest from its server functions. Every
+      // call gets the panel's checks: a staff member with a fresh
+      // two-factor sign-in who may manage accounts, who may change this
+      // account (src/lib/admin-roles.ts), and the panel's rules
+      // (src/lib/user-admin.ts).
+      if (!ctx.path.startsWith("/admin/")) return;
       const session = await getSessionFromCtx(ctx);
-      if (adminAccess(session) !== "ok") {
+      if (!session || adminAccess(session) !== "ok" || !canManageUsers(session.user.role)) {
         throw new APIError("FORBIDDEN", { message: "Admin access needs a two-factor sign-in." });
       }
-
-      // Check rules on allowed Better Auth admin endpoints
-      const targetUserId = typeof ctx.body?.userId === "string" ? ctx.body.userId : null;
-      if (targetUserId) {
-        let action: "make-admin" | "remove-admin" | "ban" | "unban" | "sign-out" | null = null;
-        if (ctx.path === "/admin/set-role") {
-          action = ctx.body?.role === "admin" ? "make-admin" : "remove-admin";
-        } else if (ctx.path === "/admin/ban-user") {
-          action = "ban";
-        } else if (ctx.path === "/admin/unban-user") {
-          action = "unban";
-        } else if (ctx.path === "/admin/revoke-user-sessions") {
-          action = "sign-out";
-        }
-
-        if (action) {
-          const target = await db.user.findUnique({
-            where: { id: targetUserId },
-            select: { id: true, role: true, emailVerified: true, banned: true, banExpires: true },
-          });
-          if (!target) throw new APIError("BAD_REQUEST", { message: "No such user." });
-          const problem = userActionProblem(action, session!.user.id, target);
-          if (problem) throw new APIError("BAD_REQUEST", { message: problem });
-        }
-      }
+      const action = ADMIN_ENDPOINT_ACTIONS[ctx.path];
+      if (ctx.path === "/admin/list-users") return;
+      const userId: unknown = ctx.body?.userId;
+      const target =
+        action && isUserId(userId)
+          ? await db.user.findUnique({
+              where: { id: userId },
+              select: { id: true, role: true, emailVerified: true, banned: true, banExpires: true },
+            })
+          : null;
+      if (!action || !target) throw new APIError("FORBIDDEN", { message: "Not allowed." });
+      const newRole: unknown = ctx.body?.role;
+      const problem =
+        action === "set-role"
+          ? newRole !== "admin" && newRole !== "user"
+            ? "Not allowed."
+            : (roleChangeProblem(session.user.role, target.role, newRole) ??
+              userActionProblem(newRole === "admin" ? "make-admin" : "remove-admin", session.user.id, target))
+          : (staffTargetProblem(session.user.role, target.role) ?? userActionProblem(action, session.user.id, target));
+      if (problem) throw new APIError("FORBIDDEN", { message: problem });
     }),
   },
-  // Disabled Better Auth endpoints: the panel uses its own server actions and rules,
-  // and code sign-in would skip two-factor.
   disabledPaths: [
+    // Sign-in and password reset by emailed code: the UI doesn't use
+    // them, and code sign-in would skip two-factor.
     "/sign-in/email-otp",
     "/email-otp/request-password-reset",
     "/forget-password/email-otp",
     "/email-otp/reset-password",
-    "/admin/remove-user",
-    "/admin/set-user-password",
-    "/admin/impersonate-user",
-    "/admin/stop-impersonating",
-    "/admin/list-user-sessions",
-    "/admin/revoke-user-session",
+    // Every admin endpoint but list-users: the panel calls the ones it
+    // needs from the server, and the others (update-user, create-user,
+    // remove-user, impersonate-user, ...) would get around its rules.
+    ...ADMIN_API_PATHS.filter((path) => path !== "/admin/list-users"),
   ],
   rateLimit: {
     // On in production by default. AUTH_RATE_LIMIT=off exists only for
@@ -263,7 +277,14 @@ export const auth = betterAuth({
         });
       },
     }),
-    admin({ defaultRole: "user", adminRoles: ["admin"] }),
+    // Every role in src/lib/admin-roles.ts. The ones that manage accounts
+    // get the plugin's admin permissions, so the panel's ban, sign-out and
+    // role calls work for them; the hook above decides who may change whom.
+    admin({
+      defaultRole: "user",
+      roles: { owner: adminAc, admin: adminAc, moderator: adminAc, editor: userAc, user: userAc },
+      adminRoles: ["owner", "admin", "moderator"],
+    }),
     twoFactor({ issuer: "Gayflix" }),
     // Must stay last: lets server actions set auth cookies.
     nextCookies(),

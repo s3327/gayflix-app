@@ -174,7 +174,10 @@ model Media {
   featuredBeforeTrash Boolean?     @default(false)
   backdropFocus       String?
   lockedFields        String[]      @default([])
+  /// The first time the title was published; kept when it is unpublished.
   publishedAt    DateTime?
+  /// A draft's "Publish at": the publish_due job publishes it then.
+  publishAt      DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   episodes       Episode[]
@@ -182,11 +185,13 @@ model Media {
   views          MediaView[]
   /// Movies only: a series' video is on its episodes.
   videoSources   VideoSource[]
+  revisions      TitleRevision[]
 
   @@index([status, type, updatedAt])
   @@index([status, createdAt])
   @@index([status, publishedAt])
   @@index([status, type, publishedAt])
+  @@index([publishAt])
   @@map("media")
 }
 
@@ -371,4 +376,73 @@ model TwoFactor {
   @@index([secret])
   @@index([userId])
   @@map("twoFactor")
+}
+
+// --- Phase 4: Manage Over Time -------------------------------------------
+
+/// System-wide chronological record of administrative actions.
+model ActivityLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorEmail String
+  actorRole  String?
+  action     String
+  entityType String
+  entityId   String?
+  summary    String
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@map("activity_log")
+}
+
+/// Dynamic site configuration stored in database.
+model SiteSetting {
+  id                String   @id @default("default")
+  siteTitle         String   @default("Gayflix")
+  tagline           String   @default("Stream queer cinema, series and shorts")
+  contactEmail      String?  @default("support@gayflix.com")
+  registrationOpen  Boolean  @default(true)
+  maintenanceMode   Boolean  @default(false)
+  allowedEmbedHosts String[] @default(["vidsrc.to", "superembed.stream", "2embed.cc", "multiembed.mov", "autoembed.to", "player.vidsrc.me"])
+  defaultPageSize   Int      @default(24)
+  webhookUrl        String?
+  updatedAt         DateTime @updatedAt
+  updatedBy         String?
+
+  @@map("site_setting")
+}
+
+/// Point-in-time snapshot of a title before updates.
+model TitleRevision {
+  id         String   @id @default(cuid())
+  mediaId    String
+  actorId    String?
+  actorEmail String
+  snapshot   Json
+  summary    String?
+  createdAt  DateTime @default(now())
+  media      Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@index([mediaId, createdAt])
+  @@map("title_revision")
+}
+
+/// Background scheduled job execution record.
+model ScheduledJobRun {
+  id          String    @id @default(cuid())
+  jobName     String
+  status      String
+  itemsCount  Int       @default(0)
+  details     String?
+  durationMs  Int       @default(0)
+  triggeredBy String    @default("scheduler")
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+
+  @@index([jobName, startedAt])
+  @@map("scheduled_job_run")
 }

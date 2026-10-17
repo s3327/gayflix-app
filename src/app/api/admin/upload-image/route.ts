@@ -8,12 +8,15 @@ import {
   MAX_IMAGE_BYTES,
   sniffImageType,
 } from "@/lib/image-upload";
-import { requireAdmin } from "@/lib/session";
+import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
 import { imageUrlProblem } from "@/lib/title-form";
 
 export async function POST(request: Request) {
   try {
-    await requireAdmin();
+    const { allowed } = await catalogSession();
+    if (!allowed) {
+      return NextResponse.json({ error: FORBIDDEN_CATALOG }, { status: 403 });
+    }
     const form = await request.formData();
     const kind = form.get("kind");
     const file = form.get("file");
