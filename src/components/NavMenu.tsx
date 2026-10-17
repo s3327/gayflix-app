@@ -19,7 +19,7 @@ function NavLink({ item, isActive }: { item: NavMenuItem; isActive: boolean }) {
 }
 
 /**
- * One row of links: Home, Trending, New Releases, Browse (where genre,
+ * One row of links: Home, Trending, Recently Added, Browse (where genre,
  * country, year and language are filters), Movies and Series.
  *
  * Shown from md (768px, a portrait tablet), where every link fits on

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import FormError from "@/components/FormError";
 import Modal from "@/components/Modal";
 import { reportAllowance, submitReport } from "@/lib/report-actions";
@@ -11,7 +12,9 @@ import {
   REPORT_REASONS,
   type ReportAllowance,
 } from "@/lib/reports";
+import { authHref } from "@/lib/safe-redirect";
 import { useToast } from "@/lib/toast-context";
+import { useCurrentPath } from "@/lib/use-current-path";
 
 /**
  * Reports are saved on the server, which also enforces the daily limit
@@ -29,6 +32,7 @@ export default function ReportModal({
   onClose: () => void;
 }) {
   const { showToast } = useToast();
+  const here = useCurrentPath();
   const [allowance, setAllowance] = useState<ReportAllowance | null>(null);
   const [reason, setReason] = useState("");
   const [details, setDetails] = useState("");
@@ -81,7 +85,7 @@ export default function ReportModal({
       {/* Rate-limit note — always visible, not just when the limit is
           hit, so the cap isn't a surprise. */}
       <p className="mt-3 rounded-md bg-bg-elevated px-3 py-2 text-xs text-ink-secondary">
-        Guests can submit {GUEST_REPORT_LIMIT} report a day. Logged-in users get
+        Guests can submit {GUEST_REPORT_LIMIT} reports a day. Logged-in users get
         up to {LOGGED_IN_REPORT_LIMIT} a day.{" "}
         {!allowance ? null : allowance.remaining > 0 ? (
           <>
@@ -89,12 +93,23 @@ export default function ReportModal({
             <span className="font-semibold text-ink-primary">
               {allowance.remaining} of {allowance.limit}
             </span>{" "}
-            left today{allowance.isLoggedIn ? "" : " — log in for more"}.
+            left today.
           </>
         ) : (
           <span className="font-semibold text-status-error">
-            You&apos;ve used today&apos;s limit — try again tomorrow.
+            You&apos;ve used today&apos;s limit. Try again tomorrow.
           </span>
+        )}
+        {allowance && !allowance.isLoggedIn && (
+          <>
+            {" "}
+            <Link
+              href={authHref("/login", here)}
+              className="font-semibold text-ink-brand underline-offset-2 hover:underline"
+            >
+              Log in for more
+            </Link>
+          </>
         )}
       </p>
 

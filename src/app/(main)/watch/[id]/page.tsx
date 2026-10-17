@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { Star } from "lucide-react";
 import { getTitle, getVideoSources } from "@/lib/catalog";
 import WatchPlayer from "@/components/WatchPlayer";
@@ -55,22 +56,29 @@ export default async function WatchPage({
         backdropUrl={movie.backdropUrl}
       />
 
-      {/* Mini poster + title/rating/tagline/tags */}
+      {/* Mini poster + title/rating/tagline/tags; the poster and title lead
+          to the title's page. The poster link is for the mouse only: the
+          title is the same link for keyboards and screen readers. */}
       <div className="mt-8 flex gap-4 sm:gap-6">
-        <div
-          className={`relative aspect-2/3 w-24 shrink-0 overflow-hidden rounded-card bg-bg-surface bg-linear-to-br sm:w-32 ${movie.gradient ?? ""}`}
+        <Link
+          href={`/movie/${movie.id}`}
+          tabIndex={-1}
+          aria-hidden
+          className={`relative aspect-2/3 w-24 shrink-0 overflow-hidden rounded-card bg-bg-surface bg-linear-to-br transition-opacity hover:opacity-80 sm:w-32 ${movie.gradient ?? ""}`}
         >
           <Image
             src={movie.posterUrl}
-            alt={movie.title}
+            alt=""
             fill
             sizes="128px"
             className="object-cover"
           />
-        </div>
+        </Link>
         <div className="min-w-0">
           <h1 className="flex flex-wrap items-baseline gap-2 font-display text-xl font-bold sm:text-2xl">
-            {movie.title}
+            <Link href={`/movie/${movie.id}`} className="transition-colors hover:text-ink-brand">
+              {movie.title}
+            </Link>
             <span className="text-base font-normal text-ink-secondary">({movie.year})</span>
             {movie.rating !== undefined && (
               <span className="flex items-center gap-1 text-sm font-semibold text-pride-yellow">

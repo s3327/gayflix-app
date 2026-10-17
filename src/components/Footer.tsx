@@ -7,7 +7,7 @@ const FOOTER_LINKS: { heading: string; links: { label: string; href: string }[] 
     links: [
       { label: "Movies", href: "/movie" },
       { label: "Series", href: "/series" },
-      { label: "New Releases", href: "/new-releases" },
+      { label: "Recently Added", href: "/new-releases" },
       { label: "Trending Now", href: "/trending" },
     ],
   },

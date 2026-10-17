@@ -256,17 +256,26 @@ test("signed-in users get five reports a day", async ({ browser, request }) => {
   await expect(dialog).toContainText("You have 4 of 5 left today.");
 });
 
-test("guests get one report a day", async ({ browser }) => {
+test("guests get three reports a day, and can log in for more", async ({ browser }) => {
   const page = await guestPage(browser);
-  await page.goto("/episode/the-brownstone-season-1-episode-1", { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "Report an issue" }).click();
+  const episode = "/episode/the-brownstone-season-1-episode-1";
+  await page.goto(episode, { waitUntil: "networkidle" });
   const dialog = page.getByRole("dialog");
-  await expect(dialog).toContainText("You have 1 of 1 left today — log in for more.");
-  await dialog.getByLabel("What's the issue?").selectOption("Video won't play");
-  await dialog.getByRole("button", { name: "Submit" }).click();
-  await expect(page.getByText("Report submitted")).toBeVisible();
+  const reasons = ["Video won't play", "Wrong title details", "Inappropriate content"];
+  for (const [sent, reason] of reasons.entries()) {
+    await page.getByRole("button", { name: "Report an issue" }).click();
+    await expect(dialog).toContainText(`You have ${3 - sent} of 3 left today.`);
+    await dialog.getByLabel("What's the issue?").selectOption(reason);
+    await dialog.getByRole("button", { name: "Submit" }).click();
+    // The modal closes only once the report is saved.
+    await expect(dialog).toHaveCount(0);
+  }
 
   await page.getByRole("button", { name: "Report an issue" }).click();
   await expect(dialog).toContainText("You've used today's limit");
   await expect(dialog.getByRole("button", { name: "Submit" })).toBeDisabled();
+  await expect(dialog.getByRole("link", { name: "Log in for more" })).toHaveAttribute(
+    "href",
+    `/login?next=${encodeURIComponent(episode)}`
+  );
 });

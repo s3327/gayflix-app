@@ -11,10 +11,12 @@ export const REPORT_REASONS = [
   "Poor video/audio quality",
   "Audio out of sync",
   "Subtitles missing or wrong",
+  "Wrong title details",
+  "Inappropriate content",
   "Other",
 ] as const;
 
-export const GUEST_REPORT_LIMIT = 1;
+export const GUEST_REPORT_LIMIT = 3;
 export const LOGGED_IN_REPORT_LIMIT = 5;
 export const MAX_REPORT_DETAILS = 1000;
 

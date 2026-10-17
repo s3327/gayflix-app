@@ -51,9 +51,10 @@ export const TRENDING_SIZE = 100;
 export const LIBRARY_PAGE_SIZE = 50;
 
 const ORDER = {
-  /** Recently edited first: /movie, /series and their home rows. */
-  updated: [{ publishedAt: "desc" }, { id: "desc" }],
-  /** Recently added first: New Releases and Browse. */
+  /**
+   * Newest on the site first: Recently Added, /movie, /series, their home
+   * rows and Browse. Editing a title doesn't move it.
+   */
   added: [{ publishedAt: "desc" }, { id: "desc" }],
   /** Browse's other sorts: most viewed of all time, newest release, A to Z. */
   popular: [{ viewCount: "desc" }, { publishedAt: "desc" }, { id: "desc" }],
@@ -183,7 +184,7 @@ export async function getLiveHero(): Promise<{ id: string; title: string; type: 
   const heroSelect = { id: true, title: true, type: true } satisfies Prisma.MediaSelect;
   const featured = await db.media.findFirst({
     where: { ...PUBLISHED, featured: true },
-    orderBy: ORDER.updated,
+    orderBy: ORDER.added,
     select: heroSelect,
   });
   if (featured) return featured;
@@ -191,8 +192,8 @@ export async function getLiveHero(): Promise<{ id: string; title: string; type: 
 }
 
 /**
- * The home page: the hero (the most recently updated featured title, or
- * else the newest one) and the Trending Now, New Releases, Movies and
+ * The home page: the hero (the most recently published featured title, or
+ * else the newest one) and the Trending Now, Recently Added, Movies and
  * Series rows.
  */
 export async function getHome() {
@@ -201,13 +202,13 @@ export async function getHome() {
   const [featured, trending, newReleases, movies, series] = await Promise.all([
     db.media.findFirst({
       where: { ...PUBLISHED, featured: true },
-      orderBy: ORDER.updated,
+      orderBy: ORDER.added,
       select: heroSelect,
     }),
     trendingRows(TRENDING_ROW_SIZE),
     cards(PUBLISHED, ORDER.added, ROW_SIZE),
-    cards({ ...PUBLISHED, type: "movie" }, ORDER.updated, ROW_SIZE),
-    cards({ ...PUBLISHED, type: "series" }, ORDER.updated, ROW_SIZE),
+    cards({ ...PUBLISHED, type: "movie" }, ORDER.added, ROW_SIZE),
+    cards({ ...PUBLISHED, type: "series" }, ORDER.added, ROW_SIZE),
   ]);
   const hero =
     featured ??

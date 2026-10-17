@@ -29,7 +29,7 @@ export default async function MoviePage({
   const requestedPage = pageParam(searchParams.page);
   const { items: pageItems, page, totalPages } = await listTitles({
     type: "movie",
-    sort: "updated",
+    sort: "added",
     page: requestedPage,
   });
   // An address past the last page isn't a page.

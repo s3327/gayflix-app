@@ -7,7 +7,7 @@ export type NavMenuItem = {
 export const primaryNavItems: NavMenuItem[] = [
   { label: "Home", href: "/home" },
   { label: "Trending", href: "/trending" },
-  { label: "New Releases", href: "/new-releases" },
+  { label: "Recently Added", href: "/new-releases" },
   { label: "Browse", href: "/browse" },
   { label: "Movies", href: "/movie" },
   { label: "Series", href: "/series" },
