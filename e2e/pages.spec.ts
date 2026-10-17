@@ -27,6 +27,9 @@ const PAGES = [
   "/verify-email?email=a%40b.co",
   "/terms",
   "/privacy",
+  "/about",
+  "/contact",
+  "/copyright",
 ];
 
 for (const path of PAGES) {

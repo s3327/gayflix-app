@@ -1,21 +1,33 @@
 import Image from "next/image";
 import Link from "next/link";
 
-const FOOTER_LINKS: { heading: string; links: string[] }[] = [
-  { heading: "Browse", links: ["Movies", "Series", "New Releases", "Trending Now"] },
-  { heading: "Company", links: ["About", "Careers", "Contact"] },
-  { heading: "Legal", links: ["Terms of Service", "Privacy Policy", "Cookie Policy"] },
+const FOOTER_LINKS: { heading: string; links: { label: string; href: string }[] }[] = [
+  {
+    heading: "Browse",
+    links: [
+      { label: "Movies", href: "/movie" },
+      { label: "Series", href: "/series" },
+      { label: "New Releases", href: "/new-releases" },
+      { label: "Trending Now", href: "/trending" },
+    ],
+  },
+  {
+    heading: "Company",
+    links: [
+      { label: "About", href: "/about" },
+      { label: "Contact", href: "/contact" },
+      { label: "Copyright", href: "/copyright" },
+    ],
+  },
+  {
+    heading: "Legal",
+    links: [
+      { label: "Terms of Service", href: "/terms" },
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Cookies", href: "/privacy#cookies" },
+    ],
+  },
 ];
-
-// Active routes mapped for footer items
-const FOOTER_HREFS: Record<string, string> = {
-  "Movies": "/movie",
-  "Series": "/series",
-  "New Releases": "/new-releases",
-  "Trending Now": "/trending",
-  "Terms of Service": "/terms",
-  "Privacy Policy": "/privacy",
-};
 
 export default function Footer() {
   return (
@@ -47,28 +59,16 @@ export default function Footer() {
                   {col.heading}
                 </h3>
                 <ul className="mt-3 flex flex-col gap-2">
-                  {col.links.map((link) => {
-                    const href = FOOTER_HREFS[link];
-                    return (
-                      <li key={link}>
-                        {href ? (
-                          <Link
-                            href={href}
-                            className="text-sm text-ink-secondary transition-colors hover:text-ink-brand"
-                          >
-                            {link}
-                          </Link>
-                        ) : (
-                          // No page yet — plain text rather than a
-                          // button that does nothing when clicked.
-                          <span className="text-sm text-ink-muted">
-                            {link}{" "}
-                            <span className="text-xs">(coming soon)</span>
-                          </span>
-                        )}
-                      </li>
-                    );
-                  })}
+                  {col.links.map((link) => (
+                    <li key={link.href}>
+                      <Link
+                        href={link.href}
+                        className="text-sm text-ink-secondary transition-colors hover:text-ink-brand"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
                 </ul>
               </div>
             ))}

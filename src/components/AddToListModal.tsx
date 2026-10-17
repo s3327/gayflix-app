@@ -7,10 +7,10 @@ import { useLists } from "@/lib/lists-context";
 import type { FavoriteEntry } from "@/lib/favorites-context";
 
 /**
- * Opened from a Favorites card — lets someone put a favorited title into
- * one or more lists without ever leaving Favorites, and without removing
- * it from Favorites (that's a separate, unrelated toggle — see
- * FavoriteCard's own heart icon).
+ * Puts a title into one or more lists, or makes a new list with it,
+ * without leaving the page. Opened from a Favorites card and from
+ * AddToListButton on title, watch and episode pages. Lists don't touch
+ * Favorites: that's a separate toggle.
  */
 export default function AddToListModal({
   entry,

@@ -1,10 +1,6 @@
-import type { Metadata } from "next";
-import { SITE_NAME } from "@/lib/page-metadata";
 import { getSiteSettings } from "@/lib/site-settings";
 
-// The page is a client component, which can't name itself in the tab.
-export const metadata: Metadata = { title: `Sign Up · ${SITE_NAME}` };
-
+// The page names itself in the tab; this adds the closed-registration notice.
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const settings = await getSiteSettings();
 

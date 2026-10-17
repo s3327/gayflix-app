@@ -315,6 +315,8 @@ model MediaList {
   id        String     @id @default(cuid())
   userId    String
   name      String
+  /// Only the owner can see a list until they share it.
+  isPublic  Boolean    @default(false)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)

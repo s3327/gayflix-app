@@ -80,3 +80,38 @@ test("forgot-password answers the same for unknown emails", async ({ page }) => 
   await page.getByRole("button", { name: "Send Reset Link" }).click();
   await expect(page.getByText("a password reset link is on its way")).toBeVisible();
 });
+
+test("signing up again with a taken email emails the owner instead", async ({ page, request }) => {
+  // Confirmed: the owner gets log-in and reset links, and no code.
+  const owner = accounts().user;
+  let since = Date.now();
+  await page.goto("/signup");
+  await page.getByLabel("Name").fill("Someone Else");
+  await page.getByLabel("Email").fill(owner.email);
+  await page.getByLabel("Password").fill("another-password");
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Sign Up" }).click();
+  // The page can't tell, so nobody can find out who has an account.
+  await expect(page).toHaveURL(/\/verify-email\?email=/);
+  const notice = await waitForEmail(owner.email, since);
+  expect(notice).toContain("already has an account");
+  expect(notice).toContain("/login");
+  expect(notice).toContain("/forgot-password");
+  expect(codeFrom(notice)).toBe("");
+
+  // Never confirmed: a fresh code, which finishes the first sign-up.
+  const account = newAccount("signup-again");
+  since = Date.now();
+  await request.post("/api/auth/sign-up/email", { data: account });
+  // The first code is sent after the response; wait for it, so it isn't
+  // mistaken for the new one.
+  await waitForEmail(account.email, since);
+  since = Date.now();
+  await request.post("/api/auth/sign-up/email", { data: account });
+  const code = codeFrom(await waitForEmail(account.email, since));
+  expect(code).not.toBe("");
+  const verify = await request.post("/api/auth/email-otp/verify-email", {
+    data: { email: account.email, otp: code },
+  });
+  expect(verify.ok()).toBe(true);
+});

@@ -3,11 +3,11 @@ import Link from "next/link";
 import { Play, Star } from "lucide-react";
 import type { Media, MediaDetail } from "@/lib/media";
 import ReadMoreText from "@/components/ReadMoreText";
-import FavoriteButton from "@/components/FavoriteButton";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import RecommendationSection from "@/components/RecommendationSection";
 import SeasonTabs from "@/components/SeasonTabs";
 import TagList from "@/components/TagList";
+import TitleActions from "@/components/TitleActions";
 import { countryHref, genreHref, languageHref, searchHref } from "@/lib/browse-href";
 
 /**
@@ -157,21 +157,19 @@ export default function TitleDetail({
 
             <TagList tags={title.tags} className="mt-4" />
 
-            <div className="mt-4">
-              <FavoriteButton
-                showLabel
-                media={{
-                  id: title.id,
-                  title: title.title,
-                  year: title.year,
-                  duration: title.duration,
-                  type: title.type,
-                  genre: title.genre,
-                  posterUrl: title.posterUrl,
-                  gradient: title.gradient,
-                }}
-              />
-            </div>
+            <TitleActions
+              className="mt-4"
+              media={{
+                id: title.id,
+                title: title.title,
+                year: title.year,
+                duration: title.duration,
+                type: title.type,
+                genre: title.genre,
+                posterUrl: title.posterUrl,
+                gradient: title.gradient,
+              }}
+            />
           </div>
         </div>
 

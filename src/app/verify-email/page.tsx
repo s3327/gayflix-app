@@ -7,7 +7,7 @@ import Link from "next/link";
 import FormError from "@/components/FormError";
 import OtpInput from "@/components/OtpInput";
 import { authClient, authErrorMessage } from "@/lib/auth-client";
-import { safeNextPath } from "@/lib/safe-redirect";
+import { authHref, nextParam, safeNextPath } from "@/lib/safe-redirect";
 
 // Matches OTP_LENGTH in src/lib/auth.ts (not imported: that file is server-only).
 const CODE_LENGTH = 6;
@@ -121,7 +121,7 @@ function VerifyEmailForm() {
 
         <p className="mt-2 text-center text-sm text-ink-secondary">
           <Link
-            href="/login"
+            href={authHref("/login", nextParam(searchParams.get("next") ?? undefined))}
             className="font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
           >
             Back to login

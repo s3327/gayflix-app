@@ -16,6 +16,8 @@ const PUBLIC_PAGES = [
   "/verify-email?email=a%40b.co",
   "/forgot-password",
   "/reset-password?error=INVALID_TOKEN",
+  "/privacy",
+  "/copyright",
 ];
 
 for (const path of PUBLIC_PAGES) {

@@ -52,7 +52,9 @@ export async function guestPage(
 
 /** A browser of its own, signed in to `account` through the login form. */
 export async function signedInPage(browser: Browser, account: Account) {
-  const context = await browser.newContext();
+  // Signed out to start with: the login page sends members on, and a
+  // context made in a test inherits its signed-in state.
+  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   const page = await context.newPage();
   await logIn(page, account);
   await expect(page).not.toHaveURL(/\/login/);

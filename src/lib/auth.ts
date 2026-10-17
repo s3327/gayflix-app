@@ -44,6 +44,9 @@ const TWO_FACTOR_VERIFY_PATHS = new Set([
   "/two-factor/verify-backup-code",
 ]);
 
+// Where links in emails point.
+const authOrigin = process.env.BETTER_AUTH_URL ?? siteUrl().origin;
+
 // Google sign-in is offered once both credentials are set.
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -54,9 +57,14 @@ const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
  * - Email + password, with the email confirmed by a 6-digit code before
  *   the first session. Passwords are hashed with scrypt.
  * - Google sign-in when GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are set.
+ * - Signing up with an email that already has an account answers like a
+ *   new sign-up, so nobody can find out who has one. The owner gets an
+ *   email instead: a log-in and reset link, or a fresh code when the
+ *   account was never confirmed.
  * - Password reset by emailed link (/reset-password); resetting signs out
  *   every other session. Signed-in users change their password with the
- *   current one, and their email with a code sent to the new address.
+ *   current one, and their email with their password and a code sent to
+ *   the new address; the old address is told.
  * - Sessions live in the database behind an httpOnly cookie (Secure in
  *   production, SameSite=Lax).
  * - Roles come from the admin plugin: "user" by default, "admin" for
@@ -73,7 +81,7 @@ const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
  */
 export const auth = betterAuth({
   appName: "Gayflix",
-  baseURL: process.env.BETTER_AUTH_URL ?? siteUrl().origin,
+  baseURL: authOrigin,
   database: prismaAdapter(db, { provider: "postgresql" }),
   emailAndPassword: {
     enabled: true,
@@ -85,6 +93,23 @@ export const auth = betterAuth({
         to: user.email,
         subject: "Reset your Gayflix password",
         text: `Someone asked to reset the password for this Gayflix account.\n\nReset it here (the link works for 1 hour):\n${url}\n\nIf this wasn't you, you can ignore this email.`,
+      });
+    },
+    onExistingUserSignUp: async ({ user }) => {
+      if (!user.emailVerified) {
+        // They signed up before and never entered the code: /verify-email
+        // is waiting for a new one.
+        after(() =>
+          auth.api
+            .sendVerificationOTP({ body: { email: user.email, type: "email-verification" } })
+            .catch((error: unknown) => console.error("[email] delivery failed:", error))
+        );
+        return;
+      }
+      deliver({
+        to: user.email,
+        subject: "You already have a Gayflix account",
+        text: `Someone tried to sign up for Gayflix with this email, which already has an account.\n\nIf it was you, log in here:\n${authOrigin}/login\n\nForgot your password? Reset it here:\n${authOrigin}/forgot-password\n\nIf it wasn't you, you can ignore this email. Nothing about your account has changed.`,
       });
     },
   },
@@ -120,6 +145,20 @@ export const auth = betterAuth({
           return { data: user };
         },
       },
+      update: {
+        // The old address hears about an email change, so a stolen
+        // session can't quietly move the account somewhere else.
+        after: async (user, ctx) => {
+          if (ctx?.path !== "/email-otp/change-email") return;
+          const previous = ctx.context.session?.user.email;
+          if (!previous || previous.toLowerCase() === user.email.toLowerCase()) return;
+          deliver({
+            to: previous,
+            subject: "Your Gayflix email was changed",
+            text: `The email for your Gayflix account was just changed to ${user.email}. Codes and password resets now go there.\n\nIf you made this change, there's nothing more to do.\n\nIf you didn't, someone else may be signed in to your account. Reply to this email and we'll help you get it back.`,
+          });
+        },
+      },
     },
     session: {
       create: {
@@ -139,6 +178,22 @@ export const auth = betterAuth({
   },
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      // Changing the email asks for the password too, when the account
+      // has one (not for Google-only accounts). The page sends it.
+      if (ctx.path === "/email-otp/request-email-change") {
+        const session = await getSessionFromCtx(ctx);
+        if (!session) return; // the endpoint turns it away itself
+        const credential = await ctx.context.internalAdapter.findCredentialAccount(session.user.id);
+        if (!credential?.password) return;
+        const password: unknown = ctx.body?.password;
+        if (typeof password !== "string" || !password) {
+          throw new APIError("BAD_REQUEST", { message: "Enter your password to change your email." });
+        }
+        if (!(await ctx.context.password.verify({ hash: credential.password, password }))) {
+          throw new APIError("BAD_REQUEST", { message: "That password isn't right." });
+        }
+        return;
+      }
       if (ctx.path === "/delete-user") {
         const session = await getSessionFromCtx(ctx);
         if (!session) return; // the endpoint turns it away itself

@@ -33,6 +33,8 @@ export type MediaList = {
   id: string;
   name: string;
   createdAt: string;
+  /** Anyone with the link can view it; otherwise only the owner. */
+  isPublic: boolean;
   /** Snapshot copies, deduped by id, in the order they were added. */
   items: FavoriteEntry[];
 };

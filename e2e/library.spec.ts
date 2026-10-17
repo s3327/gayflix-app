@@ -45,8 +45,21 @@ test("favorites and lists follow the account to another device", async ({ browse
   await expect(otherDevice.getByRole("heading", { name: "Weekend" })).toBeVisible();
   await expect(otherDevice.getByRole("link", { name: /Chosen Family/ })).toBeVisible();
 
-  // Anyone with the link can view the list, but only the owner can change it.
+  // A list is private until it's shared...
+  await expect(otherDevice.locator("main").getByText("Private")).toBeVisible();
   const guest = await guestPage(browser);
+  const before = await guest.goto(listUrl);
+  expect(before?.status()).toBe(404);
+
+  // ...then anyone with the link can view it, but only the owner can change it.
+  await otherDevice.getByRole("button", { name: "Share" }).click();
+  const dialog = otherDevice.getByRole("dialog", { name: 'Share "Weekend"' });
+  await expect(dialog.getByRole("button", { name: "Copy Link" })).toHaveCount(0);
+  await saved(otherDevice, () =>
+    dialog.getByRole("switch", { name: "Anyone with the link can view" }).check()
+  );
+  await expect(dialog.getByRole("button", { name: "Copy Link" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Close" }).click();
   await guest.goto(listUrl);
   await expect(guest.getByRole("heading", { name: "Weekend" })).toBeVisible();
   await expect(guest.getByRole("link", { name: /Chosen Family/ })).toBeVisible();
@@ -57,6 +70,49 @@ test("favorites and lists follow the account to another device", async ({ browse
   );
   await guest.reload();
   await expect(guest.getByText("This list is empty.")).toBeVisible();
+});
+
+test("add a title to a list from its own, watch and episode pages", async ({ browser, request }) => {
+  // A guest is asked to log in, and comes back to the title.
+  const guest = await guestPage(browser);
+  await guest.goto("/movie/chosen-family");
+  await guest.getByRole("button", { name: "Add to List" }).click();
+  const prompt = guest.getByRole("dialog", { name: "Log in to make lists" });
+  await expect(prompt.getByRole("link", { name: "Log in" })).toHaveAttribute(
+    "href",
+    "/login?next=%2Fmovie%2Fchosen-family"
+  );
+
+  const account = newAccount("add-to-list");
+  await createVerifiedAccount(request, account);
+  const page = await signedInPage(browser, account);
+  await page.goto("/movie/chosen-family", { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Add to List" }).click();
+  await page.getByPlaceholder("New list name").fill("Tonight");
+  await saved(page, () => page.getByRole("button", { name: "Create list" }).click());
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("button", { name: "In 1 List" })).toBeVisible();
+
+  // The watch page has the same buttons.
+  await page.goto("/watch/chosen-family", { waitUntil: "networkidle" });
+  await expect(page.getByRole("button", { name: "In 1 List" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add to Favorites" })).toBeVisible();
+
+  // An episode's page adds its series.
+  await page.goto("/episode/the-brownstone-season-1-episode-1", { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Add to List" }).click();
+  await saved(page, () => page.getByRole("button", { name: /Tonight/ }).click());
+  await page.getByRole("button", { name: "Close" }).click();
+
+  const otherDevice = await signedInPage(browser, account);
+  await otherDevice.goto("/account/favorite");
+  await otherDevice.getByRole("button", { name: "My Lists" }).click();
+  await otherDevice.getByRole("link", { name: /Tonight/ }).click();
+  await expect(otherDevice.getByRole("link", { name: /Chosen Family/ })).toBeVisible();
+  await expect(otherDevice.getByRole("link", { name: /The Brownstone/ })).toHaveAttribute(
+    "href",
+    "/series/the-brownstone"
+  );
 });
 
 test("a guest's watch history moves into their account", async ({ browser, request }) => {

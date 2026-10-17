@@ -7,7 +7,7 @@ import OtpInput from "@/components/OtpInput";
 import { authClient, authErrorMessage } from "@/lib/auth-client";
 import { useAuth } from "@/lib/auth-context";
 
-type EmailStep = "idle" | "confirm-current" | "new-email" | "verify" | "done";
+type EmailStep = "idle" | "new-email" | "verify" | "done";
 type PasswordStep = "idle" | "new-password" | "done";
 
 function memberSince(createdAt: Date | string | undefined) {
@@ -25,8 +25,10 @@ function memberSince(createdAt: Date | string | undefined) {
  *
  * Reads and changes the real account:
  *  - Save updates the display name.
- *  - Change Email sends a code to the new address; the email changes
- *    only once that code is entered.
+ *  - Change Email asks for the password (unless the account signs in
+ *    with Google only) and sends a code to the new address; the email
+ *    changes only once that code is entered, and the old address is
+ *    told (src/lib/auth.ts checks both).
  *  - Change Password needs the current password, and signs out every
  *    other device.
  */
@@ -40,8 +42,9 @@ export default function AccountPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   const [emailStep, setEmailStep] = useState<EmailStep>("idle");
-  const [confirmCurrentEmail, setConfirmCurrentEmail] = useState("");
-  const [emailConfirmError, setEmailConfirmError] = useState(false);
+  // Whether the account has a password to ask for; looked up on Change Email.
+  const [hasPassword, setHasPassword] = useState(true);
+  const [emailPassword, setEmailPassword] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [emailError, setEmailError] = useState("");
 
@@ -54,8 +57,7 @@ export default function AccountPage() {
 
   function resetSubFlows() {
     setEmailStep("idle");
-    setConfirmCurrentEmail("");
-    setEmailConfirmError(false);
+    setEmailPassword("");
     setNewEmail("");
     setEmailError("");
     setPasswordStep("idle");
@@ -98,13 +100,10 @@ export default function AccountPage() {
     setIsEditing(false);
   }
 
-  function handleConfirmCurrentEmail(event: React.FormEvent) {
-    event.preventDefault();
-    if (confirmCurrentEmail.trim().toLowerCase() !== activeEmail.toLowerCase()) {
-      setEmailConfirmError(true);
-      return;
-    }
-    setEmailConfirmError(false);
+  async function handleStartEmailChange() {
+    const { data } = await authClient.listAccounts();
+    // If the lookup fails, ask anyway: the server knows the answer.
+    setHasPassword(data ? data.some((account) => account.providerId === "credential") : true);
     setEmailStep("new-email");
   }
 
@@ -112,7 +111,12 @@ export default function AccountPage() {
     event.preventDefault();
     if (!newEmail.trim()) return;
     setEmailError("");
-    const { error } = await authClient.emailOtp.requestEmailChange({ newEmail: newEmail.trim() });
+    // Better Auth's own client has no password field here; the server
+    // checks it before the endpoint runs (src/lib/auth.ts).
+    const { error } = await authClient.$fetch("/email-otp/request-email-change", {
+      method: "POST",
+      body: { newEmail: newEmail.trim(), ...(hasPassword && { password: emailPassword }) },
+    });
     if (error) {
       setEmailError(authErrorMessage(error));
       return;
@@ -229,7 +233,7 @@ export default function AccountPage() {
               {emailStep === "idle" && (
                 <button
                   type="button"
-                  onClick={() => setEmailStep("confirm-current")}
+                  onClick={handleStartEmailChange}
                   className="text-xs font-semibold text-ink-brand transition-colors hover:text-brand-pink-light"
                 >
                   Change Email
@@ -241,50 +245,12 @@ export default function AccountPage() {
               <p className="text-sm text-ink-primary">{activeEmail}</p>
             )}
 
-            {emailStep === "confirm-current" && (
-              <form onSubmit={handleConfirmCurrentEmail} className="flex flex-col gap-3">
-                <p className="text-sm text-ink-secondary">
-                  Confirm your current email to continue
-                </p>
-                <input
-                  type="email"
-                  aria-label="Current email"
-                  required
-                  value={confirmCurrentEmail}
-                  onChange={(event) => {
-                    setConfirmCurrentEmail(event.target.value);
-                    setEmailConfirmError(false);
-                  }}
-                  placeholder={activeEmail}
-                  className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
-                />
-                {emailConfirmError && (
-                  <p className="text-xs text-status-error">
-                    That doesn&apos;t match your current email.
-                  </p>
-                )}
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="rounded-card bg-brand-pink px-5 py-2 text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark"
-                  >
-                    Continue
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEmailStep("idle")}
-                    className="rounded-card border border-border-strong px-5 py-2 text-sm font-semibold text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            )}
-
             {emailStep === "new-email" && (
               <form onSubmit={handleSubmitNewEmail} className="flex flex-col gap-3">
                 <p className="text-sm text-ink-secondary">
-                  Enter your new email address
+                  {hasPassword
+                    ? "Enter your new email address and your password"
+                    : "Enter your new email address"}
                 </p>
                 <input
                   type="email"
@@ -296,6 +262,21 @@ export default function AccountPage() {
                   placeholder="new@example.com"
                   className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
                 />
+                {hasPassword && (
+                  <input
+                    type="password"
+                    aria-label="Current password"
+                    autoComplete="current-password"
+                    required
+                    value={emailPassword}
+                    onChange={(event) => {
+                      setEmailPassword(event.target.value);
+                      setEmailError("");
+                    }}
+                    placeholder="Current password"
+                    className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+                  />
+                )}
                 <FormError message={emailError} />
                 <div className="flex gap-2">
                   <button

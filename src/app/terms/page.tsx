@@ -1,118 +1,110 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import Image from "next/image";
+import LegalPage, { ContactEmail, LegalLink, LegalSection } from "@/components/LegalPage";
+import { LEGAL } from "@/lib/legal";
 import { SITE_NAME } from "@/lib/page-metadata";
 
 export const metadata: Metadata = { title: `Terms of Service · ${SITE_NAME}` };
 
 /**
- * Placeholder legal copy — linked from the sign-up checkbox and (once
- * wired) Footer's Legal column. Structure/headings are realistic so the
- * page reads as a real ToS, but the actual clauses are filler text, not
- * reviewed legal language — swap before this ever goes live.
+ * The Terms the sign-up checkbox agrees to. Written for the site as it
+ * works: free, with optional accounts, and video played from other
+ * hosts. Names, country and contact come from src/lib/legal.ts.
  */
 export default function TermsPage() {
   return (
-    <main className="mx-auto max-w-3xl px-4 py-16 sm:px-8">
-      <Link href="/" className="inline-flex items-center gap-2">
-        <Image
-          src="/brand/gayflix-icon.png"
-          alt="Gayflix"
-          width={500}
-          height={500}
-          className="h-8 w-8"
-        />
-      </Link>
-
-      <h1 className="mt-8 font-display text-3xl font-bold">
-        Terms of Service
-      </h1>
-      <p className="mt-2 text-sm text-ink-muted">Last updated: January 2026</p>
-
-      <div className="mt-8 flex flex-col gap-6 text-sm leading-relaxed text-ink-secondary">
-        <p>
-          Welcome to Gayflix. By creating an account or using our streaming
-          service, you agree to these Terms of Service. Please read them
-          carefully before signing up.
-        </p>
-
-        <section>
-          <h2 className="font-display text-lg font-semibold text-ink-primary">
-            1. Your Account
-          </h2>
-          <p className="mt-2">
-            You&apos;re responsible for keeping your login credentials
-            secure and for all activity that happens under your account.
-            You must be at least 18 years old, or the age of majority in
-            your region, to create an account.
-          </p>
-        </section>
-
-        <section>
-          <h2 className="font-display text-lg font-semibold text-ink-primary">
-            2. Subscription &amp; Billing
-          </h2>
-          <p className="mt-2">
-            Access to Gayflix content requires an active subscription.
-            Subscriptions renew automatically until cancelled, and pricing
-            is shown before you confirm any purchase.
-          </p>
-        </section>
-
-        <section>
-          <h2 className="font-display text-lg font-semibold text-ink-primary">
-            3. Content &amp; Usage
-          </h2>
-          <p className="mt-2">
-            Titles on Gayflix are licensed for personal, non-commercial
-            streaming only. Downloading, redistributing, or publicly
-            broadcasting our content without permission is prohibited.
-          </p>
-        </section>
-
-        <section>
-          <h2 className="font-display text-lg font-semibold text-ink-primary">
-            4. Community Guidelines
-          </h2>
-          <p className="mt-2">
-            Gayflix is built for and by the LGBTQ+ community. Harassment,
-            hate speech, and impersonation are not tolerated and may result
-            in account suspension.
-          </p>
-        </section>
-
-        <section>
-          <h2 className="font-display text-lg font-semibold text-ink-primary">
-            5. Changes to These Terms
-          </h2>
-          <p className="mt-2">
-            We may update these terms from time to time. Continued use of
-            Gayflix after changes take effect means you accept the revised
-            terms.
-          </p>
-        </section>
-
-        <section>
-          <h2 className="font-display text-lg font-semibold text-ink-primary">
-            6. Contact
-          </h2>
-          <p className="mt-2">
-            Questions about these terms? Reach out through the Contact page
-            linked in our footer.
-          </p>
-        </section>
-      </div>
-
-      <p className="mt-10 text-sm text-ink-secondary">
-        See also our{" "}
-        <Link
-          href="/privacy"
-          className="font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
-        >
-          Privacy Policy
-        </Link>
-        .
+    <LegalPage title="Terms of Service" path="/terms" updated>
+      <p>
+        These terms are an agreement between you and {LEGAL.operator} (&quot;we&quot;), who run
+        Gayflix. By using Gayflix or creating an account, you agree to them. If you don&apos;t
+        agree, please don&apos;t use the site.
       </p>
-    </main>
+
+      <LegalSection title="1. What Gayflix is">
+        <p>
+          Gayflix is a free catalog of LGBTQ+ films and series. You can browse and watch without an
+          account. An account lets you keep favorites, lists and your watch history on every
+          device. There are no subscriptions or payments.
+        </p>
+        <p>
+          Videos play from the hosts the titles are published on, inside our player. Those hosts
+          run their own services under their own terms, and we don&apos;t control what they show or
+          how long a video stays available.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="2. Your account">
+        <p>
+          You must be at least 18, or the age of majority where you live if that&apos;s higher, to
+          create an account. Give a real email address you can read, and keep your password to
+          yourself: you&apos;re responsible for what happens under your account.
+        </p>
+        <p>
+          You can delete your account at any time from Account, then Setting. Your favorites,
+          lists and history are deleted with it.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="3. Using Gayflix">
+        <p>Please don&apos;t:</p>
+        <ul className="list-disc pl-5">
+          <li>download, copy or rebroadcast videos, except where the host allows it;</li>
+          <li>use Gayflix to harass, threaten or out anyone, or post hateful list names;</li>
+          <li>send false reports, or try to overload, break into or scrape the site;</li>
+          <li>sign in as someone else or share an account you don&apos;t own.</li>
+        </ul>
+        <p>
+          We may suspend or close an account that breaks these rules, and we&apos;ll tell you why
+          by email when we can.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="4. Shared lists">
+        <p>
+          Lists are private until you share one. A shared list&apos;s name and titles can be seen by
+          anyone with its link, so choose names you&apos;re happy for others to read. You can stop
+          sharing at any time, and the link then stops working.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="5. Copyright">
+        <p>
+          Titles, posters and descriptions belong to their owners. If you own a work that appears
+          on Gayflix without your permission, our <LegalLink href="/copyright">Copyright page</LegalLink>{" "}
+          says how to have it taken down.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="6. No guarantees">
+        <p>
+          Gayflix is offered as it is, for free. We work to keep it running and accurate, but we
+          can&apos;t promise that every title will play, stay available or be described correctly.
+          As far as the law allows, we aren&apos;t liable for losses that come from using the site
+          or from not being able to use it. Nothing in these terms limits rights the law gives you
+          that can&apos;t be signed away.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="7. Changes">
+        <p>
+          We may change these terms as Gayflix changes. The date at the top shows the latest
+          version. When a change matters to members, we&apos;ll email them before it takes effect.
+          Using Gayflix after that means you accept the new terms.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="8. Law">
+        <p>
+          These terms follow the law of {LEGAL.country}, and disputes are settled by its courts,
+          unless the law where you live gives you the right to bring them there.
+        </p>
+      </LegalSection>
+
+      <LegalSection title="9. Contact">
+        <p>
+          Questions about these terms: <ContactEmail />. Our{" "}
+          <LegalLink href="/privacy">Privacy Policy</LegalLink> explains what we keep about you.
+        </p>
+      </LegalSection>
+    </LegalPage>
   );
 }

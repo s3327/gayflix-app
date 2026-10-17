@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Clapperboard, Flag, Play, RotateCcw } from "lucide-react";
+import { Flag, Play, RotateCcw } from "lucide-react";
 import { useHistory } from "@/lib/history-context";
 import type { FavoriteEntry } from "@/lib/favorites-context";
 import type { VideoSourceEntry } from "@/lib/video-source";
@@ -113,8 +113,15 @@ export default function WatchPlayer({
             />
 
             {!source ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center">
-                <Clapperboard className="h-8 w-8 text-ink-brand" aria-hidden />
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-4 text-center sm:gap-2 sm:p-6">
+                <Image
+                  src="/brand/gayflix-logo-full.png"
+                  alt="Gayflix"
+                  width={1000}
+                  height={667}
+                  sizes="(min-width: 1024px) 264px, (min-width: 640px) 168px, 96px"
+                  className="h-16 w-auto sm:h-28 lg:h-44"
+                />
                 <p className="font-display text-xl font-bold text-ink-primary">Coming soon</p>
                 <p className="max-w-sm text-sm text-ink-secondary">
                   This {noun} isn&apos;t ready to watch yet. Check back soon.

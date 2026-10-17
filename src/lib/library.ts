@@ -40,18 +40,23 @@ export async function loadLibrary(userId: string): Promise<Library> {
 export function toMediaList(list: {
   id: string;
   name: string;
+  isPublic: boolean;
   createdAt: Date;
   items: { entry: unknown }[];
 }): MediaList {
   return {
     id: list.id,
     name: list.name,
+    isPublic: list.isPublic,
     createdAt: list.createdAt.toISOString(),
     items: list.items.map((item) => item.entry as FavoriteEntry),
   };
 }
 
-/** A list anyone with the link can view (list ids are random UUIDs). */
+/**
+ * A list, for /list/[id]. The page shows it to its owner, and to anyone
+ * with the link once the owner shares it (list ids are random UUIDs).
+ */
 export async function findList(id: string) {
   const list = await db.mediaList.findUnique({
     where: { id },

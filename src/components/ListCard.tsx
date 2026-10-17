@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Layers, Pencil, Share2, Trash2 } from "lucide-react";
-import { copyListLink, useLists, type MediaList } from "@/lib/lists-context";
-import { useToast } from "@/lib/toast-context";
+import { Layers, Lock, Pencil, Share2, Trash2 } from "lucide-react";
+import { useLists, type MediaList } from "@/lib/lists-context";
 import NameListModal from "@/components/NameListModal";
 import ConfirmModal from "@/components/ConfirmModal";
+import ShareListModal from "@/components/ShareListModal";
 
 /**
  * List view, not a cover grid — a list is a named collection, not a
@@ -17,7 +17,7 @@ import ConfirmModal from "@/components/ConfirmModal";
  */
 export default function ListCard({ list }: { list: MediaList }) {
   const { renameList, deleteList } = useLists();
-  const { showToast } = useToast();
+  const [isSharing, setIsSharing] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
@@ -31,8 +31,16 @@ export default function ListCard({ list }: { list: MediaList }) {
           <span className="block truncate font-display text-sm font-semibold text-ink-primary">
             {list.name}
           </span>
-          <span className="block text-xs text-ink-secondary">
-            {list.items.length} {list.items.length === 1 ? "title" : "titles"}
+          <span className="flex items-center gap-1 text-xs text-ink-secondary">
+            {list.items.length} {list.items.length === 1 ? "title" : "titles"} ·{" "}
+            {list.isPublic ? (
+              "Shared"
+            ) : (
+              <>
+                <Lock className="h-3 w-3" aria-hidden />
+                Private
+              </>
+            )}
           </span>
         </span>
       </Link>
@@ -40,7 +48,7 @@ export default function ListCard({ list }: { list: MediaList }) {
       <div className="flex shrink-0 gap-1">
         <button
           type="button"
-          onClick={() => copyListLink(list.id, showToast)}
+          onClick={() => setIsSharing(true)}
           aria-label="Share list"
           title="Share list"
           className="flex h-8 w-8 items-center justify-center rounded-md text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary"
@@ -66,6 +74,8 @@ export default function ListCard({ list }: { list: MediaList }) {
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
+
+      {isSharing && <ShareListModal list={list} onClose={() => setIsSharing(false)} />}
 
       {isRenaming && (
         <NameListModal
