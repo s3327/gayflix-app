@@ -12,6 +12,7 @@ import {
   type FavoriteEntry,
 } from "@/lib/library-types";
 import { getSession } from "@/lib/session";
+import { parseProgress } from "@/lib/watch-progress";
 
 /*
  * Server functions behind the Favorites, History and Lists providers.
@@ -75,9 +76,38 @@ export async function recordWatch(value: unknown): Promise<void> {
   await db.watchHistory.upsert({
     where: { userId_mediaId: { userId, mediaId: entry.id } },
     create: { userId, mediaId: entry.id, entry, watchedAt },
-    update: { entry, watchedAt },
+    // Watching it again puts it back on Continue Watching.
+    update: { entry, watchedAt, hiddenFromContinue: false },
   });
   await trimHistory(userId);
+}
+
+/**
+ * How far into a title (`mediaId`, a movie's or an episode's id) the
+ * player got, saved as it plays. It only updates the History entry
+ * recordWatch made when playing began, so it can't add titles.
+ */
+export async function saveProgress(
+  mediaId: unknown,
+  position: unknown,
+  duration: unknown
+): Promise<void> {
+  const userId = await requireUserId();
+  const id = requireMediaId(mediaId);
+  const progress = parseProgress(position, duration);
+  if (!progress) throw new Error("Invalid progress");
+  await db.watchHistory.updateMany({
+    where: { userId, mediaId: id },
+    data: { progressSeconds: progress.position, durationSeconds: progress.duration },
+  });
+}
+
+/** Takes a title off Continue Watching, or puts it back (Undo). It stays in History. */
+export async function setHiddenFromContinue(mediaId: unknown, hidden: unknown): Promise<void> {
+  const userId = await requireUserId();
+  const id = requireMediaId(mediaId);
+  if (typeof hidden !== "boolean") throw new Error("Invalid setting");
+  await db.watchHistory.updateMany({ where: { userId, mediaId: id }, data: { hiddenFromContinue: hidden } });
 }
 
 /**

@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getEpisode, getVideoSources, resolveEpisodeRedirect } from "@/lib/catalog";
+import { getResumePosition } from "@/lib/library";
 import WatchPlayer from "@/components/WatchPlayer";
 import EpisodeSelectorDrawer from "@/components/watch/EpisodeSelectorDrawer";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
@@ -51,7 +52,11 @@ export default async function EpisodePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [found, sources] = await Promise.all([getEpisode(id), getVideoSources({ episodeId: id })]);
+  const [found, sources, resumeAt] = await Promise.all([
+    getEpisode(id),
+    getVideoSources({ episodeId: id }),
+    getResumePosition(id),
+  ]);
   if (!found) {
     const targetSlug = await resolveEpisodeRedirect(id);
     if (targetSlug) {
@@ -87,6 +92,7 @@ export default async function EpisodePage({
         }}
         sources={sources}
         backdropUrl={series.backdropUrl}
+        resumeAt={resumeAt}
       />
 
       {/* Previous / Next episode & episode selector */}

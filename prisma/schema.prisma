@@ -300,11 +300,18 @@ model Favorite {
 }
 
 model WatchHistory {
-  userId    String
-  mediaId   String
-  entry     Json
-  watchedAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String
+  mediaId            String
+  entry              Json
+  watchedAt          DateTime @default(now())
+  /// How far in the video got, and how long it is, in seconds, saved as
+  /// it plays. Both stay 0 for an embed, which can't say.
+  progressSeconds    Int      @default(0)
+  durationSeconds    Int      @default(0)
+  /// Taken off Continue Watching (it stays in History); watching it
+  /// again puts it back.
+  hiddenFromContinue Boolean  @default(false)
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, mediaId])
   @@index([userId, watchedAt])

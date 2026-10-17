@@ -14,6 +14,8 @@ const GUEST_STORAGE_KEY = "gayflix:history";
 type HistoryContextValue = {
   history: HistoryEntry[]; // sorted newest-watched-first
   recordWatch: (entry: FavoriteEntry) => void;
+  /** How far the player got, in seconds; saved for signed-in users only. */
+  recordProgress: (id: string, position: number, duration: number) => void;
   removeFromHistory: (id: string) => void;
   clearHistory: () => void;
 };
@@ -23,11 +25,10 @@ const HistoryContext = createContext<HistoryContextValue | null>(null);
 type HistoryRecord = Record<string, HistoryEntry>;
 
 /**
- * Records "Play was pressed," not real watch progress — see the Play
- * button's own comment (WatchPlayer.tsx) for why: the video itself may
- * be a third-party embed this app can't see inside of, but the Play
- * button lives in this app's own DOM, so that click is always
- * observable regardless of what the embed can report back.
+ * Records that watching began (see WatchPlayer.tsx for when that is).
+ * How far it got is saved separately, for signed-in users, and only for
+ * a file or a stream: an embed is a provider's player this app can't
+ * see inside of.
  *
  * Signed in, history lives in the account (src/lib/library-actions.ts).
  * Guests' history stays in this browser's localStorage. When someone
@@ -91,6 +92,14 @@ export function HistoryProvider({
     [setHistory, userId]
   );
 
+  const recordProgress = useCallback(
+    (id: string, position: number, duration: number) => {
+      // Like a missed history write, a missed save isn't worth a toast.
+      if (userId) library.saveProgress(id, position, duration).catch(() => {});
+    },
+    [userId]
+  );
+
   const removeFromHistory = useCallback(
     (id: string) => {
       const removed = history[id];
@@ -126,10 +135,11 @@ export function HistoryProvider({
         (a, b) => new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime()
       ),
       recordWatch,
+      recordProgress,
       removeFromHistory,
       clearHistory,
     }),
-    [history, recordWatch, removeFromHistory, clearHistory]
+    [history, recordWatch, recordProgress, removeFromHistory, clearHistory]
   );
 
   return (

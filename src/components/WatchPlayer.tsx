@@ -7,6 +7,7 @@ import { useHistory } from "@/lib/history-context";
 import type { FavoriteEntry } from "@/lib/favorites-context";
 import type { VideoSourceEntry } from "@/lib/video-source";
 import { recordView } from "@/lib/view-actions";
+import { formatTimestamp, parseProgress, resumePosition } from "@/lib/watch-progress";
 import ReportModal from "@/components/ReportModal";
 import ServerTabs from "@/components/ServerTabs";
 import SourcePlayer from "@/components/SourcePlayer";
@@ -16,6 +17,11 @@ import SourcePlayer from "@/components/SourcePlayer";
  * or the episode's video sources (getVideoSources in src/lib/catalog.ts),
  * one server tab each. With none, it says the title is coming soon and
  * offers nothing to play or report.
+ *
+ * `resumeAt` is where the signed-in viewer stopped last time, in seconds
+ * (getResumePosition in src/lib/library.ts), or 0. A file or a stream
+ * starts there, and saves how far it gets as it plays; an embed can't
+ * do either, so it always starts from its beginning.
  *
  * Watching records a History entry and counts a view for Trending
  * (src/lib/view-actions.ts), once per visit to the page. A file or a
@@ -29,17 +35,22 @@ export default function WatchPlayer({
   media,
   sources,
   backdropUrl,
+  resumeAt = 0,
 }: {
   media: FavoriteEntry;
   sources: VideoSourceEntry[];
   backdropUrl?: string;
+  resumeAt?: number;
 }) {
-  const { recordWatch } = useHistory();
+  const { recordWatch, recordProgress } = useHistory();
   const [active, setActive] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   // The server that couldn't play, while it's still the chosen one.
   const [failedId, setFailedId] = useState<string | null>(null);
   const [isReportOpen, setIsReportOpen] = useState(false);
+  // Where a file or a stream starts: where it stopped last visit, then
+  // where this one got to, so changing servers carries on from there.
+  const [startAt, setStartAt] = useState(resumeAt);
   // Bumped when focus should move to the video: Play and Try again
   // replace their own buttons, so focus follows rather than dropping to
   // the top of the page.
@@ -50,6 +61,7 @@ export default function WatchPlayer({
 
   const source = sources[active];
   const failed = source !== undefined && failedId === source.id;
+  const resumes = resumeAt > 0 && source !== undefined && source.kind !== "embed";
 
   useEffect(() => {
     if (focusRequest > 0) frameRef.current?.querySelector<HTMLElement>("iframe, video")?.focus();
@@ -66,6 +78,13 @@ export default function WatchPlayer({
     recordWatch(media);
     // A view that fails to count isn't worth bothering anyone about.
     recordView(media.id).catch(() => {});
+  }
+
+  function handleProgress(position: number, duration: number) {
+    const progress = parseProgress(position, duration);
+    if (!progress) return;
+    recordProgress(media.id, progress.position, progress.duration);
+    setStartAt(resumePosition(progress));
   }
 
   function handlePlay() {
@@ -99,7 +118,9 @@ export default function WatchPlayer({
             key={source.id}
             source={source}
             title={media.title}
+            startAt={startAt}
             onStart={handleStart}
+            onProgress={handleProgress}
             onFail={() => setFailedId(source.id)}
           />
         ) : (
@@ -162,12 +183,21 @@ export default function WatchPlayer({
               <button
                 type="button"
                 onClick={handlePlay}
-                aria-label={`Play ${media.title}`}
-                className="group absolute inset-0 flex items-center justify-center focus-visible:-outline-offset-4"
+                aria-label={
+                  resumes
+                    ? `Resume ${media.title} from ${formatTimestamp(resumeAt)}`
+                    : `Play ${media.title}`
+                }
+                className="group absolute inset-0 flex flex-col items-center justify-center gap-3 focus-visible:-outline-offset-4"
               >
                 <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-pink text-ink-onBrand shadow-lg transition-transform group-hover:scale-110">
                   <Play className="ml-1 h-7 w-7 fill-current" aria-hidden />
                 </span>
+                {resumes && (
+                  <span className="rounded-pill bg-bg-base/70 px-3 py-1 text-sm font-semibold text-ink-primary backdrop-blur-sm">
+                    Resume from {formatTimestamp(resumeAt)}
+                  </span>
+                )}
               </button>
             )}
           </>

@@ -1,6 +1,8 @@
 import { findPublishedIds } from "@/lib/catalog";
 import { db } from "@/lib/db";
-import type { FavoriteEntry, HistoryEntry, Library, MediaList } from "@/lib/library-types";
+import { isMediaId, type FavoriteEntry, type HistoryEntry, type Library, type MediaList } from "@/lib/library-types";
+import { getSession } from "@/lib/session";
+import { resumePosition } from "@/lib/watch-progress";
 
 /** How many history entries an account keeps (oldest drop off). */
 export const HISTORY_LIMIT = 200;
@@ -80,4 +82,19 @@ export async function findList(id: string) {
   const published = await findPublishedIds(list.items.map((item) => item.mediaId));
   const items = list.items.filter((item) => published.has(item.mediaId));
   return { ownerId: list.userId, list: toMediaList({ ...list, items }) };
+}
+
+/**
+ * Where the signed-in user's player picks up a movie or an episode, in
+ * seconds: where they stopped, or 0 to start from the beginning (and
+ * always for guests, whose progress isn't saved).
+ */
+export async function getResumePosition(mediaId: string): Promise<number> {
+  const session = await getSession();
+  if (!session || !isMediaId(mediaId)) return 0;
+  const row = await db.watchHistory.findUnique({
+    where: { userId_mediaId: { userId: session.user.id, mediaId } },
+    select: { progressSeconds: true, durationSeconds: true },
+  });
+  return row ? resumePosition({ position: row.progressSeconds, duration: row.durationSeconds }) : 0;
 }
