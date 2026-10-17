@@ -13,6 +13,7 @@ import { imageHosts } from "@/lib/image-hosts.mjs";
 import { createTitleRevision } from "@/lib/title-revisions";
 import { logActivity } from "@/lib/activity-logger";
 import { getTmdbDetails, getTmdbSeasonDetails } from "@/lib/tmdb";
+import { videoHosts, videoUrlAllowed } from "@/lib/video-hosts";
 import {
   EPISODE_FIELDS,
   TITLE_FIELDS,
@@ -617,35 +618,46 @@ export async function bulkTagTitles({
   return { ok: true, count: items.length };
 }
 
-/** Test video source link reachability. */
+const LINK_CHECK_HEADERS = { "User-Agent": "Gayflix-Admin-LinkCheck/1.0" };
+const LINK_CHECK_REDIRECTS = 3;
+
+/**
+ * "Test" on a video source: whether the link answers. Only links on
+ * VIDEO_HOSTS are fetched, and a redirect is followed only while it stays
+ * on them, so the check can't be pointed at the server's own network.
+ */
 export async function verifyVideoUrl(
-  url: string
+  url: unknown
 ): Promise<{ ok: boolean; status?: number; error?: string }> {
   const { allowed } = await catalogSession();
   if (!allowed) return { ok: false, error: FORBIDDEN_CATALOG };
+  if (typeof url !== "string" || url.length > 2048) return { ok: false, error: "That isn't a link." };
+  const hosts = videoHosts();
+  if (!videoUrlAllowed(url, hosts)) {
+    return { ok: false, error: "Only https links on the video hosts (VIDEO_HOSTS) can be tested." };
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
   try {
-    const parsed = new URL(url);
-    if (!["http:", "https:"].includes(parsed.protocol)) {
-      return { ok: false, error: "Only HTTP/HTTPS URLs can be verified" };
+    let current = url;
+    for (let hop = 0; hop <= LINK_CHECK_REDIRECTS; hop++) {
+      const init = { signal: controller.signal, redirect: "manual" as const };
+      const res = await fetch(current, { ...init, method: "HEAD", headers: LINK_CHECK_HEADERS }).catch(() =>
+        fetch(current, { ...init, method: "GET", headers: { ...LINK_CHECK_HEADERS, Range: "bytes=0-100" } })
+      );
+      const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+      if (!location) return { ok: res.status < 400, status: res.status };
+      current = new URL(location, current).toString();
+      if (!videoUrlAllowed(current, hosts)) {
+        return { ok: false, status: res.status, error: "The link redirects off the video hosts." };
+      }
     }
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch(url, {
-      method: "HEAD",
-      signal: controller.signal,
-      headers: { "User-Agent": "Gayflix-Admin-LinkCheck/1.0" },
-    }).catch(async () => {
-      return fetch(url, {
-        method: "GET",
-        signal: controller.signal,
-        headers: { Range: "bytes=0-100", "User-Agent": "Gayflix-Admin-LinkCheck/1.0" },
-      });
-    });
-    clearTimeout(timeout);
-    return { ok: res.ok || res.status < 400, status: res.status };
+    return { ok: false, error: "The link redirects too many times." };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Network error";
-    return { ok: false, error: msg };
+    const timedOut = err instanceof Error && err.name === "AbortError";
+    return { ok: false, error: timedOut ? "The link didn't answer in time." : "The link couldn't be reached." };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
