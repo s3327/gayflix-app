@@ -35,7 +35,9 @@ const STATIC_PAGES: SearchResultItem[] = [
   { id: "p-rep", title: "Reports Queue", href: "/admin/reports", category: "Pages" },
   { id: "p-usr", title: "Users & Accounts", href: "/admin/users", category: "Pages" },
   { id: "p-tr", title: "Trash", href: "/admin/trash", category: "Pages" },
-  { id: "p-set", title: "Settings", href: "/admin/setting", category: "Pages" },
+  { id: "p-act", title: "Activity Log", href: "/admin/activity", category: "Pages" },
+  { id: "p-job", title: "Scheduled Jobs & Health", href: "/admin/jobs", category: "Pages" },
+  { id: "p-set", title: "Settings", href: "/admin/settings", category: "Pages" },
 ];
 
 const STATIC_ACTIONS: SearchResultItem[] = [

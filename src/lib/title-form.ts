@@ -179,6 +179,105 @@ export function parseTitle(
   };
 }
 
+/** What the library's quick edit drawer may change. */
+export type QuickEditInput = {
+  id: string;
+  title: string;
+  year: number;
+  status: MediaStatus;
+  /** Movies only: the runtime as a card shows it ("1h 52m"). */
+  duration?: string;
+  genres?: string[];
+  tagline?: string | null;
+  rating?: number | null;
+};
+
+/**
+ * Checks the quick edit drawer's fields with the title form's rules.
+ * Returns the cleaned fields, or the first problem as a sentence.
+ */
+export function parseQuickEdit(
+  input: unknown,
+  type: MediaType,
+  { now = new Date() }: { now?: Date } = {}
+): { ok: true; data: QuickEditInput } | { ok: false; message: string } {
+  if (typeof input !== "object" || input === null) return { ok: false, message: "Nothing to save." };
+  const raw = input as Record<string, unknown>;
+  if (!isMediaId(raw.id)) return { ok: false, message: "Invalid title ID" };
+  const title = typeof raw.title === "string" ? raw.title.trim() : "";
+  const titleProblem = requiredText(title, 200, "Enter the title.");
+  if (titleProblem) return { ok: false, message: titleProblem };
+  const lastYear = now.getUTCFullYear() + 5;
+  if (typeof raw.year !== "number" || !Number.isInteger(raw.year) || raw.year < FIRST_YEAR || raw.year > lastYear) {
+    return { ok: false, message: `Enter a year from ${FIRST_YEAR} to ${lastYear}.` };
+  }
+  if (raw.status !== "draft" && raw.status !== "published") return { ok: false, message: "Invalid status" };
+  const data: QuickEditInput = { id: raw.id, title, year: raw.year, status: raw.status };
+
+  // A series' duration is its season count, worked out from its episodes.
+  if (raw.duration !== undefined && type === "movie") {
+    const minutes = typeof raw.duration === "string" ? movieDurationMinutes(raw.duration) : null;
+    if (minutes === null || minutes < 1 || minutes > 999) {
+      return { ok: false, message: "Enter the runtime like 1h 52m or 112." };
+    }
+    data.duration = movieDuration(minutes);
+  }
+  if (raw.genres !== undefined) {
+    if (!Array.isArray(raw.genres) || !raw.genres.every((genre) => typeof genre === "string")) {
+      return { ok: false, message: "Invalid genres" };
+    }
+    const genres = splitList(raw.genres.join(","));
+    const problem = genres.length === 0 ? "Enter at least one genre." : listProblem(genres, 10, 40, "genres");
+    if (problem) return { ok: false, message: problem };
+    data.genres = genres;
+  }
+  if (raw.tagline !== undefined) {
+    if (raw.tagline !== null && typeof raw.tagline !== "string") return { ok: false, message: "Invalid tagline" };
+    const tagline = raw.tagline?.trim() || null;
+    const problem = tagline && optionalText(tagline, 200);
+    if (problem) return { ok: false, message: problem };
+    data.tagline = tagline;
+  }
+  if (raw.rating !== undefined) {
+    if (raw.rating !== null && (typeof raw.rating !== "number" || !Number.isFinite(raw.rating) || raw.rating < 0 || raw.rating > 5)) {
+      return { ok: false, message: "Enter a rating from 0 to 5, or leave it empty." };
+    }
+    data.rating = raw.rating === null ? null : Math.round(raw.rating * 10) / 10;
+  }
+  return { ok: true, data };
+}
+
+/** The bulk tag modal's changes. */
+export type BulkTagInput = {
+  addTags: string[];
+  removeTags: string[];
+  addGenres: string[];
+  removeGenres: string[];
+};
+
+/** Checks the bulk tag modal's lists, or says what's wrong with them. */
+export function parseBulkTags(input: unknown): { ok: true; data: BulkTagInput } | { ok: false; message: string } {
+  const raw = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+  const data: BulkTagInput = { addTags: [], removeTags: [], addGenres: [], removeGenres: [] };
+  for (const key of Object.keys(data) as (keyof BulkTagInput)[]) {
+    const value = raw[key] ?? [];
+    if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+      return { ok: false, message: "Invalid tags or genres" };
+    }
+    const items = splitList(value.join(","));
+    const problem = key.endsWith("Genres") ? listProblem(items, 10, 40, "genres") : listProblem(items, 20, 40, "tags");
+    if (problem) return { ok: false, message: problem };
+    data[key] = items;
+  }
+  return { ok: true, data };
+}
+
+/** Whether a title's tags and genres fit the title form's limits after a bulk change. */
+export function bulkTagsProblem(tags: string[], genres: string[]): string | null {
+  if (genres.length === 0) return "Every title needs at least one genre.";
+  return listProblem(genres, 10, 40, "genres") ?? listProblem(tags, 20, 40, "tags");
+}
+
 /** The form for a new title. */
 export function emptyTitleValues(): TitleValues {
   const values = Object.fromEntries(TITLE_FIELDS.map((field) => [field, ""])) as TitleValues;
@@ -316,6 +415,84 @@ export function uploadPath(type: MediaType) {
 /** /episode/[id]: "the-brownstone-season-1-episode-2". */
 export function episodeId(seriesId: string, season: number, episode: number) {
   return `${seriesId}-season-${season}-episode-${episode}`;
+}
+
+/** One row of a season's table editor, as checked. */
+export type SeasonRowInput = {
+  id: string;
+  episodeNumber: number;
+  title: string;
+  minutes: number;
+  airDate: Date | null;
+  stillUrl: string | null;
+};
+
+/** A season holds at most this many episodes in the table editor. */
+export const SEASON_ROWS_MAX = 1000;
+
+/**
+ * Checks a season's table editor. Errors are keyed "<episode id>-<field>",
+ * as the table shows them.
+ */
+export function parseSeasonRows(
+  seasonArg: unknown,
+  rowsArg: unknown,
+  hosts: string[]
+): { ok: true; seasonNumber: number; rows: SeasonRowInput[] } | { ok: false; message: string; errors?: Record<string, string> } {
+  if (typeof seasonArg !== "number" || !Number.isInteger(seasonArg) || seasonArg < 1 || seasonArg > 100) {
+    return { ok: false, message: "Enter a season from 1 to 100." };
+  }
+  if (!Array.isArray(rowsArg) || rowsArg.length === 0 || rowsArg.length > SEASON_ROWS_MAX) {
+    return { ok: false, message: "Nothing to save." };
+  }
+  const errors: Record<string, string> = {};
+  const rows: SeasonRowInput[] = [];
+  const ids = new Set<string>();
+  const numbers = new Set<number>();
+  for (const raw of rowsArg as unknown[]) {
+    const row = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+    if (!isMediaId(row.id) || ids.has(row.id)) {
+      return { ok: false, message: "This table is out of date. Reload the page." };
+    }
+    const id = row.id;
+    ids.add(id);
+    const fail = (field: string, problem: string) => {
+      errors[`${id}-${field}`] ??= problem;
+    };
+
+    const episodeNumber = row.episodeNumber;
+    if (typeof episodeNumber !== "number" || !Number.isInteger(episodeNumber) || episodeNumber < 1 || episodeNumber > 1000) {
+      fail("episodeNumber", "Enter an episode number from 1 to 1000.");
+    } else if (numbers.has(episodeNumber)) {
+      fail("episodeNumber", `Season ${seasonArg} already has an episode ${episodeNumber}.`);
+    } else {
+      numbers.add(episodeNumber);
+    }
+
+    const title = typeof row.title === "string" ? row.title.trim() : "";
+    const titleProblem = requiredText(title, 200, "Enter the title.");
+    if (titleProblem) fail("title", titleProblem);
+
+    const minutesMatch = typeof row.duration === "string" ? /^(\d{1,3})\s*(?:min|m)?$/i.exec(row.duration.trim()) : null;
+    const minutes = minutesMatch ? Number(minutesMatch[1]) : 0;
+    if (minutes < 1) fail("duration", "Enter the length in minutes, like 42 min.");
+
+    // A date input's "2026-10-10", or the same day as a full ISO time.
+    const airDateText = typeof row.airDate === "string" ? row.airDate.slice(0, 10) : "";
+    const airDate = airDateText ? calendarDate(airDateText) : null;
+    if (row.airDate != null && row.airDate !== "" && !airDate) fail("airDate", "Enter a date, or leave it empty.");
+
+    const stillUrl = typeof row.stillUrl === "string" && row.stillUrl.trim() ? row.stillUrl.trim() : null;
+    if (row.stillUrl != null && typeof row.stillUrl !== "string") fail("stillUrl", "That isn't a link.");
+    const stillProblem = stillUrl && imageUrlProblem(stillUrl, hosts);
+    if (stillProblem) fail("stillUrl", stillProblem);
+
+    rows.push({ id, episodeNumber: episodeNumber as number, title, minutes, airDate, stillUrl });
+  }
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, message: Object.values(errors)[0], errors };
+  }
+  return { ok: true, seasonNumber: seasonArg, rows };
 }
 
 // --- Durations, addresses and gradients ---------------------------------------

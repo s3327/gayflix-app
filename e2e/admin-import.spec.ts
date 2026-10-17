@@ -223,6 +223,9 @@ function uniqueId() {
 }
 
 test.describe("TMDB seasons and episodes bulk import", () => {
+  // These share the stub's few TMDB series (tv/990009 and others), and a
+  // TMDB id belongs to one title, so they run one at a time.
+  test.describe.configure({ mode: "default" });
   test.use({ httpCredentials: ADMIN_CREDENTIALS, storageState: ADMIN_STATE });
 
   // Tier 1: Feature Coverage (>=5 cases)

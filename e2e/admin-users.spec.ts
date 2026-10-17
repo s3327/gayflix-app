@@ -113,10 +113,15 @@ test.describe("signed in as an admin", () => {
     const { user, userPage } = await signedInUser(browser, request, "ban");
     await page.goto(`/admin/users/${await userId(user.email)}`);
 
-    await page.getByLabel("Reason").fill("e2e: spam in reports");
     await page.getByLabel("How long").selectOption({ label: "7 days" });
-    await page.getByRole("button", { name: "Ban", exact: true }).click();
+    // Enter in the reason field asks first too.
+    await page.getByLabel("Reason").fill("e2e: spam in reports");
+    await page.getByLabel("Reason").press("Enter");
     const dialog = page.getByRole("dialog", { name: "Ban this account?" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("region", { name: "Ban" })).toContainText("Banning signs the account out everywhere");
+    await page.getByRole("button", { name: "Ban", exact: true }).click();
     await expect(dialog).toContainText(user.email);
     await dialog.getByRole("button", { name: "Ban" }).click();
     const ban = page.getByRole("region", { name: "Ban" });

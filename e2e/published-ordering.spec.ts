@@ -3,7 +3,7 @@ import { ADMIN_CREDENTIALS, expect, test } from "./fixtures";
 
 /*
  * Publication Timestamp & Public Ordering (R4 / Features 18-21):
- * - publishedAt timestamp assignment on transition to published
+ * - publishedAt timestamp assignment the first time a title is published
  * - publishedAt preserved across trash and restore
  * - Public catalog queries ordered by publishedAt DESC, id DESC
  * - NEW badge freshness evaluated against publishedAt (<= 7 days)
@@ -361,14 +361,14 @@ test.describe("publication timestamp and ordering", () => {
     }
   });
 
-  test("T2-Pub-4: re-publishing an unpublished title updates publishedAt to current time", async ({
+  test("T2-Pub-4: re-publishing an unpublished title keeps the date it was first published", async ({
     page,
     consoleProblems,
   }) => {
     void consoleProblems;
     const uid = uniqueId();
-    const movieId = `e2e-repub-fresh-${uid}`;
-    const title = `E2E Repub Fresh ${uid}`;
+    const movieId = `e2e-repub-keep-${uid}`;
+    const title = `E2E Repub Keep ${uid}`;
     const oldPub = "2023-01-01T00:00:00Z";
 
     await sql(
@@ -386,9 +386,8 @@ test.describe("publication timestamp and ordering", () => {
         `SELECT "publishedAt" FROM media WHERE id = $1`,
         [movieId]
       );
-      // Fresh publishedAt must be recent, not 2023
-      const ageMs = Math.abs(Date.now() - new Date(after.publishedAt).getTime());
-      expect(ageMs).toBeLessThan(15000);
+      // Unpublishing and publishing again doesn't make it "new" again.
+      expect(new Date(after.publishedAt).toISOString()).toBe(new Date(oldPub).toISOString());
     } finally {
       await sql(`DELETE FROM media WHERE id = $1`, [movieId]);
     }

@@ -46,7 +46,7 @@ export default function BulkTagModal({
         onCompleted();
         onClose();
       } else {
-        setError("Failed to apply tags.");
+        setError(res.message || "Failed to apply tags.");
       }
     });
   };
