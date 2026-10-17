@@ -6,6 +6,8 @@ import { getTitle, getVideoSources } from "@/lib/catalog";
 import WatchPlayer from "@/components/WatchPlayer";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import TagList from "@/components/TagList";
+import TitleActions from "@/components/TitleActions";
+import type { FavoriteEntry } from "@/lib/favorites-context";
 import { countryHref, genreHref, languageHref, searchHref } from "@/lib/browse-href";
 import { watchMetadata } from "@/lib/page-metadata";
 
@@ -33,20 +35,22 @@ export default async function WatchPage({
     redirect(first ? `/episode/${first.id}` : `/series/${movie.id}`);
   }
 
+  const entry: FavoriteEntry = {
+    id: movie.id,
+    title: movie.title,
+    year: movie.year,
+    duration: movie.duration,
+    type: "movie",
+    genre: movie.genre,
+    gradient: movie.gradient,
+    posterUrl: movie.posterUrl,
+  };
+
   return (
     <main className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
       {/* Player and its server tabs — records watch history on play click */}
       <WatchPlayer
-        media={{
-          id: movie.id,
-          title: movie.title,
-          year: movie.year,
-          duration: movie.duration,
-          type: "movie",
-          genre: movie.genre,
-          gradient: movie.gradient,
-          posterUrl: movie.posterUrl,
-        }}
+        media={entry}
         sources={sources}
         backdropUrl={movie.backdropUrl}
       />
@@ -79,6 +83,8 @@ export default async function WatchPage({
           {movie.tagline && <p className="mt-1 text-sm italic text-ink-muted">{movie.tagline}</p>}
 
           <TagList tags={movie.tags} className="mt-3" />
+
+          <TitleActions media={entry} className="mt-4" />
         </div>
       </div>
 

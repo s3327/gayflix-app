@@ -9,6 +9,7 @@ import WatchPlayer from "@/components/WatchPlayer";
 import EpisodeSelectorDrawer from "@/components/watch/EpisodeSelectorDrawer";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import TagList from "@/components/TagList";
+import TitleActions from "@/components/TitleActions";
 import { countryHref, genreHref, languageHref, searchHref } from "@/lib/browse-href";
 import { episodeMetadata } from "@/lib/page-metadata";
 
@@ -191,6 +192,21 @@ export default async function EpisodePage({
           </p>
 
           <TagList tags={series.tags} className="mt-3" />
+
+          {/* Favorites and lists hold the series, not one episode. */}
+          <TitleActions
+            className="mt-4"
+            media={{
+              id: series.id,
+              title: series.title,
+              year: series.year,
+              duration: series.duration,
+              type: "series",
+              genre: series.genre,
+              gradient: series.gradient,
+              posterUrl: series.posterUrl,
+            }}
+          />
         </div>
       </div>
 
