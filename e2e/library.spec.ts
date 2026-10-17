@@ -133,7 +133,9 @@ test("a list's page leads back to My Lists, and can rename and delete it", async
   await page.getByRole("link", { name: "My Lists" }).click();
   await expect(page).toHaveURL(/\/account\/favorite\?tab=lists$/);
   await page.getByRole("link", { name: /Sunny Day/ }).click();
-  await page.getByRole("button", { name: "Delete" }).click();
+  // My Lists has its own "Delete list" buttons, so wait to leave it.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Sunny Day");
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
   await saved(page, () => page.getByRole("dialog").getByRole("button", { name: "Delete" }).click());
   await expect(page).toHaveURL(/\/account\/favorite\?tab=lists$/);
   await expect(page.getByRole("link", { name: /Sunny Day/ })).toHaveCount(0);
