@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
@@ -19,11 +20,14 @@ export default async function SeriesPage({
   searchParams: Promise<SearchParams>;
 }) {
   const searchParams = await searchParamsPromise;
+  const requestedPage = pageParam(searchParams.page);
   const { items: pageItems, page, totalPages } = await listTitles({
     type: "series",
     sort: "updated",
-    page: pageParam(searchParams.page),
+    page: requestedPage,
   });
+  // An address past the last page isn't a page.
+  if (page !== requestedPage) notFound();
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 sm:py-14">
