@@ -1,6 +1,7 @@
 import { appendFile } from "node:fs/promises";
 
-export type Email = { to: string; subject: string; text: string };
+/** `html` is the branded version (src/lib/email-templates.ts); `text` is always sent too. */
+export type Email = { to: string; subject: string; text: string; html?: string };
 
 /**
  * Sends a transactional email (verification codes, password resets).
@@ -28,6 +29,7 @@ export async function sendEmail(
         to: [email.to],
         subject: email.subject,
         text: email.text,
+        ...(email.html && { html: email.html }),
       }),
     });
     if (!response.ok) {
