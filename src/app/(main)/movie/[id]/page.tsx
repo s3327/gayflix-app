@@ -25,8 +25,7 @@ export default async function MoviePage({
   // A series id under /movie (an old or hand-typed link) goes to its page.
   if (title.type !== "movie") redirect(titleHref(title));
 
-  // Placeholder recommendations: the newest other titles. Related-title
-  // matching (genre, director, cast) comes later.
+  // The other titles most like this one.
   const recommended = await listRecommendations(title.id);
   return <TitleDetail title={title} recommended={recommended} />;
 }

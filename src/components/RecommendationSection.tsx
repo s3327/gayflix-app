@@ -16,12 +16,8 @@ const CONTAINER = "mx-auto max-w-[1040px]";
  * mechanism. All 12 are always in the DOM; SwipeableRow's chevrons +
  * native touch swipe + mouse drag handle revealing the rest.
  *
- * UI-only for now — always shows whatever `media` it's given. The plan
- * (per instruction) is an admin setting that decides whether this pulls
- * "related" titles (same genre/director/cast — real recommendation logic)
- * or just falls back to "new releases" when there's nothing to relate to
- * yet. That's backend/config work, not built here — this component is
- * just the display layer it'll plug into.
+ * The titles come ranked from listRecommendations (src/lib/catalog.ts):
+ * the ones sharing the most genres, tags and people come first.
  */
 export default function RecommendationSection({ media }: { media: Media[] }) {
   const visible = media.slice(0, MAX_VISIBLE);
