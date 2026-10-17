@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
@@ -8,11 +9,9 @@ import { pageParam, type SearchParams } from "@/lib/search-params";
 export const metadata: Metadata = { title: "Movies" };
 
 /**
- * All published movies — fixed filter (type === "movie"), no chips,
- * since there's nothing here for a person to toggle (unlike Genre/
- * Country/Year/Language, which filter by a value the person picks).
- * Structurally this is closer to New Releases (fixed filter + sort +
- * paginate, no chip UI) than to CatalogFilterPage.
+ * All published movies — fixed filter (type === "movie"), nothing to
+ * pick (Browse is where filters are). Structurally the same as New
+ * Releases: fixed filter + sort + paginate.
  *
  * Sorted by updatedAt, not createdAt — "recently edited," not
  * "recently added." An old title that just got fixed/re-uploaded shows
@@ -27,11 +26,14 @@ export default async function MoviePage({
   searchParams: Promise<SearchParams>;
 }) {
   const searchParams = await searchParamsPromise;
+  const requestedPage = pageParam(searchParams.page);
   const { items: pageItems, page, totalPages } = await listTitles({
     type: "movie",
     sort: "updated",
-    page: pageParam(searchParams.page),
+    page: requestedPage,
   });
+  // An address past the last page isn't a page.
+  if (page !== requestedPage) notFound();
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 sm:py-14">

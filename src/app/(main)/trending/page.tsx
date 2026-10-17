@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import MediaCard from "@/components/MediaCard";
@@ -46,6 +47,8 @@ export default async function TrendingPage({
 
   const requestedPage = pageParam(searchParams.page);
   const { page, totalPages, pageItems } = paginate(sorted, requestedPage);
+  // An address past the last page isn't a page.
+  if (page !== requestedPage) notFound();
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 sm:py-14">

@@ -17,21 +17,21 @@ import { expect, seriousViolations, signedInPage, test } from "./fixtures";
 
 test("logging in from a page comes back to it", async ({ page, consoleProblems }) => {
   void consoleProblems;
-  await page.goto("/genre?genre=Drama");
+  await page.goto("/browse?genre=Drama");
   await page.getByRole("banner").getByRole("link", { name: "Log in" }).click();
-  await expect(page).toHaveURL(/\/login\?next=%2Fgenre%3Fgenre%3DDrama$/);
+  await expect(page).toHaveURL(/\/login\?next=%2Fbrowse%3Fgenre%3DDrama$/);
 
   // Over to sign up and back keeps it.
   await page.locator("main").getByRole("link", { name: "Sign up" }).click();
-  await expect(page).toHaveURL(/\/signup\?next=%2Fgenre%3Fgenre%3DDrama$/);
+  await expect(page).toHaveURL(/\/signup\?next=%2Fbrowse%3Fgenre%3DDrama$/);
   await page.locator("main").getByRole("link", { name: "Log in" }).click();
-  await expect(page).toHaveURL(/\/login\?next=%2Fgenre%3Fgenre%3DDrama$/);
+  await expect(page).toHaveURL(/\/login\?next=%2Fbrowse%3Fgenre%3DDrama$/);
 
   const { user } = accounts();
   await page.getByLabel("Email").fill(user.email);
   await page.getByLabel("Password").fill(user.password);
   await page.getByRole("button", { name: "Log In" }).click();
-  await expect(page).toHaveURL(/\/genre\?genre=Drama$/);
+  await expect(page).toHaveURL(/\/browse\?genre=Drama$/);
 });
 
 test("a guest's favorite leads through sign-up and back to the title", async ({

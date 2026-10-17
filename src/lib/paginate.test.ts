@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PAGE_SIZE, pageWindow, paginate } from "@/lib/paginate";
+import { PAGE_SIZE, pageNumbers, pageWindow, paginate } from "@/lib/paginate";
 
 const items = Array.from({ length: 50 }, (_, i) => i);
 
@@ -32,5 +32,22 @@ describe("pageWindow", () => {
   it("clamps out-of-range pages to the last one", () => {
     expect(pageWindow(50, 999)).toEqual({ page: 3, totalPages: 3, skip: PAGE_SIZE * 2 });
     expect(pageWindow(0, 4)).toEqual({ page: 1, totalPages: 1, skip: 0 });
+  });
+});
+
+describe("pageNumbers", () => {
+  it("shows every page when there are few", () => {
+    expect(pageNumbers(1, 1)).toEqual([1]);
+    expect(pageNumbers(2, 4)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("skips the middle of a long run", () => {
+    expect(pageNumbers(1, 20)).toEqual([1, 2, null, 20]);
+    expect(pageNumbers(10, 20)).toEqual([1, null, 9, 10, 11, null, 20]);
+    expect(pageNumbers(20, 20)).toEqual([1, null, 19, 20]);
+  });
+
+  it("shows a single skipped page instead of a gap", () => {
+    expect(pageNumbers(4, 20)).toEqual([1, 2, 3, 4, 5, null, 20]);
   });
 });

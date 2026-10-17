@@ -1,107 +1,133 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowDownAZ, ArrowDown, ArrowUp } from "lucide-react";
+import { notFound } from "next/navigation";
+import { cache } from "react";
+import BrowseFilters from "@/components/BrowseFilters";
 import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
-import { FilterChipLink } from "@/components/FilterChip";
-import { listTitles } from "@/lib/catalog";
+import {
+  browseHref,
+  browseLabel,
+  hasFilters,
+  parseBrowse,
+  yearRange,
+} from "@/lib/browse";
+import { listFilterValues, listTitles } from "@/lib/catalog";
 import { pageParam, type SearchParams } from "@/lib/search-params";
 
-type TypeFilter = "all" | "movie" | "series";
+/*
+ * Every published title, narrowed by any mix of type, genre, year or
+ * decade, country and language, and sorted. Everything is in the address
+ * (src/lib/browse.ts); the old /genre, /country, /year and /language
+ * pages redirect here with their query (next.config.mjs).
+ */
 
-function buildHref(params: { type: TypeFilter; sortAsc: boolean; page: number }) {
-  const qs = new URLSearchParams();
-  if (params.type !== "all") qs.set("type", params.type);
-  if (!params.sortAsc) qs.set("sort", "desc");
-  if (params.page !== 1) qs.set("page", String(params.page));
-  const query = qs.toString();
-  return query ? `/browse?${query}` : "/browse";
+/**
+ * The page's data, read once for both the tab title and the page (keyed
+ * by the query as text, since each gets its own copy of the params).
+ */
+const loadQuery = cache(async (paramsJson: string) => {
+  const params = JSON.parse(paramsJson) as SearchParams;
+  const [genres, years, countries, languages] = await Promise.all([
+    listFilterValues("genre"),
+    listFilterValues("year"),
+    listFilterValues("country"),
+    listFilterValues("language"),
+  ]);
+  const options = { genres, years: years.map(Number), countries, languages };
+  const { query, ignored } = parseBrowse(params, options);
+  const requestedPage = pageParam(params.page);
+  const result = await listTitles({
+    type: query.type || undefined,
+    genre: query.genre || undefined,
+    year: yearRange(query.year) ?? undefined,
+    country: query.country || undefined,
+    language: query.language || undefined,
+    sort: query.sort,
+    page: requestedPage,
+  });
+  return { options, query, ignored, requestedPage, ...result };
+});
+
+async function load(searchParams: Promise<SearchParams>) {
+  return loadQuery(JSON.stringify(await searchParams));
 }
 
-export const metadata: Metadata = { title: "Browse" };
+function countText(total: number) {
+  return `${total} ${total === 1 ? "title" : "titles"}`;
+}
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}): Promise<Metadata> {
+  const { query, total } = await load(searchParams);
+  const label = browseLabel(query);
+  return { title: label ? `${label} · ${countText(total)}` : "Browse" };
+}
 
 export default async function BrowsePage({
-  searchParams: searchParamsPromise,
+  searchParams,
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const searchParams = await searchParamsPromise;
-  // The whole published catalog, not scoped to any one genre/country/
-  // year/language the way those pages are.
-  const typeFilter: TypeFilter =
-    searchParams.type === "movie" || searchParams.type === "series"
-      ? searchParams.type
-      : "all";
-  const sortAsc = searchParams.sort !== "desc";
-
-  const { items: pageItems, page, totalPages } = await listTitles({
-    type: typeFilter === "all" ? undefined : typeFilter,
-    sort: sortAsc ? "title" : "title-desc",
-    page: pageParam(searchParams.page),
-  });
+  const { options, query, ignored, requestedPage, items, page, totalPages, total } = await load(
+    searchParams
+  );
+  // An address past the last page isn't a page.
+  if (requestedPage !== page) notFound();
+  const label = browseLabel(query);
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 sm:py-14">
-      <h1 className="font-display text-3xl font-bold">Browse</h1>
-
-      {/* Type filter chips (left) + alphabetical sort (right) */}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex gap-2">
-          {(["movie", "series"] as const).map((type) => {
-            const isActive = typeFilter === type;
-            return (
-              <FilterChipLink
-                key={type}
-                href={buildHref({ type: isActive ? "all" : type, sortAsc, page: 1 })}
-                isActive={isActive}
-              >
-                {type}
-              </FilterChipLink>
-            );
-          })}
-        </div>
-
-        {/* Sort control: an A–Z icon labels this as the alphabetical
-            sort (the only sort mode this page has), and the separate
-            asc/desc icon button next to it is what's actually
-            clickable — it just flips the direction. */}
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1.5 rounded-card border border-border-strong px-4 py-1.5 text-xs font-semibold text-ink-secondary">
-            <ArrowDownAZ className="h-3.5 w-3.5" />
-            Title
-          </span>
-          <Link
-            href={buildHref({ type: typeFilter, sortAsc: !sortAsc, page: 1 })}
-            aria-label={sortAsc ? "Sort Z to A" : "Sort A to Z"}
-            title={sortAsc ? "A to Z" : "Z to A"}
-            className="flex items-center justify-center rounded-card border border-border-strong p-2 text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary"
-          >
-            {sortAsc ? (
-              <ArrowDown className="h-3.5 w-3.5" />
-            ) : (
-              <ArrowUp className="h-3.5 w-3.5" />
-            )}
-          </Link>
-        </div>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <h1 className="font-display text-3xl font-bold">{label || "Browse"}</h1>
+        <p className="text-sm text-ink-muted">{countText(total)}</p>
       </div>
 
-      {pageItems.length > 0 ? (
+      <div className="mt-6">
+        <BrowseFilters options={options} query={query} />
+      </div>
+
+      {(ignored.length > 0 || hasFilters(query)) && (
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+          {ignored.map(({ facet, value }) => (
+            <p key={facet} className="text-ink-secondary">
+              There&apos;s no {facet} called &ldquo;{value}&rdquo;, so it&apos;s left
+              out.
+            </p>
+          ))}
+          {hasFilters(query) && (
+            <Link
+              href={browseHref({ sort: query.sort })}
+              className="font-semibold text-ink-brand hover:underline"
+            >
+              Clear filters
+            </Link>
+          )}
+        </div>
+      )}
+
+      {items.length > 0 ? (
         <div className="mt-8">
           <MediaGrid>
-            {pageItems.map((item) => (
+            {items.map((item) => (
               <MediaCard key={item.id} item={item} />
             ))}
           </MediaGrid>
         </div>
       ) : (
-        <p className="mt-8 text-sm text-ink-muted">No titles found.</p>
+        <p className="mt-8 text-sm text-ink-muted">
+          {hasFilters(query) ? "No titles match these filters." : "No titles yet."}
+        </p>
       )}
 
       <Pagination
         page={page}
         totalPages={totalPages}
-        makeHref={(p) => buildHref({ type: typeFilter, sortAsc, page: p })}
+        makeHref={(p) => browseHref(query, p)}
       />
     </main>
   );

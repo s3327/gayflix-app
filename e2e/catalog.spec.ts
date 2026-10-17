@@ -85,6 +85,63 @@ test("the search page matches genres and pages through results", async ({
   await expect(page.getByText(/^Page 2 of \d+$/)).toBeVisible();
 });
 
+test("Browse combines filters, counts what they find, and clears them", async ({
+  page,
+  consoleProblems,
+}) => {
+  void consoleProblems;
+  await page.goto("/browse?genre=Drama&type=movie");
+  const heading = page.getByRole("heading", { level: 1 });
+  await expect(heading).toHaveText("Drama · Movies");
+  const count = page.locator("main").getByText(/^\d+ titles?$/);
+  const found = await count.textContent();
+  await expect(page).toHaveTitle(`Drama · Movies · ${found} · Gayflix`);
+
+  await page.getByLabel("Year").selectOption("2020s");
+  await expect(page).toHaveURL(/\/browse\?type=movie&genre=Drama&year=2020s$/);
+  await expect(heading).toHaveText("Drama · Movies · 2020s");
+
+  await page.getByLabel("Sort by").selectOption("title");
+  await expect(page).toHaveURL(/&sort=title$/);
+  await expect(page.getByLabel("Sort by")).toHaveValue("title");
+
+  await page.getByRole("link", { name: "Clear filters" }).click();
+  await expect(page).toHaveURL(/\/browse\?sort=title$/);
+  await expect(heading).toHaveText("Browse");
+  await expect(page.getByLabel("Genre")).toHaveValue("");
+});
+
+test("the old genre, country, year and language pages open Browse, which says what it can't find", async ({
+  page,
+}) => {
+  await page.goto("/genre?genre=Drama");
+  await expect(page).toHaveURL(/\/browse\?genre=Drama$/);
+  await page.goto("/year?year=2024");
+  await expect(page).toHaveURL(/\/browse\?year=2024$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("2024");
+
+  await page.goto("/browse?genre=Westernz&country=canada");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Canada");
+  await expect(
+    page.getByText("There's no genre called “Westernz”, so it's left out.")
+  ).toBeVisible();
+});
+
+test("listings number their pages, and only when there's more than one", async ({ page }) => {
+  await page.goto("/browse?genre=Drama");
+  const pager = page.getByRole("navigation", { name: "Pagination" });
+  await pager.getByRole("link", { name: "Page 2" }).click();
+  await expect(page).toHaveURL(/\/browse\?genre=Drama&page=2$/);
+  await expect(pager.locator('[aria-current="page"]')).toHaveText("2");
+
+  expect((await page.goto("/browse?genre=Drama&page=999"))?.status()).toBe(404);
+  expect((await page.goto("/movie?page=999"))?.status()).toBe(404);
+
+  await page.goto("/search?q=dorothy");
+  await expect(page.getByText("1 title found")).toBeVisible();
+  await expect(pager).toHaveCount(0);
+});
+
 test("a title's details and tags lead to the titles that share them", async ({
   page,
   consoleProblems,
@@ -94,11 +151,9 @@ test("a title's details and tags lead to the titles that share them", async ({
 
   await page.goto("/movie/chosen-family");
   await details.getByRole("link", { name: "Drama" }).click();
-  await expect(page).toHaveURL(/\/genre\?genre=Drama$/);
-  await expect(page.getByRole("link", { name: "Drama", exact: true })).toHaveAttribute(
-    "aria-current",
-    "true"
-  );
+  await expect(page).toHaveURL(/\/browse\?genre=Drama$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Drama");
+  await expect(page.getByLabel("Genre")).toHaveValue("Drama");
 
   // Search matches cast, so a cast member finds their other titles.
   await page.goto("/movie/chosen-family");

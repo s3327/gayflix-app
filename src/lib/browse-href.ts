@@ -1,20 +1,21 @@
+import { browseHref } from "@/lib/browse";
+
 /*
- * Links into the public listings, built the same way the listings build
- * their own: /genre?genre=Drama, /search?q=Jordan+Lee. A title's page
- * links its genres, country and language to their listings, and its
- * people and tags to a search for them.
+ * Links into the public listings: /browse?genre=Drama,
+ * /search?q=Jordan+Lee. A title's page links its genres, country and
+ * language to Browse, and its people and tags to a search for them.
  */
 
 export function genreHref(genre: string): string {
-  return `/genre?${new URLSearchParams({ genre })}`;
+  return browseHref({ genre });
 }
 
 export function countryHref(country: string): string {
-  return `/country?${new URLSearchParams({ country })}`;
+  return browseHref({ country });
 }
 
 export function languageHref(language: string): string {
-  return `/language?${new URLSearchParams({ language })}`;
+  return browseHref({ language });
 }
 
 /** The search page for `query`; page 1 unless given. */

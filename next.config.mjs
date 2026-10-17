@@ -39,6 +39,16 @@ const nextConfig = {
     // to, and the hosts in IMAGE_HOSTS (see src/lib/image-hosts.mjs).
     remotePatterns: imageHosts().map((hostname) => ({ protocol: "https", hostname })),
   },
+  // The genre, country, year and language pages became filters on
+  // Browse, which reads the same query (/genre?genre=Drama →
+  // /browse?genre=Drama; the query is passed along).
+  async redirects() {
+    return ["genre", "country", "year", "language"].map((facet) => ({
+      source: `/${facet}`,
+      destination: "/browse",
+      permanent: true,
+    }));
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

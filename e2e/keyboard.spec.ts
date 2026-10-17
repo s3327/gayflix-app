@@ -98,14 +98,15 @@ test.describe("on a phone", () => {
 
   test("the menu drawer by keyboard", async ({ page }) => {
     await page.goto("/home");
-    const drawer = page.getByRole("navigation", { name: "Filter by" });
+    // The header's strip is hidden on phones, so this is the drawer's.
+    const drawer = page.getByRole("navigation", { name: "Primary" });
     await tabTo(page, page.getByRole("button", { name: "Open menu" }));
     await page.keyboard.press("Enter");
     await expect(drawer).toBeVisible();
 
     // Tab goes into the drawer, its ring in full.
     await page.keyboard.press("Tab");
-    await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Home" })).toBeFocused();
+    await expect(drawer.getByRole("link", { name: "Home" })).toBeFocused();
     expect(await hiddenRingSides(page)).toEqual([]);
 
     // Escape closes it and puts focus back on the menu button.

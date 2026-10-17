@@ -19,7 +19,7 @@ const PAGES = [
   "/home",
   "/trending",
   "/browse",
-  "/genre?genre=Drama",
+  "/browse?genre=Drama&year=2020s",
   "/search?q=drama",
   "/movie/chosen-family",
   "/series/the-brownstone",

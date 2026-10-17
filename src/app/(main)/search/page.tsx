@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Search } from "lucide-react";
 import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
@@ -35,10 +36,10 @@ export default async function SearchPage({
   // Published titles whose title, synopsis, people, tags, genres,
   // country or language contain the query, or from that year; title
   // matches first.
-  const { items: results, total, page, totalPages } = await searchTitles(
-    query,
-    pageParam(searchParams.page)
-  );
+  const requestedPage = pageParam(searchParams.page);
+  const { items: results, total, page, totalPages } = await searchTitles(query, requestedPage);
+  // An address past the last page isn't a page.
+  if (page !== requestedPage) notFound();
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 sm:py-14">

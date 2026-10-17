@@ -53,11 +53,12 @@ export const LIBRARY_PAGE_SIZE = 50;
 const ORDER = {
   /** Recently edited first: /movie, /series and their home rows. */
   updated: [{ publishedAt: "desc" }, { id: "desc" }],
-  /** Recently added first: New Releases and the filter pages. */
+  /** Recently added first: New Releases and Browse. */
   added: [{ publishedAt: "desc" }, { id: "desc" }],
-  /** A to Z (and back) for Browse. */
+  /** Browse's other sorts: most viewed of all time, newest release, A to Z. */
+  popular: [{ viewCount: "desc" }, { publishedAt: "desc" }, { id: "desc" }],
+  released: [{ year: "desc" }, { releaseDate: { sort: "desc", nulls: "last" } }, { id: "desc" }],
   title: [{ title: "asc" }, { id: "asc" }],
-  "title-desc": [{ title: "desc" }, { id: "desc" }],
 } satisfies Record<string, Prisma.MediaOrderByWithRelationInput[]>;
 
 export type TitleSort = keyof typeof ORDER;
@@ -285,7 +286,8 @@ export type TitleFilter = {
   genre?: string;
   country?: string;
   language?: string;
-  year?: number;
+  /** A year (from and to the same) or a decade. */
+  year?: { from: number; to: number };
 };
 
 export type TitlePage = {
@@ -310,7 +312,7 @@ export async function listTitles({
     genres: filter.genre ? { has: filter.genre } : undefined,
     country: filter.country,
     language: filter.language,
-    year: filter.year,
+    year: filter.year ? { gte: filter.year.from, lte: filter.year.to } : undefined,
   };
   const settings = await getSiteSettings();
   const perPage = settings.defaultPageSize || PAGE_SIZE;
@@ -329,8 +331,8 @@ export async function listTitles({
 export type FilterField = "genre" | "country" | "language" | "year";
 
 /**
- * The chips on /genre, /country, /language and /year: every value at
- * least one published title has. Years newest first, the rest A to Z.
+ * Browse's choices: every value at least one published title has. Years
+ * newest first, the rest A to Z.
  */
 export async function listFilterValues(field: FilterField): Promise<string[]> {
   await connection();

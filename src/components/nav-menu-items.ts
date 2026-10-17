@@ -3,7 +3,7 @@ export type NavMenuItem = {
   href: string;
 };
 
-// Left cluster — primary browsing entry points.
+// The header's links (NavMenu, and MobileNavMenu on phones).
 export const primaryNavItems: NavMenuItem[] = [
   { label: "Home", href: "/home" },
   { label: "Trending", href: "/trending" },
@@ -11,12 +11,4 @@ export const primaryNavItems: NavMenuItem[] = [
   { label: "Browse", href: "/browse" },
   { label: "Movies", href: "/movie" },
   { label: "Series", href: "/series" },
-];
-
-// Right cluster — filter/facet-based browsing.
-export const filterNavItems: NavMenuItem[] = [
-  { label: "Genre", href: "/genre" },
-  { label: "Country", href: "/country" },
-  { label: "Year", href: "/year" },
-  { label: "Language", href: "/language" },
 ];

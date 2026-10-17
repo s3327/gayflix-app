@@ -1,7 +1,7 @@
 /**
- * The 3/4/6-column responsive grid shared by Trending, New Releases, and
- * Genre — 24 items divides evenly into all three column counts (8/6/4
- * rows), which is why all three pages use this exact grid.
+ * The 3/4/6-column responsive grid every listing shares (Trending, New
+ * Releases, Browse and the rest) — 24 items divides evenly into all
+ * three column counts (8/6/4 rows).
  */
 export default function MediaGrid({ children }: { children: React.ReactNode }) {
   return (

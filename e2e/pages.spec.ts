@@ -7,10 +7,7 @@ const PAGES = [
   "/trending",
   "/new-releases",
   "/browse",
-  "/genre?genre=Drama",
-  "/country",
-  "/year",
-  "/language",
+  "/browse?genre=Drama&type=movie&year=2020s&sort=title",
   "/movie",
   "/series",
   "/movie/chosen-family",
@@ -50,7 +47,7 @@ test("the landing page leads into the site, and the logo leads back to it", asyn
   );
   await expect(page.getByRole("link", { name: "Sign Up" })).toHaveAttribute("href", "/signup");
   await page.getByRole("link", { name: "Drama", exact: true }).click();
-  await expect(page).toHaveURL(/\/genre\?genre=Drama$/);
+  await expect(page).toHaveURL(/\/browse\?genre=Drama$/);
   await expect(page.getByRole("link", { name: "Gayflix home" })).toHaveAttribute("href", "/");
 });
 
