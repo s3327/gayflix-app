@@ -17,7 +17,7 @@ export default function PosterCard({ media }: { media: Media }) {
             instead of a flash of empty bg-surface */}
         <Image
           src={media.posterUrl}
-          alt={media.title}
+          alt=""
           fill
           sizes="(min-width: 1024px) 220px, (min-width: 640px) 180px, 150px"
           className="object-cover"

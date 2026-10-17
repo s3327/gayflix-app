@@ -49,12 +49,25 @@ export default async function SearchPage({
           Find movies and series by title, genre, cast, director, or release year.
         </p>
 
-        {/* Search input form on the page */}
-        <form action="/search" method="GET" className="mt-6 flex items-center gap-2">
+        {/* On screen the heading and the Search button say what the field
+            is for; its label is for screen readers. */}
+        <form
+          role="search"
+          action="/search"
+          method="GET"
+          className="mt-6 flex items-center gap-2"
+        >
           <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-muted" />
+            <label htmlFor="search-page-q" className="sr-only">
+              Search titles
+            </label>
+            <Search
+              aria-hidden
+              className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-muted"
+            />
             <input
-              type="text"
+              id="search-page-q"
+              type="search"
               name="q"
               defaultValue={query}
               placeholder="Search by title, cast, genre, year..."

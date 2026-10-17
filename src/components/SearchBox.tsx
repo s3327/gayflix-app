@@ -107,11 +107,16 @@ export default function SearchBox() {
 
       {isOpen && (
         <div className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-card border border-border-subtle bg-bg-surface shadow-xl sm:w-80">
-          <form onSubmit={handleSubmit} className="flex items-center gap-2 border-b border-border-subtle px-3 py-2.5">
-            <Search className="h-4 w-4 shrink-0 text-ink-muted" strokeWidth={2} />
+          <form
+            role="search"
+            onSubmit={handleSubmit}
+            className="flex items-center gap-2 border-b border-border-subtle px-3 py-2.5"
+          >
+            <Search aria-hidden className="h-4 w-4 shrink-0 text-ink-muted" strokeWidth={2} />
             <input
               ref={inputRef}
               type="text"
+              aria-label="Search titles"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search titles..."

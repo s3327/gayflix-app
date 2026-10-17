@@ -176,6 +176,47 @@ test.describe("on a phone", () => {
   });
 });
 
+test("Skip to content goes past the header and menus", async ({ page }) => {
+  await page.goto("/movie/chosen-family");
+  await page.keyboard.press("Tab");
+  const skip = page.getByRole("link", { name: "Skip to content" });
+  await expect(skip).toBeFocused();
+  expect(await hiddenRingSides(page)).toEqual([]);
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Tab");
+  expect(
+    await page.evaluate(() => {
+      const el = document.activeElement;
+      return Boolean(el?.closest("#content")) && !el?.closest("header, nav");
+    })
+  ).toBe(true);
+});
+
+test("season tabs by keyboard", async ({ page }) => {
+  await page.goto("/series/the-brownstone");
+  const tabs = page.getByRole("tablist", { name: "Seasons" }).getByRole("tab");
+  const panel = page.getByRole("tabpanel");
+  await expect(tabs).toHaveText(["Season 1", "Season 2", "Season 3"]);
+  await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
+
+  // One Tab stop for the row; the arrows, Home and End move along it.
+  await tabTo(page, tabs.first());
+  await page.keyboard.press("ArrowRight");
+  await expect(tabs.nth(1)).toBeFocused();
+  await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "true");
+  await expect(panel).toHaveAccessibleName("Season 2");
+  await page.keyboard.press("End");
+  await expect(tabs.nth(2)).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(tabs.first()).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(tabs.nth(2)).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Tab");
+  await expect(panel.getByRole("link").first()).toBeFocused();
+});
+
 test("a title row by keyboard on a wide screen", async ({ page }) => {
   await page.goto("/movie/chosen-family");
   await tabThroughRow(page, recommendations(page));
@@ -183,7 +224,9 @@ test("a title row by keyboard on a wide screen", async ({ page }) => {
 
 test("search by keyboard", async ({ page }) => {
   await page.goto("/home");
-  // The logo is the first stop, with its ring.
+  // Skip to content is the first stop, then the logo, with its ring.
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Gayflix home" })).toBeFocused();
   expect(await hiddenRingSides(page)).toEqual([]);
@@ -251,9 +294,7 @@ test.describe("signed in", () => {
 
     // Past the last item, the menu closes.
     await page.keyboard.press("Enter");
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab");
-    await expect(logOut).toBeFocused();
+    await tabTo(page, logOut);
     expect(await hiddenRingSides(page)).toEqual([]);
     await page.keyboard.press("Tab");
     await expect(logOut).toBeHidden();

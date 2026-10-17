@@ -27,7 +27,7 @@ export default function MediaCard({
       <div className="relative aspect-2/3 w-full overflow-hidden rounded-card bg-bg-surface transition-transform duration-200 ease-out group-hover:z-10 group-hover:scale-105">
         <Image
           src={item.posterUrl}
-          alt={item.title}
+          alt=""
           fill
           sizes="(min-width: 1024px) 220px, (min-width: 640px) 200px, 30vw"
           className="object-cover"

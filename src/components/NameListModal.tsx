@@ -28,15 +28,21 @@ export default function NameListModal({
   return (
     <Modal title={title} onClose={onClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <input
-          type="text"
-          autoFocus
-          required
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="e.g. Weekend Watchlist"
-          className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
-        />
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="list-name" className="text-sm text-ink-secondary">
+            List name
+          </label>
+          <input
+            id="list-name"
+            type="text"
+            autoFocus
+            required
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="e.g. Weekend Watchlist"
+            className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+          />
+        </div>
         <div className="flex gap-2">
           <button
             type="submit"

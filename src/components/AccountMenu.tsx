@@ -17,9 +17,17 @@ import { useCurrentPath } from "@/lib/use-current-path";
  * for a single destination.
  *
  * Logged-in is where this earns being its own component: the icon
- * becomes a dropdown trigger with two items, My Account and Log Out,
- * that closes like SearchBox (see useDropdown) and on route change.
+ * becomes a dropdown trigger with the account pages and Log Out, that
+ * closes like SearchBox (see useDropdown) and on route change.
  */
+const MENU_ITEMS = [
+  { label: "My Account", href: "/account" },
+  { label: "Favorites", href: "/account/favorite" },
+  { label: "My Lists", href: "/account/favorite?tab=lists" },
+  { label: "History", href: "/account/history" },
+  { label: "Settings", href: "/account/setting" },
+];
+
 export default function AccountMenu() {
   const { isLoggedIn, logout } = useAuth();
   const { showToast } = useToast();
@@ -75,16 +83,20 @@ export default function AccountMenu() {
         <div className="absolute right-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-card border border-border-subtle bg-bg-surface py-1 shadow-xl">
           {/* The panel clips anything outside it, so these items draw
               their focus ring inside their edges instead. */}
-          <Link
-            href="/account"
-            className="block px-4 py-2.5 text-sm font-semibold text-ink-primary transition-colors hover:bg-bg-elevated focus-visible:-outline-offset-2"
-          >
-            My Account
-          </Link>
+          {MENU_ITEMS.map(({ label, href }) => (
+            <Link
+              key={href}
+              href={href}
+              onClick={() => setIsOpen(false)}
+              className="block px-4 py-2.5 text-sm font-semibold text-ink-primary transition-colors hover:bg-bg-elevated focus-visible:-outline-offset-2"
+            >
+              {label}
+            </Link>
+          ))}
           <button
             type="button"
             onClick={handleLogout}
-            className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-status-error transition-colors hover:bg-bg-elevated focus-visible:-outline-offset-2"
+            className="block w-full border-t border-border-subtle px-4 py-2.5 text-left text-sm font-semibold text-status-error transition-colors hover:bg-bg-elevated focus-visible:-outline-offset-2"
           >
             Log Out
           </button>

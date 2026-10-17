@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 /**
  * Clamps text to 3 lines and only shows a "Read more" toggle if the full
@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
  */
 export default function ReadMoreText({ text }: { text: string }) {
   const ref = useRef<HTMLParagraphElement>(null);
+  const id = useId();
   const [expanded, setExpanded] = useState(false);
   const [canExpand, setCanExpand] = useState(false);
 
@@ -23,6 +24,7 @@ export default function ReadMoreText({ text }: { text: string }) {
     <div>
       <p
         ref={ref}
+        id={id}
         className={`text-sm leading-snug text-ink-secondary ${
           expanded ? "" : "line-clamp-3"
         }`}
@@ -33,6 +35,8 @@ export default function ReadMoreText({ text }: { text: string }) {
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-controls={id}
           className="mt-2 text-sm font-semibold text-ink-brand transition-colors hover:text-brand-pink-light"
         >
           {expanded ? "Read less" : "Read more"}
