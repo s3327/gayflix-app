@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import FormError from "@/components/FormError";
+import PasswordInput from "@/components/PasswordInput";
 import { authClient, authErrorMessage } from "@/lib/auth-client";
 
 /**
@@ -80,18 +81,19 @@ function ResetPasswordForm() {
               >
                 New Password
               </label>
-              <input
+              <PasswordInput
                 id="password"
                 name="password"
-                type="password"
                 autoComplete="new-password"
                 minLength={8}
                 required
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="At least 8 characters"
-                className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+                aria-describedby="password-hint"
               />
+              <p id="password-hint" className="text-xs text-ink-muted">
+                At least 8 characters
+              </p>
             </div>
 
             <FormError message={error} />

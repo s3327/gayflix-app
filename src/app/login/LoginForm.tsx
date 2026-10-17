@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import FormError from "@/components/FormError";
 import GoogleAuthButton from "@/components/GoogleAuthButton";
+import PasswordInput from "@/components/PasswordInput";
 import TwoFactorForm from "@/components/TwoFactorForm";
 import { authClient, authErrorMessage, signInWithGoogle } from "@/lib/auth-client";
 import { authHref } from "@/lib/safe-redirect";
@@ -24,9 +25,10 @@ import { authHref } from "@/lib/safe-redirect";
  * was never confirmed gets a fresh code and is sent to /verify-email
  * instead (Better Auth sends the code on that sign-in attempt). Accounts
  * with two-factor turned on (admins) enter a code from their
- * authenticator app before the session starts.
+ * authenticator app before the session starts. Google shows only where
+ * it's set up (`google`, from src/lib/auth.ts).
  */
-export default function LoginForm({ next }: { next: string | null }) {
+export default function LoginForm({ next, google }: { next: string | null; google: boolean }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -127,16 +129,13 @@ export default function LoginForm({ next }: { next: string | null }) {
                   Forgot password?
                 </Link>
               </div>
-              <input
+              <PasswordInput
                 id="password"
                 name="password"
-                type="password"
                 autoComplete="current-password"
                 required
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="••••••••"
-                className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
               />
             </div>
 
@@ -152,17 +151,21 @@ export default function LoginForm({ next }: { next: string | null }) {
           </form>
         )}
 
-        <div className="mt-6 flex items-center gap-3">
-          <div className="h-px flex-1 bg-border-subtle" />
-          <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-            or
-          </span>
-          <div className="h-px flex-1 bg-border-subtle" />
-        </div>
+        {google && (
+          <>
+            <div className="mt-6 flex items-center gap-3">
+              <div className="h-px flex-1 bg-border-subtle" />
+              <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                or
+              </span>
+              <div className="h-px flex-1 bg-border-subtle" />
+            </div>
 
-        <div className="mt-6">
-          <GoogleAuthButton label="Continue with Google" onClick={handleGoogleAuth} />
-        </div>
+            <div className="mt-6">
+              <GoogleAuthButton label="Continue with Google" onClick={handleGoogleAuth} />
+            </div>
+          </>
+        )}
 
         <p className="mt-6 text-center text-sm text-ink-secondary">
           New to Gayflix?{" "}
