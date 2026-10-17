@@ -2,13 +2,21 @@ import { cookies } from "next/headers";
 
 export type AdminFlashUndo = {
   label?: string;
-  action: "restore_media" | "publish_media" | "unpublish_media" | "resolve_report" | "reopen_report";
+  action:
+    | "restore_media"
+    | "trash_media"
+    | "publish_media"
+    | "unpublish_media"
+    | "resolve_report"
+    | "reopen_report";
   ids: string[];
 };
 
 export type AdminFlash = {
   message: string;
   undo?: AdminFlashUndo;
+  /** Set by setAdminFlash, so the banner can tell a new message from one it already showed. */
+  id?: string;
 };
 
 const FLASH_COOKIE = "admin_flash";
@@ -19,7 +27,7 @@ const FLASH_COOKIE = "admin_flash";
  */
 export async function setAdminFlash(flash: AdminFlash): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.set(FLASH_COOKIE, JSON.stringify(flash), {
+  cookieStore.set(FLASH_COOKIE, JSON.stringify({ ...flash, id: crypto.randomUUID() }), {
     path: "/admin",
     sameSite: "lax",
     httpOnly: false,

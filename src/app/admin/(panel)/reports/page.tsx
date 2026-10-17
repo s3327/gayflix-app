@@ -96,11 +96,31 @@ export default async function ReportsPage({
           latestAt: when(report.createdAt),
           detailsList: report.details ? [report.details] : [],
           reportIds: [report.id],
+          sources: [],
         });
       }
     }
   }
   const reportGroups = Array.from(groupMap.values());
+
+  // The sources a group's "turn off" choice can pick from: that title's or
+  // episode's server tabs that are still on.
+  if (reportGroups.length > 0) {
+    const groupMediaIds = [...new Set(reportGroups.map((group) => group.mediaId))];
+    const sources = await db.videoSource.findMany({
+      where: {
+        enabled: true,
+        OR: [{ mediaId: { in: groupMediaIds } }, { episodeId: { in: groupMediaIds } }],
+      },
+      orderBy: { position: "asc" },
+      select: { id: true, label: true, mediaId: true, episodeId: true },
+    });
+    for (const group of reportGroups) {
+      group.sources = sources
+        .filter((source) => (source.episodeId ?? source.mediaId) === group.mediaId)
+        .map(({ id, label }) => ({ id, label }));
+    }
+  }
 
   const tabHref = (resolved: boolean, view = "list") => {
     const qs = new URLSearchParams();

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { setAdminFlash, type AdminFlashUndo } from "@/lib/admin-flash";
-import { restoreTitle, updateMediaStatusBatch } from "@/lib/admin-catalog-actions";
+import { restoreTitle, trashTitles, updateMediaStatusBatch } from "@/lib/admin-catalog-actions";
 import { reopenReport, resolveReport } from "@/lib/admin-report-actions";
 import { requireAdmin } from "@/lib/session";
 import { canManageCatalog, canManageUsers } from "@/lib/admin-roles";
@@ -10,6 +10,7 @@ import { FORBIDDEN_CATALOG, FORBIDDEN_USERS } from "@/lib/admin-guard";
 
 const UNDO_ACTIONS: AdminFlashUndo["action"][] = [
   "restore_media",
+  "trash_media",
   "publish_media",
   "unpublish_media",
   "resolve_report",
@@ -30,6 +31,7 @@ export async function performUndo(actionArg: unknown, idsArg: unknown): Promise<
 
   switch (action) {
     case "restore_media":
+    case "trash_media":
     case "publish_media":
     case "unpublish_media": {
       if (!canManageCatalog(session.user.role)) {
@@ -55,6 +57,13 @@ export async function performUndo(actionArg: unknown, idsArg: unknown): Promise<
       }
       await setAdminFlash({
         message: `${ids.length === 1 ? "Title" : `${ids.length} titles`} restored.`,
+      });
+      break;
+    }
+    case "trash_media": {
+      await trashTitles(ids);
+      await setAdminFlash({
+        message: `${ids.length === 1 ? "Title" : `${ids.length} titles`} moved back to the trash.`,
       });
       break;
     }

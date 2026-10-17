@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import SettingsTabs from "@/components/admin/SettingsTabs";
-import { getSiteSettings } from "@/lib/site-settings";
+import { readSiteSettings } from "@/lib/site-settings";
 import { requireAdmin } from "@/lib/session";
 import { canManageSettings } from "@/lib/admin-roles";
 
@@ -14,7 +14,8 @@ export default async function SettingsPage() {
   if (!canManageSettings(session.user.role)) {
     redirect("/admin");
   }
-  const settings = await getSiteSettings();
+  // Not the fail-safe fallback: a form filled with it would save over the real settings.
+  const settings = await readSiteSettings();
 
   return (
     <div className="pb-10">

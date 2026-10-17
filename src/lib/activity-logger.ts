@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
-import { assertPublicHost, isPublicHttpsUrl } from "@/lib/safe-url";
+import { postJsonToPublicUrl } from "@/lib/safe-url";
 
 export type LogActivityParams = {
   actorId?: string | null;
@@ -54,23 +54,15 @@ async function dispatchWebhook(entry: {
       where: { id: "default" },
       select: { webhookUrl: true },
     });
-    if (!setting?.webhookUrl || !isPublicHttpsUrl(setting.webhookUrl)) return;
+    if (!setting?.webhookUrl) return;
 
-    const parsed = new URL(setting.webhookUrl);
-    await assertPublicHost(parsed.hostname);
-
-    await fetch(setting.webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        event: "activity.created",
-        action: entry.action,
-        summary: entry.summary,
-        actor: entry.actorEmail,
-        timestamp: entry.createdAt.toISOString(),
-      }),
-      redirect: "manual",
-      signal: AbortSignal.timeout(3000),
+    // Checks the address it connects to, not just an earlier lookup.
+    await postJsonToPublicUrl(setting.webhookUrl, {
+      event: "activity.created",
+      action: entry.action,
+      summary: entry.summary,
+      actor: entry.actorEmail,
+      timestamp: entry.createdAt.toISOString(),
     });
   } catch {
     // Ignore webhook errors

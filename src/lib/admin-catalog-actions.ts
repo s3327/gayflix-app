@@ -225,12 +225,23 @@ export async function updateTitle(
  * Publishes or unpublishes titles that aren't in the trash. A title keeps
  * the date it was first published.
  */
-export async function updateMediaStatusBatch(idsArg: unknown, statusArg: unknown) {
+/**
+ * Sets the status of titles not in the trash, and returns the ids whose
+ * status changed: an Undo puts back only those.
+ */
+export async function updateMediaStatusBatch(
+  idsArg: unknown,
+  statusArg: unknown
+): Promise<string[]> {
   const { allowed } = await catalogSession();
   const ids = mediaIds(idsArg);
-  if (!allowed || ids.length === 0) return;
+  if (!allowed || ids.length === 0) return [];
   const status = mediaStatus(statusArg);
-  await db.$transaction(async (tx) => {
+  const changed = await db.$transaction(async (tx) => {
+    const changing = await tx.media.findMany({
+      where: { id: { in: ids }, trashedAt: null, status: { not: status } },
+      select: { id: true },
+    });
     const where = { id: { in: ids }, trashedAt: null };
     if (status === "published") {
       await tx.media.updateMany({ where, data: { status, publishAt: null } });
@@ -245,8 +256,10 @@ export async function updateMediaStatusBatch(idsArg: unknown, statusArg: unknown
     } else {
       await tx.media.updateMany({ where, data: { status } });
     }
+    return changing.map((item) => item.id);
   });
   refreshPages();
+  return changed;
 }
 
 /** Publish or unpublish one title (a library row's button). */
@@ -258,7 +271,7 @@ export async function setTitleStatus(idArg: unknown, statusArg: unknown): Promis
   }
   const id = itemId(idArg);
   const status = mediaStatus(statusArg);
-  await updateMediaStatusBatch([id], status);
+  const changed = await updateMediaStatusBatch([id], status);
   const isPub = status === "published";
   await logActivity({
     actorId: session.user.id,
@@ -271,11 +284,9 @@ export async function setTitleStatus(idArg: unknown, statusArg: unknown): Promis
   });
   await setAdminFlash({
     message: isPub ? "Title published." : "Title unpublished.",
-    undo: {
-      label: "Undo",
-      action: isPub ? "unpublish_media" : "publish_media",
-      ids: [id],
-    },
+    ...(changed.length > 0 && {
+      undo: { label: "Undo", action: isPub ? "unpublish_media" : "publish_media", ids: changed },
+    }),
   });
 }
 
@@ -289,7 +300,8 @@ export async function setSelectedStatus(statusArg: unknown, form: FormData): Pro
   const ids = selectedIds(form);
   if (ids.length === 0) return;
   const status = mediaStatus(statusArg);
-  await updateMediaStatusBatch(ids, status);
+  // Undo puts back only the titles this changed, not ones already in that state.
+  const changed = await updateMediaStatusBatch(ids, status);
   const isPub = status === "published";
   await logActivity({
     actorId: session.user.id,
@@ -302,11 +314,9 @@ export async function setSelectedStatus(statusArg: unknown, form: FormData): Pro
   });
   await setAdminFlash({
     message: `${ids.length} ${ids.length === 1 ? "title" : "titles"} ${isPub ? "published" : "unpublished"}.`,
-    undo: {
-      label: "Undo",
-      action: isPub ? "unpublish_media" : "publish_media",
-      ids,
-    },
+    ...(changed.length > 0 && {
+      undo: { label: "Undo", action: isPub ? "unpublish_media" : "publish_media", ids: changed },
+    }),
   });
 }
 
@@ -454,20 +464,22 @@ export async function deleteTitle(idArg: unknown): Promise<void> {
 
 /** Restore multiple checked titles from trash. */
 export async function bulkRestoreTrash(form: FormData): Promise<void> {
-  const { allowed } = await catalogSession();
+  const { session, allowed } = await catalogSession();
   if (!allowed) {
     await setAdminFlash({ message: FORBIDDEN_CATALOG });
     return;
   }
   const ids = selectedIds(form);
   if (ids.length === 0) return;
-  await db.$transaction(async (tx) => {
+  const restored = await db.$transaction(async (tx) => {
+    const done: string[] = [];
     for (const id of ids) {
       const item = await tx.media.findUnique({
         where: { id },
         select: { statusBeforeTrash: true, featuredBeforeTrash: true, trashedAt: true },
       });
       if (!item || !item.trashedAt) continue;
+      done.push(id);
       const restoredStatus = item.statusBeforeTrash ?? "draft";
       const restoredFeatured = item.featuredBeforeTrash ?? false;
 
@@ -486,12 +498,34 @@ export async function bulkRestoreTrash(form: FormData): Promise<void> {
         await unfeatureOthers(tx, id);
       }
     }
+    return done;
   });
   refreshPages();
+  if (restored.length > 0) {
+    await logActivity({
+      actorId: session.user.id,
+      actorEmail: session.user.email,
+      actorRole: session.user.role,
+      action: "title.restore",
+      entityType: "media",
+      entityId: restored.join(","),
+      summary: `Restored ${restored.length} titles from trash`,
+    });
+  }
   await setAdminFlash({
-    message: `${ids.length} ${ids.length === 1 ? "title" : "titles"} restored.`,
-    undo: { label: "Undo", action: "restore_media", ids },
+    message: `${restored.length} ${restored.length === 1 ? "title" : "titles"} restored.`,
+    // Undo sends them back to the trash.
+    ...(restored.length > 0 && {
+      undo: { label: "Undo", action: "trash_media", ids: restored },
+    }),
   });
+}
+
+/** Undo of a restore: back to the trash. */
+export async function trashTitles(idsArg: unknown): Promise<void> {
+  const { allowed } = await catalogSession();
+  if (!allowed) return;
+  await moveToTrash(mediaIds(idsArg));
 }
 
 /** Permanently delete multiple checked titles from trash. */

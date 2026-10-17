@@ -415,3 +415,55 @@ describe("parseSeasonRows", () => {
     ).toMatchObject({ ok: false, errors: { "show-season-1-episode-2-episodeNumber": "Season 1 already has an episode 1." } });
   });
 });
+
+describe("parseTitle: Publish at", () => {
+  const parse = (values: TitleValues) => parseTitle("movie", values, { now: NOW, hosts: HOSTS });
+
+  it("reads a draft's time as UTC", () => {
+    const result = parse(movie({ status: "draft", publishAt: "2026-11-01T20:30" }));
+    expect(result.ok && result.data.publishAt?.toISOString()).toBe("2026-11-01T20:30:00.000Z");
+  });
+
+  it("drops the schedule of a title published now", () => {
+    const result = parse(movie({ status: "published", publishAt: "2026-11-01T20:30" }));
+    expect(result.ok && result.data.publishAt).toBeNull();
+  });
+
+  it("refuses a time that isn't one", () => {
+    const result = parse(movie({ status: "draft", publishAt: "2026-02-30T10:00" }));
+    expect(!result.ok && result.errors.publishAt).toBeTruthy();
+  });
+
+  it("shows a stored schedule back in the form", () => {
+    const values = titleValues({
+      ...parseRow(),
+      publishAt: new Date("2026-11-01T20:30:00Z"),
+    });
+    expect(values.publishAt).toBe("2026-11-01T20:30");
+  });
+});
+
+function parseRow() {
+  return {
+    type: "movie" as const,
+    status: "draft" as const,
+    title: "Chosen Family",
+    year: 2026,
+    releaseDate: null,
+    runtimeMinutes: 112,
+    duration: "1h 52m",
+    genres: ["Drama"],
+    country: "Canada",
+    language: "English",
+    director: null,
+    creator: null,
+    cast: [],
+    tags: [],
+    rating: null,
+    tagline: null,
+    synopsis: "",
+    posterUrl: NO_POSTER,
+    backdropUrl: null,
+    featured: false,
+  };
+}

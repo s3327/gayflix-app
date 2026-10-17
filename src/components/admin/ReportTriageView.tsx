@@ -14,6 +14,8 @@ export type ReportGroup = {
   latestAt: string;
   detailsList: string[];
   reportIds: string[];
+  /** The title's or episode's video sources that are still on. */
+  sources: { id: string; label: string }[];
 };
 
 export default function ReportTriageView({
@@ -26,14 +28,16 @@ export default function ReportTriageView({
   const [isPending, startTransition] = useTransition();
   const [expandedMediaId, setExpandedMediaId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
-  const [disableSources, setDisableSources] = useState<Record<string, boolean>>({});
+  // Keyed by group (title and reason), so two groups for one title don't share them.
+  const [disableSource, setDisableSource] = useState<Record<string, string>>({});
 
-  const handleResolveGroup = (group: ReportGroup) => {
+  const handleResolveGroup = (group: ReportGroup, key: string) => {
     startTransition(async () => {
       await resolveAllForMedia({
         mediaId: group.mediaId,
-        disableSources: disableSources[group.mediaId] ?? false,
-        notes: notes[group.mediaId] || undefined,
+        reportIds: group.reportIds,
+        disableSourceId: disableSource[key] || undefined,
+        notes: notes[key] || undefined,
       });
     });
   };
@@ -85,33 +89,38 @@ export default function ReportTriageView({
                 <input
                   type="text"
                   placeholder="Resolution notes (optional)..."
-                  value={notes[group.mediaId] || ""}
-                  onChange={(e) =>
-                    setNotes((prev) => ({ ...prev, [group.mediaId]: e.target.value }))
-                  }
+                  aria-label={`Resolution notes for ${group.mediaTitle}: ${group.reason}`}
+                  maxLength={1000}
+                  value={notes[key] || ""}
+                  onChange={(e) => setNotes((prev) => ({ ...prev, [key]: e.target.value }))}
                   className="w-full rounded-md border border-border-subtle bg-bg-elevated px-3 py-1.5 text-xs text-ink-primary focus:border-brand-pink focus:outline-hidden"
                 />
 
-                <label className="flex items-center gap-2 text-xs text-ink-secondary select-none cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={disableSources[group.mediaId] ?? false}
-                    onChange={(e) =>
-                      setDisableSources((prev) => ({
-                        ...prev,
-                        [group.mediaId]: e.target.checked,
-                      }))
-                    }
-                    className="h-3.5 w-3.5 rounded-sm border-border-strong accent-brand-pink"
-                  />
-                  <VideoOff className="h-3.5 w-3.5 text-ink-muted" />
-                  Disable video source upon resolve
-                </label>
+                {group.sources.length > 0 && (
+                  <label className="flex items-center gap-2 text-xs text-ink-secondary">
+                    <VideoOff className="h-3.5 w-3.5 shrink-0 text-ink-muted" />
+                    <span className="sr-only">Video source to turn off for {group.mediaTitle}</span>
+                    <select
+                      value={disableSource[key] ?? ""}
+                      onChange={(e) =>
+                        setDisableSource((prev) => ({ ...prev, [key]: e.target.value }))
+                      }
+                      className="w-full rounded-md border border-border-subtle bg-bg-elevated px-2 py-1.5 text-xs text-ink-primary focus:border-brand-pink focus:outline-hidden"
+                    >
+                      <option value="">Leave video sources as they are</option>
+                      {group.sources.map((source) => (
+                        <option key={source.id} value={source.id}>
+                          Turn off {source.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
 
                 <button
                   type="button"
                   disabled={isPending}
-                  onClick={() => handleResolveGroup(group)}
+                  onClick={() => handleResolveGroup(group, key)}
                   className="rounded-card bg-brand-pink px-4 py-2 text-xs font-bold text-ink-onBrand hover:bg-brand-pink-light flex items-center justify-center gap-1.5 disabled:opacity-60 shadow-2xs"
                 >
                   {isPending ? (
@@ -119,7 +128,7 @@ export default function ReportTriageView({
                   ) : (
                     <Check className="h-3.5 w-3.5" />
                   )}
-                  Resolve all for this title ({group.count})
+                  Resolve these {group.count === 1 ? "report" : `${group.count} reports`}
                 </button>
               </div>
             </div>

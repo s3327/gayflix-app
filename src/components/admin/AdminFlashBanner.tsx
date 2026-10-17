@@ -10,29 +10,29 @@ import { performUndo } from "@/lib/admin-undo-actions";
  * and providing an accessible Undo button for reversible actions (A7, F9).
  */
 export default function AdminFlashBanner({ flash }: { flash: AdminFlash | null }) {
-  const [dismissed, setDismissed] = useState(false);
-  const [prevFlash, setPrevFlash] = useState(flash);
+  // Dismissal is per message: a later message shows even after one was closed.
+  const [dismissedId, setDismissedId] = useState<string | null>(null);
   const [isUndoing, setIsUndoing] = useState(false);
+  const flashId = flash ? (flash.id ?? flash.message) : null;
+  const dismissed = flashId !== null && flashId === dismissedId;
 
-  if (flash !== prevFlash) {
-    setPrevFlash(flash);
-    setDismissed(false);
-  }
-
-  // Clear cookie once loaded so refresh doesn't show old flash
+  // The cookie is read once: clear it as soon as each new message shows, so
+  // it doesn't come back when the panel next refreshes. The layout stays
+  // mounted between pages, so this runs per message, not per mount.
   useEffect(() => {
-    if (typeof document !== "undefined") {
+    if (flashId !== null) {
       document.cookie = "admin_flash=; path=/admin; max-age=0";
     }
-  }, []);
+  }, [flashId]);
 
   if (!flash || dismissed) return null;
 
   async function handleUndo() {
     if (!flash?.undo || isUndoing) return;
     setIsUndoing(true);
+    const undoneId = flashId;
     await performUndo(flash.undo.action, flash.undo.ids);
-    setDismissed(true);
+    setDismissedId(undoneId);
     setIsUndoing(false);
   }
 
@@ -57,7 +57,7 @@ export default function AdminFlashBanner({ flash }: { flash: AdminFlash | null }
       </div>
       <button
         type="button"
-        onClick={() => setDismissed(true)}
+        onClick={() => setDismissedId(flashId)}
         aria-label="Dismiss message"
         className="flex h-5 w-5 items-center justify-center rounded-sm text-ink-secondary transition-colors hover:text-ink-primary"
       >

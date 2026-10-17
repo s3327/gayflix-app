@@ -5,9 +5,10 @@ import { redirect } from "next/navigation";
 import { isImdbId, isTmdbId, parseTmdbRef } from "@/lib/import-mapping";
 import { isMediaId } from "@/lib/library-types";
 import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
-import { libraryPath, uploadPath } from "@/lib/title-form";
-import { prepareImport, type ImportState } from "@/lib/title-import";
-import { insertTitle, isUniqueViolation } from "@/lib/title-store";
+import { libraryPath, parseTitle, titleValues, uploadPath } from "@/lib/title-form";
+import { freshValues, prepareImport, type ImportState } from "@/lib/title-import";
+import { createTitleRevision } from "@/lib/title-revisions";
+import { insertTitle, isUniqueViolation, titleData } from "@/lib/title-store";
 
 /*
  * The Import page's server function. Like the title editor's, it checks
@@ -89,90 +90,75 @@ export async function importMultipleTitles(
   return { ok: true, imported, skipped, errors };
 }
 
-/** Refresh title metadata from TMDB, respecting locked fields. */
-export async function refreshTitleFromTmdb({
-  id,
-  overwriteUnlocked = false,
-}: {
-  id: string;
-  overwriteUnlocked: boolean;
-}): Promise<{ ok: boolean; message?: string; updatedFields?: string[] }> {
-  const { allowed } = await catalogSession();
-  if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
-  const { db } = await import("@/lib/db");
-  const existing = await db.media.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      type: true,
-      tmdbId: true,
-      imdbId: true,
-      title: true,
-      year: true,
-      synopsis: true,
-      tagline: true,
-      posterUrl: true,
-      backdropUrl: true,
-      director: true,
-      creator: true,
-      cast: true,
-      genres: true,
-      lockedFields: true,
-      trashedAt: true,
-    },
-  });
+/** Refresh's fields: the title form's field, and its name in lockedFields. */
+const REFRESH_FIELDS = [
+  ["title", "title"],
+  ["year", "year"],
+  ["runtime", "runtimeMinutes"],
+  ["synopsis", "synopsis"],
+  ["tagline", "tagline"],
+  ["posterUrl", "posterUrl"],
+  ["backdropUrl", "backdropUrl"],
+  ["credit", "director"],
+  ["credit", "creator"],
+  ["cast", "cast"],
+  ["genres", "genres"],
+] as const;
 
+/**
+ * Refresh from TMDB. Fills empty fields from TMDB (every unlocked field
+ * with `overwriteUnlocked`), then saves through the title form's checks.
+ * Status and Featured stay as they are.
+ */
+export async function refreshTitleFromTmdb(
+  input: unknown
+): Promise<{ ok: boolean; message?: string; updatedFields?: string[] }> {
+  const { session, allowed } = await catalogSession();
+  if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
+  const raw = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+  if (!isMediaId(raw.id)) return { ok: false, message: "Invalid title ID" };
+  const id = raw.id;
+  const overwriteUnlocked = raw.overwriteUnlocked === true;
+
+  const { db } = await import("@/lib/db");
+  const existing = await db.media.findUnique({ where: { id } });
   if (!existing || existing.trashedAt || !existing.tmdbId) {
     return { ok: false, message: "Title not found or has no linked TMDB ID" };
   }
-
   const ref = parseTmdbRef(existing.tmdbId);
   if (!ref) return { ok: false, message: "Invalid linked TMDB reference" };
 
-  const plan = await prepareImport(ref, existing.type);
-  if (plan.status !== "ready" || !plan.input) {
-    return { ok: false, message: "Could not fetch fresh metadata from TMDB" };
-  }
+  const fresh = await freshValues(ref, existing.type);
+  if (!fresh.ok) return { ok: false, message: fresh.message };
 
-  const fresh = plan.input;
+  const current = titleValues(existing);
+  const values = { ...current };
   const locked = new Set(existing.lockedFields);
-  const dataToUpdate: Record<string, unknown> = {};
   const updatedFields: string[] = [];
-
-  const applyField = (key: string, freshVal: unknown, existingVal: unknown) => {
-    if (locked.has(key)) return;
-    const isBlank =
-      existingVal === null ||
-      existingVal === undefined ||
-      existingVal === "" ||
-      (Array.isArray(existingVal) && existingVal.length === 0);
-    if (overwriteUnlocked || isBlank) {
-      if (freshVal !== undefined && freshVal !== null) {
-        dataToUpdate[key] = freshVal;
-        updatedFields.push(key);
-      }
+  for (const [field, column] of REFRESH_FIELDS) {
+    if ((column === "director" || column === "runtimeMinutes") && existing.type !== "movie") continue;
+    if (column === "creator" && existing.type !== "series") continue;
+    if (locked.has(column) || !fresh.values[field]) continue;
+    if ((overwriteUnlocked || !current[field]) && fresh.values[field] !== current[field]) {
+      values[field] = fresh.values[field];
+      updatedFields.push(column);
     }
-  };
-
-  applyField("title", fresh.title, existing.title);
-  applyField("year", fresh.year, existing.year);
-  applyField("synopsis", fresh.synopsis, existing.synopsis);
-  applyField("tagline", fresh.tagline, existing.tagline);
-  applyField("posterUrl", fresh.posterUrl, existing.posterUrl);
-  applyField("backdropUrl", fresh.backdropUrl, existing.backdropUrl);
-  if (existing.type === "movie") {
-    applyField("director", fresh.credit, existing.director);
-  } else {
-    applyField("creator", fresh.credit, existing.creator);
   }
-  applyField("cast", fresh.cast, existing.cast);
-  applyField("genres", fresh.genres, existing.genres);
+  if (updatedFields.length === 0) return { ok: true, updatedFields };
 
-  if (Object.keys(dataToUpdate).length > 0) {
-    await db.media.update({ where: { id }, data: dataToUpdate });
-    revalidatePath("/", "layout");
+  const parsed = parseTitle(existing.type, values);
+  if (!parsed.ok) {
+    const [problem] = Object.values(parsed.errors);
+    return { ok: false, message: `TMDB's details can't be saved as they are. ${problem}` };
   }
-
+  await createTitleRevision({
+    mediaId: id,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    summary: `Refreshed ${updatedFields.join(", ")} from TMDB`,
+  });
+  await db.media.updateMany({ where: { id, trashedAt: null }, data: titleData(existing.type, parsed.data) });
+  revalidatePath("/", "layout");
   return { ok: true, updatedFields };
 }
 

@@ -49,7 +49,7 @@ test.describe("import", () => {
       await expect(card(page, "E2E Harbor Lights")).toContainText("Movie · 2024");
 
       await card(page, "E2E Harbor Lights").getByRole("button", { name: "Import E2E Harbor Lights" }).click();
-      await expect(page).toHaveURL(/\/admin\/library\/movies\/e2e-harbor-lights(-\d+)?\?imported=1$/);
+      await expect(page).toHaveURL(/\/admin\/library\/movies\/e2e-harbor-lights(-\d+)?$/);
       await expect(main.getByRole("status")).toHaveText(
         "Imported as a draft. Check it, then set its status to Published when it's ready."
       );
@@ -94,7 +94,7 @@ test.describe("import", () => {
 
       await main.getByLabel("Runtime in minutes").fill("90");
       await main.getByRole("button", { name: "Add movie" }).click();
-      await expect(page).toHaveURL(/\/admin\/library\/movies\/e2e-no-runtime(-\d+)?\?imported=1$/);
+      await expect(page).toHaveURL(/\/admin\/library\/movies\/e2e-no-runtime(-\d+)?$/);
       expect(await imported(tmdbId)).toEqual([
         expect.objectContaining({ runtimeMinutes: 90, imdbId: "tt9900002", status: "draft" }),
       ]);
@@ -116,7 +116,7 @@ test.describe("import", () => {
       ).toBeVisible();
       expect(await imported(tmdbId)).toEqual([]);
       await main.getByRole("button", { name: "Add movie" }).click();
-      await expect(page).toHaveURL(/\?imported=1$/);
+      await expect(page).toHaveURL(/\/admin\/library\/(movies|series)\/[\w-]+$/);
       await expect(main.getByText("Matches IMDb tt9900003")).toBeVisible();
     } finally {
       await cleanUp(tmdbId);
@@ -133,7 +133,7 @@ test.describe("import", () => {
       await expect(result).toContainText("TMDB: movie, IMDb: series. Import it as:");
       expect(await imported(tmdbId)).toEqual([]);
       await result.getByRole("button", { name: "Import E2E Two Faced as a series" }).click();
-      await expect(page).toHaveURL(/\/admin\/library\/series\/e2e-two-faced(-\d+)?\?imported=1$/);
+      await expect(page).toHaveURL(/\/admin\/library\/series\/e2e-two-faced(-\d+)?$/);
       expect(await imported(tmdbId)).toEqual([expect.objectContaining({ type: "series", imdbId: "tt9900004" })]);
     } finally {
       await cleanUp(tmdbId);
@@ -145,7 +145,7 @@ test.describe("import", () => {
     try {
       await search(page, "E2E Gap Filler");
       await card(page, "E2E Gap Filler").getByRole("button", { name: /^Import E2E/ }).click();
-      await expect(page).toHaveURL(/\?imported=1$/);
+      await expect(page).toHaveURL(/\/admin\/library\/(movies|series)\/[\w-]+$/);
       expect(await imported(tmdbId)).toEqual([
         expect.objectContaining({ runtimeMinutes: 97, country: "Ireland", synopsis: "Filled in from IMDb." }),
       ]);
@@ -160,7 +160,7 @@ test.describe("import", () => {
     try {
       await search(page, "E2E Offline Check");
       await card(page, "E2E Offline Check").getByRole("button", { name: /^Import E2E/ }).click();
-      await expect(page).toHaveURL(/\?imported=1$/);
+      await expect(page).toHaveURL(/\/admin\/library\/(movies|series)\/[\w-]+$/);
       await expect(main.getByText("Not checked against IMDb")).toBeVisible();
       expect(await imported(tmdbId)).toEqual([expect.objectContaining({ imdbId: null })]);
     } finally {
@@ -176,7 +176,7 @@ test.describe("import", () => {
       const result = card(page, "E2E No Poster");
       await expect(result.getByRole("img", { name: "E2E No Poster" })).toHaveAttribute("src", /no-poster\.jpg/);
       await result.getByRole("button", { name: /^Import E2E/ }).click();
-      await expect(page).toHaveURL(/\?imported=1$/);
+      await expect(page).toHaveURL(/\/admin\/library\/(movies|series)\/[\w-]+$/);
       await expect(main.getByRole("img", { name: "E2E No Poster" })).toHaveAttribute("src", /no-poster\.jpg/);
       await expect(main.getByLabel("Poster image link")).toHaveValue("");
       expect(await sql(`SELECT "posterUrl" FROM media WHERE "tmdbId" = $1`, [tmdbId])).toEqual([
@@ -652,7 +652,7 @@ test.describe("TMDB seasons and episodes bulk import", () => {
 
       // 2. Import series draft
       await card(page, title).getByRole("button", { name: /import e2e series import/i }).click();
-      await expect(page).toHaveURL(/\/admin\/library\/series\/e2e-series-import(-\d+)?\?imported=1$/);
+      await expect(page).toHaveURL(/\/admin\/library\/series\/e2e-series-import(-\d+)?$/);
 
       // Extract generated series ID from URL
       const url = new URL(page.url());
@@ -684,3 +684,33 @@ test.describe("TMDB seasons and episodes bulk import", () => {
   });
 });
 
+test.describe("Refresh from TMDB", () => {
+  test.use({ httpCredentials: ADMIN_CREDENTIALS, storageState: ADMIN_STATE });
+
+  test("fills a title's empty fields from TMDB and keeps the rest", async ({ page }) => {
+    const id = `e2e-refresh-${Date.now()}`;
+    await sql(
+      `INSERT INTO media (id, type, status, title, year, duration, "runtimeMinutes", genres, country, language, synopsis, "posterUrl", "tmdbId", "createdAt", "updatedAt")
+       VALUES ($1, 'movie', 'draft', 'E2E Refresh Me (edited)', 2022, '1h 44m', 104, ARRAY['Drama'], 'Canada', 'English', '', '/brand/no-poster.jpg', 'movie/990012', now(), now())`,
+      [id]
+    );
+    try {
+      await page.goto(`/admin/library/movies/${id}`);
+      await page.getByRole("button", { name: "Refresh from TMDB" }).click();
+      const dialog = page.getByRole("dialog", { name: "Refresh metadata from TMDB" });
+      await dialog.getByRole("button", { name: "Run Refresh" }).click();
+      await expect(dialog).toContainText(/Refreshed \d+ fields from TMDB/);
+
+      const [row] = await sql<{ title: string; synopsis: string; posterUrl: string; status: string }>(
+        `SELECT title, synopsis, "posterUrl", status FROM media WHERE id = $1`,
+        [id]
+      );
+      expect(row.title).toBe("E2E Refresh Me (edited)");
+      expect(row.synopsis).toBe("E2E Refresh Me, as TMDB tells it.");
+      expect(row.posterUrl).toContain("image.tmdb.org");
+      expect(row.status).toBe("draft");
+    } finally {
+      await sql(`DELETE FROM media WHERE id = $1`, [id]);
+    }
+  });
+});
