@@ -1,3 +1,4 @@
+import { findPublishedIds } from "@/lib/catalog";
 import { db } from "@/lib/db";
 import type { FavoriteEntry, HistoryEntry, Library, MediaList } from "@/lib/library-types";
 
@@ -23,17 +24,29 @@ export async function loadLibrary(userId: string): Promise<Library> {
     }),
   ]);
 
+  // Titles taken off the site since they were saved stay saved, but out
+  // of sight until they're back.
+  const published = await findPublishedIds([
+    ...favorites.map((row) => row.mediaId),
+    ...history.map((row) => row.mediaId),
+    ...lists.flatMap((list) => list.items.map((item) => item.mediaId)),
+  ]);
+  const shown = <T extends { mediaId: string }>(rows: T[]) =>
+    rows.filter((row) => published.has(row.mediaId));
+
   return {
     favorites: Object.fromEntries(
-      favorites.map((row) => [row.mediaId, row.entry as FavoriteEntry])
+      shown(favorites).map((row) => [row.mediaId, row.entry as FavoriteEntry])
     ),
     history: Object.fromEntries(
-      history.map((row) => [
+      shown(history).map((row) => [
         row.mediaId,
         { ...(row.entry as FavoriteEntry), watchedAt: row.watchedAt.toISOString() } satisfies HistoryEntry,
       ])
     ),
-    lists: Object.fromEntries(lists.map((list) => [list.id, toMediaList(list)])),
+    lists: Object.fromEntries(
+      lists.map((list) => [list.id, toMediaList({ ...list, items: shown(list.items) })])
+    ),
   };
 }
 
@@ -56,11 +69,15 @@ export function toMediaList(list: {
 /**
  * A list, for /list/[id]. The page shows it to its owner, and to anyone
  * with the link once the owner shares it (list ids are random UUIDs).
+ * Like loadLibrary, it leaves out titles that aren't published now.
  */
 export async function findList(id: string) {
   const list = await db.mediaList.findUnique({
     where: { id },
     include: { items: { orderBy: { addedAt: "asc" } } },
   });
-  return list ? { ownerId: list.userId, list: toMediaList(list) } : null;
+  if (!list) return null;
+  const published = await findPublishedIds(list.items.map((item) => item.mediaId));
+  const items = list.items.filter((item) => published.has(item.mediaId));
+  return { ownerId: list.userId, list: toMediaList({ ...list, items }) };
 }

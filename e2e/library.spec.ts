@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { createVerifiedAccount, newAccount } from "./accounts";
+import { createVerifiedAccount, newAccount, sql } from "./accounts";
 import { guestPage, signedInPage, test, expect } from "./fixtures";
 
 /*
@@ -72,6 +72,73 @@ test("favorites and lists follow the account to another device", async ({ browse
   await expect(guest.getByText("This list is empty.")).toBeVisible();
 });
 
+test("favorites list newest first, a removal can be undone, and drafts stay hidden", async ({
+  browser,
+  request,
+}) => {
+  const account = newAccount("favorites");
+  await createVerifiedAccount(request, account);
+  const page = await signedInPage(browser, account);
+  for (const id of ["chosen-family", "loud-address"]) {
+    await page.goto(id === "chosen-family" ? `/movie/${id}` : `/series/${id}`, {
+      waitUntil: "networkidle",
+    });
+    await saved(page, () => page.getByRole("button", { name: "Add to Favorites" }).click());
+  }
+  // Saved before the title went back to being a draft.
+  await sql(
+    `INSERT INTO favorite ("userId", "mediaId", entry)
+     SELECT id, 'cabin-fever', $2::jsonb FROM "user" WHERE email = $1`,
+    [
+      account.email,
+      JSON.stringify({ id: "cabin-fever", title: "Cabin Fever", year: 2024, duration: "1h", type: "movie", genre: "Drama" }),
+    ]
+  );
+
+  await page.goto("/account/favorite");
+  const titles = page.locator("main a p:first-of-type");
+  await expect(titles).toHaveText(["Loud Address", "Chosen Family"]);
+
+  await saved(page, () =>
+    page.getByRole("button", { name: "Remove from favorites" }).first().click()
+  );
+  await expect(titles).toHaveText(["Chosen Family"]);
+  await saved(page, () =>
+    page.getByRole("status").filter({ hasText: "Removed from Favorites" }).getByRole("button", { name: "Undo" }).click()
+  );
+  await expect(titles).toHaveText(["Loud Address", "Chosen Family"]);
+  await page.reload();
+  await expect(titles).toHaveText(["Loud Address", "Chosen Family"]);
+});
+
+test("a list's page leads back to My Lists, and can rename and delete it", async ({
+  browser,
+  request,
+}) => {
+  const account = newAccount("list-page");
+  await createVerifiedAccount(request, account);
+  const page = await signedInPage(browser, account);
+  await page.goto("/account/favorite?tab=lists");
+  await page.getByRole("button", { name: "Create List" }).click();
+  await page.getByLabel("List name").fill("Rainy Day");
+  await saved(page, () => page.getByRole("button", { name: "Create", exact: true }).click());
+  await page.getByRole("link", { name: /Rainy Day/ }).click();
+  await expect(page).toHaveTitle("Rainy Day · Gayflix");
+
+  await page.getByRole("button", { name: "Rename" }).click();
+  await page.getByLabel("List name").fill("Sunny Day");
+  await saved(page, () => page.getByRole("button", { name: "Save" }).click());
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Sunny Day");
+
+  await page.getByRole("link", { name: "My Lists" }).click();
+  await expect(page).toHaveURL(/\/account\/favorite\?tab=lists$/);
+  await page.getByRole("link", { name: /Sunny Day/ }).click();
+  await page.getByRole("button", { name: "Delete" }).click();
+  await saved(page, () => page.getByRole("dialog").getByRole("button", { name: "Delete" }).click());
+  await expect(page).toHaveURL(/\/account\/favorite\?tab=lists$/);
+  await expect(page.getByRole("link", { name: /Sunny Day/ })).toHaveCount(0);
+});
+
 test("add a title to a list from its own, watch and episode pages", async ({ browser, request }) => {
   // A guest is asked to log in, and comes back to the title.
   const guest = await guestPage(browser);
@@ -129,6 +196,12 @@ test("a guest's watch history moves into their account", async ({ browser, reque
   await page.getByLabel("Password").fill(account.password);
   await page.getByRole("button", { name: "Log In" }).click();
   await expect(page).toHaveURL(/\/account\/history$/);
+  // It asks first: a shared computer's guest history may not be theirs.
+  const offer = page.getByRole("region", { name: "Watched on this browser" });
+  await expect(offer).toContainText("1 title was watched here before you logged in.");
+  await expect(page.locator('main a[href="/movie/chosen-family"]')).toHaveCount(0);
+  await offer.getByRole("button", { name: "Add" }).click();
+  await expect(offer).toBeHidden();
   await expect(page.locator('main a[href="/movie/chosen-family"]')).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => window.localStorage.getItem("gayflix:history")))
@@ -137,6 +210,30 @@ test("a guest's watch history moves into their account", async ({ browser, reque
   const otherDevice = await signedInPage(browser, account);
   await otherDevice.goto("/account/history");
   await expect(otherDevice.locator('main a[href="/movie/chosen-family"]')).toBeVisible();
+});
+
+test("someone else's guest history can be cleared instead", async ({ browser, request }) => {
+  const account = newAccount("history-clear");
+  await createVerifiedAccount(request, account);
+
+  const page = await guestPage(browser);
+  await page.goto("/watch/chosen-family", { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Play Chosen Family" }).click();
+  await page.goto("/login?next=%2Faccount%2Fhistory");
+  await page.getByLabel("Email").fill(account.email);
+  await page.getByLabel("Password").fill(account.password);
+  await page.getByRole("button", { name: "Log In" }).click();
+  await expect(page).toHaveURL(/\/account\/history$/);
+
+  const offer = page.getByRole("region", { name: "Watched on this browser" });
+  await offer.getByRole("button", { name: "Clear" }).click();
+  await expect(offer).toBeHidden();
+  await expect
+    .poll(() => page.evaluate(() => window.localStorage.getItem("gayflix:history")))
+    .toBe("{}");
+  await page.reload();
+  await expect(page.locator('main a[href="/movie/chosen-family"]')).toHaveCount(0);
+  await expect(offer).toBeHidden();
 });
 
 test("signed-in users get five reports a day", async ({ browser, request }) => {

@@ -22,6 +22,7 @@ export const SAVE_FAILED = "Couldn't save that. Please try again.";
  * src/lib/library-actions.ts). `initial` comes from the server render of
  * the (main) layout, so there's no loading flash. Changes show
  * immediately and are undone, with a toast, if the server rejects them.
+ * Removing one offers Undo.
  * Guests have no favorites; FavoriteButton asks them to log in.
  */
 export function FavoritesProvider({
@@ -38,35 +39,52 @@ export function FavoritesProvider({
 
   const isFavorite = useCallback((id: string) => Boolean(favorites[id]), [favorites]);
 
+  // Shows the change at once and saves it; puts it back if the save fails.
+  const save = useCallback(
+    (entry: FavoriteEntry, on: boolean) => {
+      const apply = (value: boolean) =>
+        setFavorites((prev) => {
+          const next = { ...prev };
+          if (value) next[entry.id] = entry;
+          else delete next[entry.id];
+          return next;
+        });
+      apply(on);
+      library.setFavorite(entry, on).catch(() => {
+        apply(!on);
+        showToast(SAVE_FAILED, { type: "error" });
+      });
+    },
+    [showToast]
+  );
+
   const toggleFavorite = useCallback(
     (entry: FavoriteEntry) => {
       if (!userId) {
-        showToast("Log in to save favorites");
+        showToast("Log in to save favorites", { type: "info" });
         return;
       }
       // Decide add vs. remove once, up front, so the stored result and
       // the toast can never disagree (and the updaters stay pure).
       const wasFavorite = Boolean(favorites[entry.id]);
-      const apply = (on: boolean) =>
-        setFavorites((prev) => {
-          const next = { ...prev };
-          if (on) next[entry.id] = entry;
-          else delete next[entry.id];
-          return next;
+      save(entry, !wasFavorite);
+      if (wasFavorite) {
+        // Undo adds it straight back (not a toggle, which would read the
+        // favorites as they were when this toast went up).
+        showToast("Removed from Favorites", {
+          action: { label: "Undo", onClick: () => save(entry, true) },
         });
-
-      apply(!wasFavorite);
-      showToast(wasFavorite ? "Removed from Favorites" : "Added to Favorites");
-      library.setFavorite(entry, !wasFavorite).catch(() => {
-        apply(wasFavorite);
-        showToast(SAVE_FAILED);
-      });
+      } else {
+        showToast("Added to Favorites");
+      }
     },
-    [favorites, showToast, userId]
+    [favorites, save, showToast, userId]
   );
 
   const value = useMemo<FavoritesContextValue>(
-    () => ({ favorites: Object.values(favorites), isFavorite, toggleFavorite }),
+    // Newest first: the server sends them oldest first, and new ones are
+    // added at the end.
+    () => ({ favorites: Object.values(favorites).reverse(), isFavorite, toggleFavorite }),
     [favorites, isFavorite, toggleFavorite]
   );
 

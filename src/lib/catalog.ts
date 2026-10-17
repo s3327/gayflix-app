@@ -562,6 +562,25 @@ export async function findEpisodeIds(ids: string[]): Promise<Set<string>> {
   return new Set(rows.map((row) => row.id));
 }
 
+/**
+ * Which of these ids are still on the public site: published titles, and
+ * episodes of published series. Saved favorites, history and lists hide
+ * the rest (src/lib/library.ts), so they never lead to a 404.
+ */
+export async function findPublishedIds(ids: string[]): Promise<Set<string>> {
+  await connection();
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return new Set();
+  const [titles, episodes] = await Promise.all([
+    db.media.findMany({ where: { id: { in: unique }, ...PUBLISHED }, select: { id: true } }),
+    db.episode.findMany({
+      where: { id: { in: unique }, media: PUBLISHED },
+      select: { id: true },
+    }),
+  ]);
+  return new Set([...titles, ...episodes].map((row) => row.id));
+}
+
 // --- Views -------------------------------------------------------------------
 
 /**

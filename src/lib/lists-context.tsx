@@ -59,7 +59,7 @@ export function ListsProvider({
           else delete next[listId];
           return next;
         });
-        showToast(SAVE_FAILED);
+        showToast(SAVE_FAILED, { type: "error" });
       });
     },
     [lists, showToast]
@@ -76,7 +76,7 @@ export function ListsProvider({
   const createList = useCallback(
     (name: string, firstItem?: FavoriteEntry) => {
       if (!userId) {
-        showToast("Log in to make lists");
+        showToast("Log in to make lists", { type: "info" });
         return undefined;
       }
       const newList: MediaList = {
@@ -146,7 +146,7 @@ export function ListsProvider({
       const list = lists[listId];
       if (!list) return;
       if (list.items.some((item) => item.id === entry.id)) {
-        showToast(`Already in "${list.name}"`);
+        showToast(`Already in "${list.name}"`, { type: "info" });
         return;
       }
       commit(
@@ -220,11 +220,16 @@ export function useLists() {
 }
 
 /** Copies a list's link, which works for anyone once the list is shared. */
-export async function copyListLink(listId: string, showToast: (message: string) => void) {
+export async function copyListLink(
+  listId: string,
+  showToast: ReturnType<typeof useToast>["showToast"]
+) {
   try {
     await navigator.clipboard.writeText(`${window.location.origin}/list/${listId}`);
     showToast("Link copied to clipboard");
   } catch {
-    showToast("Couldn't copy the link. Open the list and copy it from the address bar.");
+    showToast("Couldn't copy the link. Open the list and copy it from the address bar.", {
+      type: "error",
+    });
   }
 }
