@@ -41,7 +41,7 @@ test("a title appears once it's published and goes away when it's unpublished", 
     await page.goto("/new-releases");
     await expect(page.locator("main a").first()).toHaveAttribute("href", `/movie/${id}`);
     await page.goto(`/search?q=${encodeURIComponent(id)}`);
-    await expect(page.getByText("1 title found")).toBeVisible();
+    await expect(page.getByRole("main").getByText("1 title found")).toBeVisible();
 
     await sql(`UPDATE media SET status = 'draft' WHERE id = $1`, [id]);
     expect((await page.goto(`/movie/${id}`))?.status()).toBe(404);
@@ -138,4 +138,31 @@ test.describe("admin library", () => {
       "3 Seasons · 18 Episodes"
     );
   });
+});
+
+test("You Might Also Like puts the titles sharing the most first", async ({ page }) => {
+  const id = `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const genre = `E2E Genre ${id}`;
+  const insert = (suffix: string, tags: string[], director: string | null) =>
+    sql(
+      `INSERT INTO media (id, type, status, title, year, duration, genres, tags, director, country, language, "posterUrl", "updatedAt")
+       VALUES ($1, 'movie', 'published', $2, 2026, '1h 30m', ARRAY[$3], $4, $5, 'Canada', 'French',
+               'https://picsum.photos/seed/e2e/500/750', now())`,
+      [`${id}-${suffix}`, `E2E Related ${suffix} ${id}`, genre, tags, director]
+    );
+  await insert("a", ["e2e-shared"], `Director ${id}`);
+  await insert("b", ["e2e-shared"], `Director ${id}`);
+  await insert("c", [], null);
+  try {
+    await page.goto(`/movie/${id}-a`);
+    const row = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "You Might Also Like" }) });
+    const links = row.getByRole("link");
+    await expect(links.first()).toHaveAttribute("href", `/movie/${id}-b`);
+    await expect(links.nth(1)).toHaveAttribute("href", `/movie/${id}-c`);
+    await expect(row.locator(`a[href="/movie/${id}-a"]`)).toHaveCount(0);
+  } finally {
+    await sql(`DELETE FROM media WHERE id LIKE $1`, [`${id}-%`]);
+  }
 });

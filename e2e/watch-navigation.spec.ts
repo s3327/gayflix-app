@@ -513,3 +513,28 @@ test.describe("watch player episode navigation and redirects", () => {
     }
   });
 });
+
+test("a series page continues from the episode played last and ticks it", async ({ page }) => {
+  const main = page.locator("main");
+  await page.goto("/series/the-brownstone");
+  const play = main.getByRole("link", { name: "Start Watching" });
+  await expect(play).toHaveAttribute("href", "/episode/the-brownstone-season-1-episode-1");
+
+  await page.goto("/episode/the-brownstone-season-1-episode-2");
+  await main.getByRole("button", { name: /^Play The Brownstone/ }).click();
+
+  await page.goto("/series/the-brownstone");
+  const resume = main.getByRole("link", { name: "Continue S1 E2" });
+  await expect(resume).toHaveAttribute("href", "/episode/the-brownstone-season-1-episode-2");
+  await expect(main.getByRole("link", { name: /^Watched:/ })).toHaveAttribute(
+    "href",
+    "/episode/the-brownstone-season-1-episode-2"
+  );
+});
+
+test("unknown title and episode addresses still answer 404", async ({ request }) => {
+  for (const path of ["/movie/no-such-title", "/series/no-such-title", "/watch/no-such-title", "/episode/no-such-episode"]) {
+    expect((await request.get(path, { maxRedirects: 0 })).status(), path).toBe(404);
+  }
+  expect((await request.get("/movie/the-brownstone", { maxRedirects: 0 })).status()).toBe(307);
+});
