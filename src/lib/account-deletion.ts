@@ -6,6 +6,8 @@
  * unit-tested.
  */
 
+import { isStaffRole } from "@/lib/admin-roles";
+
 export type DeletionRequest = {
   role: string | null | undefined;
   /** An admin is signed in as this account from the admin panel. */
@@ -20,8 +22,8 @@ export function accountDeletionProblem(request: DeletionRequest): string | null 
   if (request.impersonating) {
     return "This account can't be deleted while an admin is signed in as it.";
   }
-  // Keeps the admin panel from losing its last admin by accident.
-  if (request.role === "admin") {
+  // Keeps the admin panel from losing its last admin (or its Owner) by accident.
+  if (isStaffRole(request.role)) {
     return "Admin accounts can't be deleted. Ask another admin to remove your admin role first.";
   }
   // Better Auth would otherwise accept any session less than a day old.

@@ -9,8 +9,10 @@ import SeasonTableEditor from "@/components/admin/SeasonTableEditor";
 import TitleForm from "@/components/admin/TitleForm";
 import VideoSources from "@/components/admin/VideoSources";
 import TmdbRefreshModal from "@/components/admin/TmdbRefreshModal";
+import TitleRevisionsModal from "@/components/admin/TitleRevisionsModal";
 import { restoreTitle, trashTitle, updateTitle } from "@/lib/admin-catalog-actions";
 import { getLiveHero, getTitleForEdit } from "@/lib/catalog";
+import { getTitleRevisions } from "@/lib/title-revisions";
 import { imageHosts, uploadHost } from "@/lib/image-hosts.mjs";
 import type { MediaType } from "@/lib/media";
 import { imageUrlProblem, libraryPath, NO_POSTER, titleValues } from "@/lib/title-form";
@@ -35,7 +37,11 @@ export default async function TitleEditPage({
   /** Just imported: the Import page opens it with ?imported=1. */
   imported: boolean;
 }) {
-  const [row, currentHero] = await Promise.all([getTitleForEdit(id), getLiveHero()]);
+  const [row, currentHero, revisions] = await Promise.all([
+    getTitleForEdit(id),
+    getLiveHero(),
+    getTitleRevisions(id),
+  ]);
   if (!row) notFound();
   // A series opened under /movies (or the other way round).
   if (row.type !== type) redirect(`${libraryPath(row.type)}/${row.id}`);
@@ -93,6 +99,13 @@ export default async function TitleEditPage({
                   currentImdbId={row.imdbId}
                 />
               )}
+              <TitleRevisionsModal
+                mediaId={row.id}
+                initialRevisions={revisions.map((r) => ({
+                  ...r,
+                  createdAt: r.createdAt.toISOString(),
+                }))}
+              />
               <form action={trashTitle.bind(null, row.id)}>
                 <button type="submit" className={BUTTON_DANGER}>
                   Move to trash

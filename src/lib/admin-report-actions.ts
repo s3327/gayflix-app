@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { setAdminFlash } from "@/lib/admin-flash";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/session";
+import { moderationSession, FORBIDDEN_USERS } from "@/lib/admin-guard";
 
 /*
  * Server functions behind /admin/reports. Each one checks for an admin
@@ -21,7 +21,11 @@ export async function resolveReport(
   id: unknown,
   notesOrFormData?: string | FormData
 ): Promise<void> {
-  const session = await requireAdmin();
+  const { session, allowed } = await moderationSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_USERS });
+    return;
+  }
   const reportId = requireReportId(id);
   const notes =
     typeof notesOrFormData === "string"
@@ -55,7 +59,11 @@ export async function resolveAllForMedia({
   disableSources?: boolean;
   notes?: string;
 }): Promise<{ ok: boolean; resolvedCount: number }> {
-  const session = await requireAdmin();
+  const { session, allowed } = await moderationSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_USERS });
+    return { ok: false, resolvedCount: 0 };
+  }
   if (!mediaId) return { ok: false, resolvedCount: 0 };
 
   if (disableSources) {
@@ -93,7 +101,11 @@ export async function resolveAllForMedia({
 
 export async function reopenReport(id: unknown, _formData?: unknown): Promise<void> {
   void _formData;
-  await requireAdmin();
+  const { allowed } = await moderationSession();
+  if (!allowed) {
+    await setAdminFlash({ message: FORBIDDEN_USERS });
+    return;
+  }
   const reportId = requireReportId(id);
   await db.report.updateMany({
     where: { id: reportId },

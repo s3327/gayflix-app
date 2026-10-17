@@ -50,8 +50,8 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      - run: npm run build
       - run: npm run db:deploy
+      - run: npm run build
       # End-to-end + accessibility (axe) tests against the production build.
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
