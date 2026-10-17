@@ -6,9 +6,16 @@ import { setAdminFlash } from "@/lib/admin-flash";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
-import { isUserId, parseBanForm, userActionProblem, type UserAction } from "@/lib/user-admin";
+import { isBanned, isUserId, parseBanForm, userActionProblem, type UserAction } from "@/lib/user-admin";
 import { logActivity } from "@/lib/activity-logger";
-import { canManageUsers, isOwner, type UserRole } from "@/lib/admin-roles";
+import {
+  canManageUsers,
+  isOwner,
+  isStaffRole,
+  roleChangeProblem,
+  staffTargetProblem,
+  type UserRole,
+} from "@/lib/admin-roles";
 
 /*
  * Server functions behind /admin/users. Each one checks for an admin
@@ -30,7 +37,10 @@ async function allowedTarget(action: UserAction, userId: unknown) {
     select: { id: true, email: true, name: true, role: true, emailVerified: true, banned: true, banExpires: true },
   });
   if (!user) throw new Error("No such user");
-  const problem = userActionProblem(action, session.user.id, user);
+  const problem =
+    (action === "make-admin" || action === "remove-admin"
+      ? roleChangeProblem(session.user.role, user.role, action === "make-admin" ? "admin" : "user")
+      : staffTargetProblem(session.user.role, user.role)) ?? userActionProblem(action, session.user.id, user);
   if (problem) throw new Error(problem);
   return { user, session };
 }
@@ -82,7 +92,7 @@ export async function setUserRole(userId: unknown, newRoleArg: unknown): Promise
   if (!isUserId(userId)) return { ok: false, message: "Invalid user ID" };
   const target = await db.user.findUnique({
     where: { id: userId },
-    select: { id: true, email: true, role: true },
+    select: { id: true, email: true, role: true, emailVerified: true, banned: true, banExpires: true },
   });
   if (!target) return { ok: false, message: "User not found" };
 
@@ -90,19 +100,19 @@ export async function setUserRole(userId: unknown, newRoleArg: unknown): Promise
     return { ok: false, message: "You cannot change your own role here." };
   }
 
-  // Owner protection
-  if (target.role === "owner" && !isOwner(session.user.role)) {
-    return { ok: false, message: "Only the Owner can transfer ownership or modify the Owner account." };
-  }
-
-  const role = String(newRoleArg).toLowerCase() as UserRole;
-  if (!["owner", "admin", "editor", "moderator", "user"].includes(role)) {
+  const role = typeof newRoleArg === "string" ? (newRoleArg.toLowerCase() as UserRole) : undefined;
+  if (!role || !["owner", "admin", "editor", "moderator", "user"].includes(role)) {
     return { ok: false, message: "Invalid role specified." };
   }
 
-  if (role === "owner" && !isOwner(session.user.role)) {
-    return { ok: false, message: "Only the current Owner can transfer ownership." };
+  // Who may change whom (src/lib/admin-roles.ts), then the panel's rules
+  // for giving staff access: a confirmed email, and not banned.
+  const problem = roleChangeProblem(session.user.role, target.role, role);
+  if (problem) return { ok: false, message: problem };
+  if (isStaffRole(role) && !target.emailVerified) {
+    return { ok: false, message: "This account hasn't confirmed its email yet, so it can't sign in." };
   }
+  if (isStaffRole(role) && isBanned(target)) return { ok: false, message: "Unban this account first." };
 
   await db.user.update({
     where: { id: target.id },
@@ -205,9 +215,19 @@ export async function updateUserDetails(
 
   const existing = await db.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, emailVerified: true },
+    select: { id: true, name: true, email: true, emailVerified: true, role: true },
   });
   if (!existing) return { ok: false, message: "User not found" };
+  if (existing.id === session.user.id) {
+    return { ok: false, message: "Change your own details from your account page." };
+  }
+  const targetProblem = staffTargetProblem(session.user.role, existing.role);
+  if (targetProblem) return { ok: false, message: targetProblem };
+  // A staff account's email is its way back in (password reset), so
+  // moving it elsewhere would hand the account over.
+  if (email !== existing.email && isStaffRole(existing.role) && !isOwner(session.user.role)) {
+    return { ok: false, message: "Only the Owner can change a staff account's email." };
+  }
 
   // Check email uniqueness if changing email
   if (email !== existing.email) {
@@ -252,9 +272,11 @@ export async function resetUserTwoFactor(userId: unknown): Promise<{ ok: boolean
   });
   if (!target) return { ok: false, message: "User not found" };
 
-  if (target.role === "owner" && !isOwner(session.user.role)) {
-    return { ok: false, message: "Only the Owner can reset 2FA on the Owner account." };
+  if (target.id === session.user.id) {
+    return { ok: false, message: "You can't reset your own two-factor here." };
   }
+  const targetProblem = staffTargetProblem(session.user.role, target.role);
+  if (targetProblem) return { ok: false, message: targetProblem };
 
   await db.$transaction([
     db.twoFactor.deleteMany({ where: { userId: target.id } }),

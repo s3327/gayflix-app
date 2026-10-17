@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import FormError from "@/components/FormError";
 import TwoFactorForm from "@/components/TwoFactorForm";
+import { isStaffRole } from "@/lib/admin-roles";
 import { authClient, authErrorMessage } from "@/lib/auth-client";
 import { safeAdminNextPath } from "@/lib/safe-redirect";
 
@@ -16,7 +17,7 @@ export default function AdminLoginForm({ nextUrl }: { nextUrl?: string }) {
   const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
 
   async function enter(user: { role?: string | null } | undefined) {
-    if (user?.role !== "admin") {
+    if (!isStaffRole(user?.role)) {
       setNeedsTwoFactor(false);
       await authClient.signOut().catch(() => {});
       setError("This account doesn't have admin access.");

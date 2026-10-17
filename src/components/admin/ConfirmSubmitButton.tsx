@@ -5,7 +5,9 @@ import ConfirmModal from "@/components/ConfirmModal";
 
 /**
  * A submit button that asks first, for actions that can't be undone.
- * Put it inside the form it submits.
+ * Put it inside the form it submits. Pressing Enter in one of the form's
+ * fields asks too: the browser submits with the hidden button, which only
+ * goes through once the dialog is confirmed.
  */
 export default function ConfirmSubmitButton({
   children,
@@ -26,6 +28,7 @@ export default function ConfirmSubmitButton({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const hiddenSubmitRef = useRef<HTMLButtonElement>(null);
+  const confirmedRef = useRef(false);
 
   return (
     <>
@@ -41,6 +44,14 @@ export default function ConfirmSubmitButton({
         ref={hiddenSubmitRef}
         type="submit"
         formAction={formAction}
+        onClick={(event) => {
+          if (confirmedRef.current) {
+            confirmedRef.current = false;
+            return;
+          }
+          event.preventDefault();
+          setIsOpen(true);
+        }}
         className="sr-only"
         tabIndex={-1}
         aria-hidden="true"
@@ -52,6 +63,7 @@ export default function ConfirmSubmitButton({
           confirmLabel={confirmLabel}
           onConfirm={() => {
             setIsOpen(false);
+            confirmedRef.current = true;
             hiddenSubmitRef.current?.click();
           }}
           onClose={() => setIsOpen(false)}

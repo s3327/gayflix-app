@@ -33,6 +33,43 @@ export function isOwner(role: string | null | undefined): boolean {
   return role === "owner";
 }
 
+/** Whether the role may change other accounts' roles (owner, admin). */
+export function canChangeRoles(role: string | null | undefined): boolean {
+  return role === "owner" || role === "admin";
+}
+
+/**
+ * Why a staff member with `actorRole` can't change an account with
+ * `targetRole` (edit it, ban it, sign it out, reset its two-factor), or
+ * null if they can. Only the Owner changes the Owner account; moderators
+ * change members only, never other staff. The panel's own rules
+ * (userActionProblem in src/lib/user-admin.ts) apply on top.
+ */
+export function staffTargetProblem(
+  actorRole: string | null | undefined,
+  targetRole: string | null | undefined
+): string | null {
+  if (!canManageUsers(actorRole)) return "You don't have permission to manage accounts.";
+  if (isOwner(targetRole) && !isOwner(actorRole)) return "Only the Owner can change the Owner account.";
+  if (!canChangeRoles(actorRole) && isStaffRole(targetRole)) {
+    return "Moderators can only change member accounts.";
+  }
+  return null;
+}
+
+/** Why `actorRole` can't give an account with `targetRole` the role `newRole`, or null. */
+export function roleChangeProblem(
+  actorRole: string | null | undefined,
+  targetRole: string | null | undefined,
+  newRole: string
+): string | null {
+  if (!canChangeRoles(actorRole)) return "Only an Owner or an Admin can change roles.";
+  const problem = staffTargetProblem(actorRole, targetRole);
+  if (problem) return problem;
+  if (newRole === "owner" && !isOwner(actorRole)) return "Only the Owner can make another Owner.";
+  return null;
+}
+
 /** Human-readable label for a role. */
 export function roleLabel(role: string | null | undefined): string {
   switch (role) {

@@ -949,20 +949,24 @@ export async function getCatalogOverview() {
 }
 
 /**
- * Resolves an old episode slug to its latest slug through any episode redirects.
- * Follows chained redirects up to 10 hops.
+ * Resolves an old episode slug to its latest slug through any episode
+ * redirects, following chains up to 10 hops. A chain that loops back on
+ * itself leads nowhere (null), so the page is a 404 rather than a
+ * redirect loop.
  */
 export async function resolveEpisodeRedirect(slug: string): Promise<string | null> {
+  await connection();
+  const seen = new Set([slug]);
   let currentSlug = slug;
-  let hops = 0;
-  while (hops < 10) {
+  while (seen.size <= 10) {
     const redirect = await db.episodeRedirect.findFirst({
       where: { oldSlug: currentSlug },
       select: { newSlug: true },
     });
     if (!redirect) break;
+    if (seen.has(redirect.newSlug)) return null;
+    seen.add(redirect.newSlug);
     currentSlug = redirect.newSlug;
-    hops++;
   }
-  return hops > 0 ? currentSlug : null;
+  return currentSlug === slug ? null : currentSlug;
 }

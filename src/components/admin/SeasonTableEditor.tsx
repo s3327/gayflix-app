@@ -218,7 +218,8 @@ function SeasonTableEditorForm({
           </thead>
           <tbody className="divide-y divide-border-subtle">
             {rows.map((row, index) => {
-              const ep = episodes[index] ?? row;
+              // By id: after a save the episodes come back in their new order.
+              const ep = episodes.find((episode) => episode.id === row.id) ?? row;
               const epNumError = errors[`${row.id}-episodeNumber`];
               const titleError = errors[`${row.id}-title`];
               const stillError = errors[`${row.id}-stillUrl`];

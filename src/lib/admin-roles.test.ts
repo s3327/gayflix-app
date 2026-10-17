@@ -4,10 +4,13 @@ import {
   canManageJobs,
   canManageSettings,
   canManageUsers,
+  canChangeRoles,
   isOwner,
   isStaffRole,
   roleBadgeClass,
+  roleChangeProblem,
   roleLabel,
+  staffTargetProblem,
 } from "./admin-roles";
 
 describe("admin-roles RBAC", () => {
@@ -68,5 +71,35 @@ describe("admin-roles RBAC", () => {
     expect(roleBadgeClass("admin")).toContain("text-purple-400");
     expect(roleBadgeClass("editor")).toContain("text-blue-400");
     expect(roleBadgeClass("moderator")).toContain("text-emerald-400");
+  });
+});
+
+describe("who may change whom", () => {
+  it("lets only the Owner and Admins change roles", () => {
+    expect(canChangeRoles("owner")).toBe(true);
+    expect(canChangeRoles("admin")).toBe(true);
+    for (const role of ["editor", "moderator", "user", null]) expect(canChangeRoles(role)).toBe(false);
+  });
+
+  it("keeps editors out of accounts and moderators away from staff", () => {
+    expect(staffTargetProblem("editor", "user")).not.toBeNull();
+    expect(staffTargetProblem("moderator", "user")).toBeNull();
+    for (const target of ["moderator", "editor", "admin", "owner"]) {
+      expect(staffTargetProblem("moderator", target)).not.toBeNull();
+    }
+  });
+
+  it("protects the Owner account from everyone but the Owner", () => {
+    expect(staffTargetProblem("admin", "owner")).toBe("Only the Owner can change the Owner account.");
+    expect(staffTargetProblem("owner", "owner")).toBeNull();
+    expect(staffTargetProblem("admin", "admin")).toBeNull();
+  });
+
+  it("lets only the Owner hand out the Owner role", () => {
+    expect(roleChangeProblem("admin", "user", "admin")).toBeNull();
+    expect(roleChangeProblem("admin", "user", "owner")).toBe("Only the Owner can make another Owner.");
+    expect(roleChangeProblem("owner", "admin", "owner")).toBeNull();
+    expect(roleChangeProblem("moderator", "user", "moderator")).not.toBeNull();
+    expect(roleChangeProblem("editor", "user", "admin")).not.toBeNull();
   });
 });

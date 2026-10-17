@@ -87,6 +87,37 @@ export function userActionProblem(
   }
 }
 
+/** Every endpoint of Better Auth's admin plugin (/api/auth/admin/*). */
+export const ADMIN_API_PATHS = [
+  "/admin/set-role",
+  "/admin/get-user",
+  "/admin/create-user",
+  "/admin/update-user",
+  "/admin/list-users",
+  "/admin/list-user-sessions",
+  "/admin/unban-user",
+  "/admin/ban-user",
+  "/admin/impersonate-user",
+  "/admin/stop-impersonating",
+  "/admin/revoke-user-session",
+  "/admin/revoke-user-sessions",
+  "/admin/remove-user",
+  "/admin/set-user-password",
+  "/admin/has-permission",
+] as const;
+
+/**
+ * The admin endpoints the panel's server functions call, and which of
+ * the panel's rules each one is. The guard in src/lib/auth.ts refuses
+ * any other admin endpoint call except list-users.
+ */
+export const ADMIN_ENDPOINT_ACTIONS: Partial<Record<string, UserAction | "set-role">> = {
+  "/admin/set-role": "set-role",
+  "/admin/ban-user": "ban",
+  "/admin/unban-user": "unban",
+  "/admin/revoke-user-sessions": "sign-out",
+};
+
 export const BAN_REASON_MAX = 200;
 
 /** How long a ban lasts, as the ban form offers it. */
