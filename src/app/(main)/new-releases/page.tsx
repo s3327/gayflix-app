@@ -6,9 +6,21 @@ import Pagination from "@/components/Pagination";
 import Badge from "@/components/Badge";
 import { listTitles } from "@/lib/catalog";
 import { isRecentlyAdded } from "@/lib/is-new";
+import { listingMetadata } from "@/lib/page-metadata";
 import { pageParam, type SearchParams } from "@/lib/search-params";
 
-export const metadata: Metadata = { title: "Recently Added" };
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}): Promise<Metadata> {
+  return listingMetadata(
+    "Recently Added",
+    "/new-releases",
+    "The films and series added to Gayflix most recently.",
+    pageParam((await searchParams).page)
+  );
+}
 
 export default async function NewReleasesPage({
   searchParams: searchParamsPromise,

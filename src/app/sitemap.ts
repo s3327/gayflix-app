@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
-import { listPublishedTitles } from "@/lib/catalog";
+import { countryHref, genreHref, languageHref } from "@/lib/browse-href";
+import { listFilterValues, listPublishedEpisodes, listPublishedTitles } from "@/lib/catalog";
 import { siteUrl } from "@/lib/site-url";
 import { titleHref } from "@/lib/title-href";
 
@@ -21,18 +22,35 @@ const STATIC_PATHS = [
 ];
 
 /**
- * Lists every public page plus every published title (drafts never
- * appear). Built per request from the catalog, so it's never stale.
+ * Lists every public page, every published title and its episodes
+ * (drafts never appear), and Browse for each genre, country and
+ * language a published title has. Built per request from the catalog,
+ * so it's never stale.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
-  const titles = await listPublishedTitles();
+  const [titles, episodes, genres, countries, languages] = await Promise.all([
+    listPublishedTitles(),
+    listPublishedEpisodes(),
+    listFilterValues("genre"),
+    listFilterValues("country"),
+    listFilterValues("language"),
+  ]);
+  const facetPaths = [
+    ...genres.map(genreHref),
+    ...countries.map(countryHref),
+    ...languages.map(languageHref),
+  ];
 
   return [
-    ...STATIC_PATHS.map((path) => ({ url: new URL(path, base).href })),
+    ...[...STATIC_PATHS, ...facetPaths].map((path) => ({ url: new URL(path, base).href })),
     ...titles.map((title) => ({
       url: new URL(titleHref(title), base).href,
       lastModified: title.updatedAt,
+    })),
+    ...episodes.map((episode) => ({
+      url: new URL(`/episode/${episode.id}`, base).href,
+      lastModified: episode.updatedAt,
     })),
   ];
 }

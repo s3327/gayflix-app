@@ -425,6 +425,17 @@ export async function listPublishedTitles() {
   });
 }
 
+/** Every episode of a published series, for the sitemap. */
+export async function listPublishedEpisodes() {
+  await connection();
+  const rows = await db.episode.findMany({
+    where: { media: PUBLISHED },
+    orderBy: { id: "asc" },
+    select: { id: true, media: { select: { updatedAt: true } } },
+  });
+  return rows.map((row) => ({ id: row.id, updatedAt: row.media.updatedAt }));
+}
+
 // --- Search ------------------------------------------------------------------
 
 /**

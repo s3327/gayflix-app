@@ -32,9 +32,9 @@ function uniqueId() {
 /** A published title; deleting it deletes its episodes and sources too. */
 async function addTitle(id: string, title: string, type: "movie" | "series" = "movie") {
   await sql(
-    `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "createdAt", "updatedAt")
+    `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "publishedAt", "createdAt", "updatedAt")
      VALUES ($1, $2::media_type, 'published', $3, 2001, '1h 30m', ARRAY['Drama'], 'Canada', 'French', $4,
-             '2001-01-01', '2001-01-01')`,
+             '2001-01-01', '2001-01-01', '2001-01-01')`,
     [id, type, title, POSTER]
   );
 }
@@ -87,8 +87,24 @@ test("a movie or an episode without video is coming soon", async ({ page, consol
     await page.goto(`/episode/${episode}`);
     await expect(main.getByText("This episode isn't ready to watch yet. Check back soon.")).toBeVisible();
     await expect(main.getByRole("group", { name: "Servers" })).toHaveCount(0);
+    // It has no air date, so that line is left out rather than shown blank.
+    await expect(main.getByRole("term")).toContainText(["Genre", "Country", "Language", "Runtime"]);
+    await expect(main.getByText("Air Date")).toHaveCount(0);
   } finally {
     await sql(`DELETE FROM media WHERE id = ANY($1)`, [[movie.id, series.id]]);
+  }
+});
+
+test("a series without episodes says they're coming soon", async ({ page }) => {
+  const uid = uniqueId();
+  const series = { id: `e2e-player-empty-series-${uid}`, title: `E2E Empty Series ${uid}` };
+  await addTitle(series.id, series.title, "series");
+  try {
+    await page.goto(`/series/${series.id}`);
+    await expect(page.locator("main").getByText("Episodes coming soon")).toBeVisible();
+    await expect(page.getByRole("link", { name: /Start Watching|Continue/ })).toHaveCount(0);
+  } finally {
+    await sql(`DELETE FROM media WHERE id = $1`, [series.id]);
   }
 });
 
@@ -190,6 +206,9 @@ test("a server that can't play says so, and can be tried again", async ({
     await expect(alert).toContainText("Direct isn't working right now.");
     await expect(alert).toContainText("Try again, or choose another server below.");
     await expect(main.locator("video")).toHaveCount(0);
+    // Nothing played, so nothing was watched.
+    const views = await sql(`SELECT 1 FROM media_view WHERE "mediaId" = $1`, [movie.id]);
+    expect(views).toHaveLength(0);
     // Focus was on the video the message replaced, so it stays nearby.
     await page.keyboard.press("Tab");
     await expect(tryAgain).toBeFocused();

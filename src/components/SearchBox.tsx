@@ -243,8 +243,8 @@ export default function SearchBox() {
                           <p className="truncate text-sm font-semibold text-ink-primary">
                             {item.title}
                           </p>
-                          <p className="truncate text-xs capitalize text-ink-secondary">
-                            {item.type} · {item.year}
+                          <p className="truncate text-xs text-ink-secondary">
+                            {item.type === "movie" ? "Movie" : "Series"} · {item.year}
                           </p>
                         </div>
                       </>

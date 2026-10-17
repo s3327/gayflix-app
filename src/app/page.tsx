@@ -37,7 +37,7 @@ const FEATURES = [
   {
     icon: Heart,
     title: "Stories that are ours",
-    body: "Films and series about our lives, our loves and the families we choose, picked by the community.",
+    body: "Films and series about our lives, our loves and the families we choose, hand-picked for our community.",
   },
   {
     icon: Clapperboard,
@@ -177,7 +177,7 @@ export default async function LandingPage() {
               </span>
             </h1>
             <p className="mx-auto mt-5 max-w-xl text-base text-ink-secondary sm:text-lg">
-              LGBTQ+ films and series, picked by our community. Browse the whole collection,
+              LGBTQ+ films and series, hand-picked for our community. Browse the whole collection,
               and sign up to keep your favorites, lists and watch history.
             </p>
             <div className="mt-8">
