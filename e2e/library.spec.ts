@@ -279,3 +279,61 @@ test("guests get three reports a day, and can log in for more", async ({ browser
     `/login?next=${encodeURIComponent(episode)}`
   );
 });
+
+test("a card's quick actions play, favorite and add to a list", async ({ browser, request }) => {
+  const account = newAccount("quick");
+  await createVerifiedAccount(request, account);
+  const card = (page: Page) =>
+    page.locator("main").getByRole("link", { name: "Chosen Family 2025 · 1h 52m" });
+
+  // A mouse shortcut, out of the keyboard's and screen readers' way: the
+  // title's page has the same actions.
+  const action = (page: Page, role: "link" | "button", name: string) =>
+    page.getByRole(role, { name, includeHidden: true });
+
+  // On hover, over the poster, for anyone.
+  const guest = await guestPage(browser);
+  await guest.goto("/movie");
+  await card(guest).hover();
+  await expect(action(guest, "link", "Play Chosen Family")).toBeVisible();
+  await expect(action(guest, "link", "Play Chosen Family")).toHaveAttribute(
+    "href",
+    "/watch/chosen-family"
+  );
+  await action(guest, "button", "Favorite Chosen Family").click();
+  await expect(guest.getByRole("dialog", { name: "Log in to save favorites" })).toBeVisible();
+
+  const page = await signedInPage(browser, account);
+  await page.goto("/movie", { waitUntil: "networkidle" });
+  await card(page).hover();
+  const favorite = action(page, "button", "Favorite Chosen Family");
+  await saved(page, () => favorite.click());
+  await expect(favorite).toHaveAttribute("aria-pressed", "true");
+
+  await action(page, "button", "Add Chosen Family to a list").click();
+  await page.getByPlaceholder("New list name").fill("Quick");
+  await saved(page, () => page.getByRole("button", { name: "Create list" }).click());
+  await expect(page.getByRole("button", { name: /Quick/ })).toHaveAttribute("aria-pressed", "true");
+
+  const rows = await sql<{ favorites: number; items: number }>(
+    `SELECT (SELECT count(*)::int FROM favorite f WHERE f."userId" = u.id AND f."mediaId" = 'chosen-family') AS favorites,
+            (SELECT count(*)::int FROM list_item i JOIN media_list l ON l.id = i."listId"
+             WHERE l."userId" = u.id AND i."mediaId" = 'chosen-family') AS items
+     FROM "user" u WHERE u.email = $1`,
+    [account.email]
+  );
+  expect(rows[0]).toEqual({ favorites: 1, items: 1 });
+
+  // A touchscreen has no hover: a tap opens the title, which has the same actions.
+  const phone = await browser.newContext({
+    storageState: { cookies: [], origins: [] },
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  const touch = await phone.newPage();
+  await touch.goto("/movie");
+  await expect(card(touch)).toBeVisible();
+  await expect(action(touch, "link", "Play Chosen Family")).toBeHidden();
+  await phone.close();
+});

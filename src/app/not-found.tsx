@@ -70,7 +70,7 @@ export default async function NotFound() {
           </h2>
           <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-6 sm:gap-4">
             {popular.map((item) => (
-              <MediaCard key={item.id} item={item} />
+              <MediaCard key={item.id} item={item} actions={false} />
             ))}
           </div>
         </section>

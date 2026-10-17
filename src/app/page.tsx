@@ -221,7 +221,7 @@ export default async function LandingPage() {
                   key={title.id}
                   className={i >= 8 ? "hidden lg:block" : i >= 6 ? "hidden sm:block" : undefined}
                 >
-                  <MediaCard item={title} />
+                  <MediaCard item={title} actions={false} />
                 </li>
               ))}
             </ul>
