@@ -47,8 +47,8 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong className="font-semibold text-ink-primary">Sign-in sessions</strong>: one per
-            device, kept for up to 30 days. We don&apos;t store your IP address or browser details
-            with them.
+            device, kept for up to 30 days. Each keeps the browser&apos;s name so you can tell your
+            devices apart in Setting, but never your IP address.
           </li>
           <li>
             <strong className="font-semibold text-ink-primary">Favorites, lists and history</strong>{" "}
