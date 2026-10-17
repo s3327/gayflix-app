@@ -17,6 +17,9 @@ const STATIC_PATHS = [
   "/country",
   "/year",
   "/language",
+  "/about",
+  "/contact",
+  "/copyright",
   "/terms",
   "/privacy",
 ];

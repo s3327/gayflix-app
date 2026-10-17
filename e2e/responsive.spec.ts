@@ -28,6 +28,7 @@ const PAGES = [
   "/login",
   "/signup",
   "/terms",
+  "/privacy",
 ];
 
 /** How far the page, and the nav strip if it's showing, run past the screen's edge. */
