@@ -199,10 +199,11 @@ on an `admin.` subdomain.
     no password in the URL);
   - **axe** accessibility checks (WCAG 2.1 A/AA) on 10 public pages and
     3 admin pages, failing on any serious or critical violation.
-- **`.github/workflows/ci.yml`** runs on every push to `main` and every PR:
-  `npm ci` → lint → typecheck → unit tests → build → e2e + axe →
-  `npm audit --omit=dev --audit-level=high`. Playwright traces are uploaded
-  when e2e fails.
+- **`.github/workflows/ci.yml`** runs on every push to `main` and every PR,
+  in parallel jobs: lint → typecheck → unit tests →
+  `npm audit --omit=dev --audit-level=high` in one, and build → e2e + axe
+  in three shards, each with its own Postgres. A `check` job passes once
+  they all have. Playwright traces are uploaded per shard when e2e fails.
 - **`npm run check`** runs lint, typecheck, unit tests and build locally.
 - **Dependabot** (`.github/dependabot.yml`) opens weekly update PRs for npm
   (minor and patch grouped, majors one by one) and GitHub Actions.

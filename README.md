@@ -71,9 +71,12 @@ sign-in needs a code, and lasts 12 hours.
 | `npm run db:deploy` | Applies pending migrations, for production and CI (`prisma migrate deploy`) |
 | `npm run make-admin -- <email> [--revoke]` | Gives an existing account the admin role, or takes it away |
 
-CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests, build,
-the e2e + axe suite and `npm audit --omit=dev` on every push to `main` and
-on every pull request. Dependabot opens weekly dependency update PRs.
+CI (`.github/workflows/ci.yml`) runs on every push to `main` and on every
+pull request, in jobs that run side by side: lint, typecheck, unit tests
+and `npm audit --omit=dev` in one, and the build plus the e2e + axe suite
+split three ways (`playwright test --shard`), each with its own database.
+The `check` job passes once all of them have. Dependabot opens weekly
+dependency update PRs.
 
 ## Environment variables
 
