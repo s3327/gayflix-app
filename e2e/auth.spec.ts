@@ -101,7 +101,11 @@ test("signing up again with a taken email emails the owner instead", async ({ pa
 
   // Never confirmed: a fresh code, which finishes the first sign-up.
   const account = newAccount("signup-again");
+  since = Date.now();
   await request.post("/api/auth/sign-up/email", { data: account });
+  // The first code is sent after the response; wait for it, so it isn't
+  // mistaken for the new one.
+  await waitForEmail(account.email, since);
   since = Date.now();
   await request.post("/api/auth/sign-up/email", { data: account });
   const code = codeFrom(await waitForEmail(account.email, since));
