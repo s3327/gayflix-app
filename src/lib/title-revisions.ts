@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/session";
 import { canManageCatalog } from "@/lib/admin-roles";
 import { logActivity } from "@/lib/activity-logger";
 import type { Prisma } from "@/generated/prisma/client";
+import { movieDurationMinutes, parseTitle, titleValues } from "@/lib/title-form";
+import { titleData } from "@/lib/title-store";
 
 export type TitleSnapshot = {
   title: string;
@@ -101,12 +103,42 @@ export async function getTitleRevisions(mediaId: string) {
   });
 }
 
-/** Restores a title to a previous snapshot revision. */
-export async function rollbackTitleRevision(revisionId: string): Promise<{ ok: boolean; message?: string }> {
+/** Prisma's cuid() ids. */
+function isRevisionId(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z0-9]{20,40}$/.test(value);
+}
+
+/**
+ * A stored snapshot laid over the title as it is now. A field the
+ * snapshot doesn't have, or has in the wrong shape, keeps today's value.
+ */
+function snapshotOver<T extends Record<string, unknown>>(current: T, snapshot: unknown): T {
+  const snap = typeof snapshot === "object" && snapshot !== null ? (snapshot as Record<string, unknown>) : {};
+  const merged: Record<string, unknown> = { ...current };
+  for (const key of Object.keys(current)) {
+    if (!(key in snap)) continue;
+    const now = current[key];
+    const then = snap[key];
+    const sameShape = Array.isArray(now)
+      ? Array.isArray(then) && then.every((item) => typeof item === "string")
+      : then === null || typeof then === typeof now || now === null;
+    if (sameShape) merged[key] = then;
+  }
+  return merged as T;
+}
+
+/**
+ * Restores a title's details to a previous snapshot revision. The
+ * restored details go through the title form's checks, and the title
+ * keeps its current status and Featured flag: restoring never publishes,
+ * unpublishes or features anything.
+ */
+export async function rollbackTitleRevision(revisionId: unknown): Promise<{ ok: boolean; message?: string }> {
   const session = await requireAdmin();
   if (!canManageCatalog(session.user.role)) {
     return { ok: false, message: "Forbidden: You do not have permission to edit catalog titles." };
   }
+  if (!isRevisionId(revisionId)) return { ok: false, message: "Revision not found." };
 
   const revision = await db.titleRevision.findUnique({
     where: { id: revisionId },
@@ -116,10 +148,43 @@ export async function rollbackTitleRevision(revisionId: string): Promise<{ ok: b
   if (!revision || !revision.media) {
     return { ok: false, message: "Revision not found." };
   }
+  const media = revision.media;
+  if (media.trashedAt) {
+    return { ok: false, message: "This title is in the trash. Restore it from the trash first." };
+  }
 
-  const snap = revision.snapshot as unknown as TitleSnapshot;
-  if (!snap || !snap.title) {
-    return { ok: false, message: "Invalid revision snapshot data." };
+  const restored = snapshotOver(
+    {
+      title: media.title,
+      year: media.year,
+      duration: media.duration,
+      genres: media.genres,
+      country: media.country,
+      language: media.language,
+      synopsis: media.synopsis,
+      tagline: media.tagline,
+      rating: media.rating,
+      director: media.director,
+      creator: media.creator,
+      cast: media.cast,
+      tags: media.tags,
+      posterUrl: media.posterUrl,
+      backdropUrl: media.backdropUrl,
+      backdropFocus: media.backdropFocus,
+    },
+    revision.snapshot
+  );
+  const parsed = parseTitle(
+    media.type,
+    titleValues({
+      ...media,
+      ...restored,
+      runtimeMinutes: media.type === "movie" ? movieDurationMinutes(restored.duration) : null,
+    })
+  );
+  if (!parsed.ok) {
+    const [problem] = Object.values(parsed.errors);
+    return { ok: false, message: `That revision can't be restored. ${problem}` };
   }
 
   // Create a revision of the current state before rolling back
@@ -130,28 +195,17 @@ export async function rollbackTitleRevision(revisionId: string): Promise<{ ok: b
     summary: `Pre-rollback snapshot before restoring revision from ${new Date(revision.createdAt).toLocaleDateString()}`,
   });
 
-  await db.media.update({
-    where: { id: revision.mediaId },
+  const { count } = await db.media.updateMany({
+    // Not if it was trashed meanwhile.
+    where: { id: revision.mediaId, trashedAt: null },
     data: {
-      title: snap.title,
-      year: snap.year,
-      duration: snap.duration,
-      status: snap.status as "draft" | "published",
-      genres: snap.genres,
-      country: snap.country,
-      language: snap.language,
-      synopsis: snap.synopsis,
-      tagline: snap.tagline ?? null,
-      rating: snap.rating ?? null,
-      director: snap.director ?? null,
-      creator: snap.creator ?? null,
-      cast: snap.cast,
-      tags: snap.tags,
-      posterUrl: snap.posterUrl,
-      backdropUrl: snap.backdropUrl ?? null,
-      backdropFocus: snap.backdropFocus ?? null,
+      ...titleData(media.type, parsed.data),
+      ...(media.type === "series" ? { duration: media.duration } : {}),
+      backdropFocus: restored.backdropFocus,
     },
   });
+  if (count === 0) return { ok: false, message: "This title is in the trash. Restore it from the trash first." };
+  const snap = parsed.data;
 
   await logActivity({
     actorId: session.user.id,
