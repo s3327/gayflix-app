@@ -124,3 +124,18 @@ test("sitemap lists public pages and published titles only", async ({ request })
   const robots = await (await request.get("/robots.txt")).text();
   expect(robots).toContain("Sitemap: http://localhost:3000/sitemap.xml");
 });
+
+test("a bar shows from a click on a link until the next page arrives", async ({ page }) => {
+  await page.goto("/new-releases");
+  // Hold the next page back a moment, as a slow connection would.
+  await page.route(/\/movie\/|\/series\//, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await route.continue();
+  });
+  const bar = page.getByRole("progressbar", { name: "Loading page" });
+  await expect(bar).toHaveCount(0);
+  await page.locator("main a[href^='/movie/'], main a[href^='/series/']").first().click();
+  await expect(bar).toBeVisible();
+  await expect(page).toHaveURL(/\/(movie|series)\//);
+  await expect(bar).toHaveCount(0);
+});

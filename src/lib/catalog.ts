@@ -42,7 +42,7 @@ import { trendingSince } from "@/lib/views";
 
 const PUBLISHED = { status: "published" } as const;
 
-/** Home rows and "You Might Also Like". */
+/** Home rows and "You Might Also Like" (listRecommendations). */
 const ROW_SIZE = 12;
 const TRENDING_ROW_SIZE = 6;
 const CONTINUE_WATCHING_SIZE = 6;
@@ -383,10 +383,33 @@ export async function listTrending(): Promise<TrendingMedia[]> {
   }));
 }
 
-/** "You Might Also Like" on a title's page: the newest other titles. */
-export async function listRecommendations(excludeId: string): Promise<Media[]> {
+/**
+ * "You Might Also Like" on a title's page: the other published titles
+ * most like it. Each shared genre scores 3, each shared tag or cast
+ * member 2, the same director or creator 3, and the same type 1. Ties
+ * (including titles that share nothing, which fill out the row) go to
+ * the most viewed, then the newest.
+ */
+export async function listRecommendations(id: string): Promise<Media[]> {
   await connection();
-  return cards({ ...PUBLISHED, id: { not: excludeId } }, ORDER.added, ROW_SIZE);
+  return (
+    await db.$queryRaw<CardRow[]>`
+      WITH this AS (
+        SELECT genres AS g, tags AS t, "cast" AS c, director AS d, creator AS cr, type AS ty
+        FROM media WHERE id = ${id}
+      )
+      SELECT ${CARD_COLUMNS} FROM media, this
+      WHERE status = 'published' AND "trashedAt" IS NULL AND id <> ${id}
+      ORDER BY
+        3 * cardinality(ARRAY(SELECT unnest(genres) INTERSECT SELECT unnest(this.g)))
+        + 2 * cardinality(ARRAY(SELECT unnest(tags) INTERSECT SELECT unnest(this.t)))
+        + 2 * cardinality(ARRAY(SELECT unnest("cast") INTERSECT SELECT unnest(this.c)))
+        + CASE WHEN director = this.d THEN 3 ELSE 0 END
+        + CASE WHEN creator = this.cr THEN 3 ELSE 0 END
+        + CASE WHEN type = this.ty THEN 1 ELSE 0 END DESC,
+        "viewCount" DESC, "publishedAt" DESC NULLS LAST, id
+      LIMIT ${ROW_SIZE}`
+  ).map(toMedia);
 }
 
 /** Every published title, for the sitemap. */

@@ -6,9 +6,13 @@ import ReadMoreText from "@/components/ReadMoreText";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import RecommendationSection from "@/components/RecommendationSection";
 import SeasonTabs from "@/components/SeasonTabs";
+import SeriesPlayButton from "@/components/SeriesPlayButton";
 import TagList from "@/components/TagList";
 import TitleActions from "@/components/TitleActions";
 import { countryHref, genreHref, languageHref, searchHref } from "@/lib/browse-href";
+
+const PLAY_BUTTON =
+  "flex items-center justify-center gap-2 rounded-card bg-brand-pink px-5 py-3 text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark";
 
 /**
  * A title's own page, /movie/[id] or /series/[id]: poster and the main
@@ -16,7 +20,7 @@ import { countryHref, genreHref, languageHref, searchHref } from "@/lib/browse-h
  * the recommendations. Series aren't a different product, just a
  * different metadata shape: Creator instead of Director, Seasons and
  * Episodes instead of a single Runtime, and "Start Watching" opens the
- * first episode. Details a title doesn't have are left out.
+ * first episode, or "Continue" the one played last (SeriesPlayButton). Details a title doesn't have are left out.
  */
 export default function TitleDetail({
   title,
@@ -28,9 +32,6 @@ export default function TitleDetail({
   const isSeries = title.type === "series";
   const { episodes } = title;
   const seasonCount = new Set(episodes.map((ep) => ep.seasonNumber)).size;
-  const watchHref = isSeries
-    ? episodes[0] && `/episode/${episodes[0].id}`
-    : `/watch/${title.id}`;
   const credit = isSeries ? title.creator : title.director;
 
   return (
@@ -52,15 +53,16 @@ export default function TitleDetail({
               <div className="absolute inset-0 bg-linear-to-t from-bg-base/30 via-transparent to-transparent" />
             </div>
 
-            {watchHref && (
+            {(!isSeries || episodes.length > 0) && (
               <div className="mt-4">
-                <Link
-                  href={watchHref}
-                  className="flex items-center justify-center gap-2 rounded-card bg-brand-pink px-5 py-3 text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark"
-                >
-                  <Play className="h-4 w-4 fill-current" />
-                  {isSeries ? "Start Watching" : "Watch Now"}
-                </Link>
+                {isSeries ? (
+                  <SeriesPlayButton episodes={episodes} className={PLAY_BUTTON} />
+                ) : (
+                  <Link href={`/watch/${title.id}`} className={PLAY_BUTTON}>
+                    <Play className="h-4 w-4 fill-current" />
+                    Watch Now
+                  </Link>
+                )}
               </div>
             )}
           </div>
