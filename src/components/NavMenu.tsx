@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { primaryNavItems, filterNavItems, type NavMenuItem } from "@/components/nav-menu-items";
+import { primaryNavItems, type NavMenuItem } from "@/components/nav-menu-items";
 
 function NavLink({ item, isActive }: { item: NavMenuItem; isActive: boolean }) {
   return (
@@ -19,14 +19,8 @@ function NavLink({ item, isActive }: { item: NavMenuItem; isActive: boolean }) {
 }
 
 /**
- * Two clusters, not one flat row: primary browsing (Home/Trending/New
- * Releases/Browse/Movies/Series) on the left, facet-based browsing
- * (Genre/Country/Year/Language) on the right. `justify-between` pushes
- * them to opposite ends when there's room (lg+, where the 1440px
- * container has plenty of width); the explicit gap is the fallback for
- * when there isn't — on narrower widths (md–lg) the two clusters just
- * sit side by side with normal spacing instead of being crushed
- * together.
+ * One row of links: Home, Trending, New Releases, Browse (where genre,
+ * country, year and language are filters), Movies and Series.
  *
  * Shown from md (768px, a portrait tablet), where every link fits on
  * one line with the tighter md gaps. Below that the links would run
@@ -44,18 +38,11 @@ export default function NavMenu() {
     <div className="sticky top-16 z-40 hidden border-b border-border-subtle bg-bg-base/95 backdrop-blur-sm sm:top-20 md:block">
       <nav
         aria-label="Primary"
-        className="mx-auto flex max-w-[1440px] items-center justify-between gap-6 overflow-x-auto px-4 py-3 scrollbar-none sm:px-8 lg:gap-8"
+        className="mx-auto flex max-w-[1440px] items-center gap-6 overflow-x-auto px-4 py-3 scrollbar-none sm:px-8 lg:gap-8"
       >
-        <div className="flex shrink-0 gap-6 lg:gap-8">
-          {primaryNavItems.map((item) => (
-            <NavLink key={item.href} item={item} isActive={pathname === item.href} />
-          ))}
-        </div>
-        <div className="flex shrink-0 gap-6 lg:gap-8">
-          {filterNavItems.map((item) => (
-            <NavLink key={item.href} item={item} isActive={pathname === item.href} />
-          ))}
-        </div>
+        {primaryNavItems.map((item) => (
+          <NavLink key={item.href} item={item} isActive={pathname === item.href} />
+        ))}
       </nav>
     </div>
   );

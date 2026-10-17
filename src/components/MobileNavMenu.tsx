@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
-import { primaryNavItems, filterNavItems, type NavMenuItem } from "@/components/nav-menu-items";
+import { primaryNavItems, type NavMenuItem } from "@/components/nav-menu-items";
 import { useDropdown } from "@/lib/use-dropdown";
 
 function DrawerLink({ item, isActive }: { item: NavMenuItem; isActive: boolean }) {
@@ -72,17 +72,8 @@ export default function MobileNavMenu() {
         <div className="fixed inset-x-0 top-16 z-40 max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-border-subtle bg-bg-base shadow-xl sm:top-20 sm:max-h-[calc(100vh-5rem)] md:hidden">
           {/* pt-2: room for the first link's focus ring, which the
               drawer's top edge would otherwise cut off. */}
-          <nav aria-label="Primary" className="flex flex-col px-4 pt-2">
+          <nav aria-label="Primary" className="flex flex-col px-4 py-2">
             {primaryNavItems.map((item) => (
-              <DrawerLink key={item.href} item={item} isActive={pathname === item.href} />
-            ))}
-          </nav>
-
-          <p className="border-t border-border-subtle px-4 pt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-            Discover
-          </p>
-          <nav aria-label="Filter by" className="flex flex-col px-4 pb-2">
-            {filterNavItems.map((item) => (
               <DrawerLink key={item.href} item={item} isActive={pathname === item.href} />
             ))}
           </nav>

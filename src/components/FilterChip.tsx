@@ -15,9 +15,9 @@ const chipClassName = (isActive: boolean) =>
   }`;
 
 /**
- * URL-based filter chip — used by Genre/Country/Year/Language/Browse/
- * Trending, all of which encode the active filter in the query string
- * so a Server Component can read it from `searchParams`.
+ * URL-based filter chip — used by Trending, which encodes the active
+ * filter in the query string so a Server Component can read it from
+ * `searchParams`.
  */
 export function FilterChipLink({
   href,

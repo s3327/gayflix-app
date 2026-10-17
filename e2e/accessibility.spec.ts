@@ -6,7 +6,7 @@ const PUBLIC_PAGES = [
   "/",
   "/home",
   "/trending",
-  "/genre",
+  "/browse?genre=Drama",
   "/movie/chosen-family",
   "/series/the-brownstone",
   "/watch/chosen-family",
