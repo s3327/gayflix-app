@@ -81,7 +81,7 @@ export default async function HomePage() {
         <ContinueWatchingSection items={continueWatching} />
         {trending.length > 0 && <TrendingNowSection media={trending} />}
         {newReleases.length > 0 && (
-          <TitleGridSection title="New Releases" media={newReleases} seeMoreHref="/new-releases" />
+          <TitleGridSection title="Recently Added" media={newReleases} seeMoreHref="/new-releases" />
         )}
         {movies.length > 0 && <TitleGridSection title="Movies" media={movies} seeMoreHref="/movie" />}
         {series.length > 0 && (

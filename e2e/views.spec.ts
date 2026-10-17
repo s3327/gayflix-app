@@ -19,9 +19,9 @@ function uniqueId() {
 /** A published title; deleting it deletes its episodes and views too. */
 async function addTitle(id: string, title: string, type: "movie" | "series" = "movie") {
   await sql(
-    `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "createdAt", "updatedAt")
+    `INSERT INTO media (id, type, status, title, year, duration, genres, country, language, "posterUrl", "publishedAt", "createdAt", "updatedAt")
      VALUES ($1, $2::media_type, 'published', $3, 2001, '1h 30m', ARRAY['Drama'], 'Canada', 'French', $4,
-             '2001-01-01', '2001-01-01')`,
+             '2001-01-01', '2001-01-01', '2001-01-01')`,
     [id, type, title, POSTER]
   );
 }
@@ -153,12 +153,12 @@ test("Continue Watching shows a signed-in user's latest titles", async ({ browse
   // Guests don't get the row: their history is in the browser until they sign in.
   const guest = await guestPage(browser);
   await guest.goto("/home");
-  await expect(guest.getByRole("heading", { name: "New Releases" })).toBeVisible();
+  await expect(guest.getByRole("heading", { name: "Recently Added" })).toBeVisible();
   await expect(guest.getByRole("heading", { name: "Continue Watching" })).toHaveCount(0);
 
   const page = await signedInPage(browser, account);
   await page.goto("/home");
-  await expect(page.getByRole("heading", { name: "New Releases" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Recently Added" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Continue Watching" })).toHaveCount(0);
 
   for (const [id, title] of [

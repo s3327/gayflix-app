@@ -8,7 +8,7 @@ import { listTitles } from "@/lib/catalog";
 import { isRecentlyAdded } from "@/lib/is-new";
 import { pageParam, type SearchParams } from "@/lib/search-params";
 
-export const metadata: Metadata = { title: "New Releases" };
+export const metadata: Metadata = { title: "Recently Added" };
 
 export default async function NewReleasesPage({
   searchParams: searchParamsPromise,
@@ -16,7 +16,7 @@ export default async function NewReleasesPage({
   searchParams: Promise<SearchParams>;
 }) {
   const searchParams = await searchParamsPromise;
-  // Every published title, newest first.
+  // Every published title, newest on the site first (not by release year).
   const requestedPage = pageParam(searchParams.page);
   const { items: pageItems, page, totalPages } = await listTitles({
     sort: "added",
@@ -27,7 +27,7 @@ export default async function NewReleasesPage({
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 sm:py-14">
-      <h1 className="font-display text-3xl font-bold">New Releases</h1>
+      <h1 className="font-display text-3xl font-bold">Recently Added</h1>
 
       {pageItems.length > 0 ? (
         <div className="mt-8">

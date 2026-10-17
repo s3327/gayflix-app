@@ -112,6 +112,24 @@ test("pages name themselves in the tab, and title pages carry a link preview", a
   await expect(page).toHaveTitle("The Brownstone S1 E1: Move-In Day · Gayflix");
 });
 
+test("watch pages lead back to the title's own page", async ({ page }) => {
+  await page.goto("/watch/chosen-family");
+  await page.getByRole("heading", { level: 1 }).getByRole("link", { name: "Chosen Family" }).click();
+  await expect(page).toHaveURL(/\/movie\/chosen-family$/);
+
+  await page.goto("/episode/the-brownstone-season-1-episode-1");
+  await page.getByRole("main").getByRole("link", { name: "The Brownstone", exact: true }).click();
+  await expect(page).toHaveURL(/\/series\/the-brownstone$/);
+});
+
+test("Recently Added is named for what it lists", async ({ page }) => {
+  await page.goto("/home");
+  await page.getByRole("navigation").getByRole("link", { name: "Recently Added" }).first().click();
+  await expect(page).toHaveURL(/\/new-releases$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Recently Added");
+  await expect(page).toHaveTitle("Recently Added · Gayflix");
+});
+
 test("unknown pages get the branded 404", async ({ page }) => {
   const response = await page.goto("/definitely-not-a-page");
   expect(response?.status()).toBe(404);

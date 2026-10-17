@@ -158,19 +158,24 @@ export default async function EpisodePage({
         )}
       </div>
 
-      {/* Mini poster + title/season-episode badge/tags */}
+      {/* Mini poster + title/season-episode badge/tags. The poster leads to
+          the series, for the mouse only: the series name above the title is
+          the same link for keyboards and screen readers. */}
       <div className="mt-8 flex gap-4 sm:gap-6">
-        <div
-          className={`relative aspect-2/3 w-24 shrink-0 overflow-hidden rounded-card bg-bg-surface bg-linear-to-br sm:w-32 ${series.gradient ?? ""}`}
+        <Link
+          href={`/series/${series.id}`}
+          tabIndex={-1}
+          aria-hidden
+          className={`relative aspect-2/3 w-24 shrink-0 overflow-hidden rounded-card bg-bg-surface bg-linear-to-br transition-opacity hover:opacity-80 sm:w-32 ${series.gradient ?? ""}`}
         >
           <Image
             src={series.posterUrl}
-            alt={series.title}
+            alt=""
             fill
             sizes="128px"
             className="object-cover"
           />
-        </div>
+        </Link>
         <div className="min-w-0">
           <Link
             href={`/series/${series.id}`}
@@ -258,8 +263,12 @@ export default async function EpisodePage({
           <MetaLink href={languageHref(series.language)}>{series.language}</MetaLink>
         </dd>
 
-        <dt className="text-ink-muted">Air Date</dt>
-        <dd className="text-ink-primary">{episode.airDate ?? "—"}</dd>
+        {episode.airDate && (
+          <>
+            <dt className="text-ink-muted">Air Date</dt>
+            <dd className="text-ink-primary">{episode.airDate}</dd>
+          </>
+        )}
 
         <dt className="text-ink-muted">Runtime</dt>
         <dd className="text-ink-primary">{episode.duration}</dd>

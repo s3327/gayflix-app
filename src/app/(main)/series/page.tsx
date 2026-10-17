@@ -23,7 +23,7 @@ export default async function SeriesPage({
   const requestedPage = pageParam(searchParams.page);
   const { items: pageItems, page, totalPages } = await listTitles({
     type: "series",
-    sort: "updated",
+    sort: "added",
     page: requestedPage,
   });
   // An address past the last page isn't a page.
