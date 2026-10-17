@@ -130,10 +130,31 @@ test("Recently Added is named for what it lists", async ({ page }) => {
   await expect(page).toHaveTitle("Recently Added · Gayflix");
 });
 
-test("unknown pages get the branded 404", async ({ page }) => {
+test("unknown pages get the branded 404, with a search and popular titles", async ({ page }) => {
   const response = await page.goto("/definitely-not-a-page");
   expect(response?.status()).toBe(404);
   await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Popular on Gayflix" }).getByRole("link")
+  ).toHaveCount(6);
+  await page.getByRole("searchbox", { name: "Search titles" }).fill("Chosen");
+  await page.getByRole("button", { name: "Search" }).click();
+  await expect(page).toHaveURL(/\/search\?q=Chosen$/);
+});
+
+test("listing pages describe themselves and name their own address", async ({ page }) => {
+  const canonical = page.locator('link[rel="canonical"]');
+  await page.goto("/home");
+  await expect(page).toHaveTitle("Home · Gayflix");
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /trending/);
+  await expect(canonical).toHaveAttribute("href", /\/home$/);
+
+  await page.goto("/browse?sort=title&genre=Drama");
+  await expect(canonical).toHaveAttribute("href", /\/browse\?genre=Drama&sort=title$/);
+
+  // A movie's watch page points search engines at the movie's own page.
+  await page.goto("/watch/chosen-family");
+  await expect(canonical).toHaveAttribute("href", /\/movie\/chosen-family$/);
 });
 
 test("scripts carry the per-request CSP nonce", async ({ page }) => {
@@ -163,6 +184,8 @@ test("sitemap lists public pages and published titles only", async ({ request })
   const xml = await response.text();
   expect(xml).toContain("<loc>http://localhost:3000/home</loc>");
   expect(xml).toContain("/movie/chosen-family</loc>");
+  expect(xml).toContain("/episode/the-brownstone-season-1-episode-1</loc>");
+  expect(xml).toContain("/browse?genre=Drama</loc>");
   expect(xml).not.toContain("/admin");
   expect(xml).not.toContain("/account");
 

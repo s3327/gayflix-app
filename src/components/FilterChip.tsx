@@ -1,14 +1,11 @@
 import Link from "next/link";
 
 /**
- * Shared pill styling for both variants below — capitalize is harmless
- * on already-capitalized text (genre/country/language names, "All",
- * numeric years), so it's applied unconditionally rather than only
- * where it was originally needed (Browse/Trending's lowercase
- * "movie"/"series" labels).
+ * Shared pill styling for both variants below. Labels show as written:
+ * CSS capitalizing would turn "Coming of Age" into "Coming Of Age".
  */
 const chipClassName = (isActive: boolean) =>
-  `rounded-pill px-4 py-1.5 text-xs font-semibold capitalize transition-colors ${
+  `rounded-pill px-4 py-1.5 text-xs font-semibold transition-colors ${
     isActive
       ? "bg-brand-pink text-ink-onBrand"
       : "border border-border-strong text-ink-secondary hover:bg-bg-elevated hover:text-ink-primary"

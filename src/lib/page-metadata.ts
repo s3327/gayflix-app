@@ -11,7 +11,7 @@ import { titleHref } from "@/lib/title-href";
 
 export const SITE_NAME = "Gayflix";
 export const SITE_TITLE = "Gayflix — Love. Stories. Ours.";
-export const SITE_DESCRIPTION = "LGBTQ+ stories, films, and series — picked by our community.";
+export const SITE_DESCRIPTION = "LGBTQ+ stories, films, and series, hand-picked for our community.";
 
 /**
  * The link preview every page starts from. A page that sets its own
@@ -23,6 +23,21 @@ export const OPEN_GRAPH = {
   type: "website",
   locale: "en_US",
 } as const satisfies Metadata["openGraph"];
+
+/**
+ * Head tags for a listing page such as /movie: its name in the tab, a
+ * description, and its own address as the canonical one (with `page=N`
+ * from page 2 on, since each page lists different titles).
+ */
+export function listingMetadata(name: string, path: string, description: string, page = 1): Metadata {
+  const url = page > 1 ? `${path}${path.includes("?") ? "&" : "?"}page=${page}` : path;
+  return {
+    title: page > 1 ? `${name} · Page ${page}` : name,
+    description,
+    alternates: { canonical: url },
+    openGraph: { ...OPEN_GRAPH, title: name, description, url },
+  };
+}
 
 /** Longest description kept whole; search results cut off around here. */
 const DESCRIPTION_LENGTH = 160;
@@ -86,14 +101,18 @@ export function titleMetadata(title: MediaDetail): Metadata {
   });
 }
 
-/** /watch/[id]: "Watch Chosen Family (2025)". */
+/**
+ * /watch/[id]: "Watch Chosen Family (2025)". Search engines are pointed
+ * at the movie's own page, which this one repeats.
+ */
 export function watchMetadata(movie: MediaDetail): Metadata {
-  return previewMetadata({
+  const metadata = previewMetadata({
     name: `Watch ${movie.title} (${movie.year})`,
     path: `/watch/${movie.id}`,
     kind: "video.movie",
     title: movie,
   });
+  return { ...metadata, alternates: { canonical: titleHref(movie) } };
 }
 
 /**

@@ -4,19 +4,29 @@ import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
 import { listTitles } from "@/lib/catalog";
+import { listingMetadata } from "@/lib/page-metadata";
 import { pageParam, type SearchParams } from "@/lib/search-params";
 
-export const metadata: Metadata = { title: "Movies" };
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}): Promise<Metadata> {
+  return listingMetadata(
+    "Movies",
+    "/movie",
+    "LGBTQ+ films on Gayflix, newest on the site first.",
+    pageParam((await searchParams).page)
+  );
+}
 
 /**
  * All published movies — fixed filter (type === "movie"), nothing to
  * pick (Browse is where filters are). Structurally the same as New
  * Releases: fixed filter + sort + paginate.
  *
- * Sorted by updatedAt, not createdAt — "recently edited," not
- * "recently added." An old title that just got fixed/re-uploaded shows
- * up on page 1; an old, untouched title doesn't, even though both were
- * added to the catalog long ago.
+ * Newest on the site first (when each was published); editing a title
+ * doesn't move it.
  *
  * Published titles only, like every public listing (src/lib/catalog.ts).
  */

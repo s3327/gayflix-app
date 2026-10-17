@@ -47,24 +47,27 @@ export default function TitleDetail({
                 src={title.posterUrl}
                 alt={title.title}
                 fill
+                priority
                 sizes="288px"
                 className="object-cover"
               />
               <div className="absolute inset-0 bg-linear-to-t from-bg-base/30 via-transparent to-transparent" />
             </div>
 
-            {(!isSeries || episodes.length > 0) && (
-              <div className="mt-4">
-                {isSeries ? (
-                  <SeriesPlayButton episodes={episodes} className={PLAY_BUTTON} />
-                ) : (
-                  <Link href={`/watch/${title.id}`} className={PLAY_BUTTON}>
-                    <Play className="h-4 w-4 fill-current" />
-                    Watch Now
-                  </Link>
-                )}
-              </div>
-            )}
+            <div className="mt-4">
+              {!isSeries ? (
+                <Link href={`/watch/${title.id}`} className={PLAY_BUTTON}>
+                  <Play className="h-4 w-4 fill-current" />
+                  Watch Now
+                </Link>
+              ) : episodes.length > 0 ? (
+                <SeriesPlayButton episodes={episodes} className={PLAY_BUTTON} />
+              ) : (
+                <p className="rounded-card border border-border-subtle px-4 py-3 text-center text-sm font-semibold text-ink-secondary">
+                  Episodes coming soon
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Details */}

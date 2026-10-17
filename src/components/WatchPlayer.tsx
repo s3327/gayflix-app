@@ -17,12 +17,11 @@ import SourcePlayer from "@/components/SourcePlayer";
  * one server tab each. With none, it says the title is coming soon and
  * offers nothing to play or report.
  *
- * Play records a History entry and counts a view for Trending
- * (src/lib/view-actions.ts), then plays the chosen server. That click is
- * deliberately the moment that counts, not playback progress: most
- * sources are a provider's player in a frame, which this app can't see
- * inside. So "history" here means "Play was pressed for this title",
- * which holds whatever the source is.
+ * Watching records a History entry and counts a view for Trending
+ * (src/lib/view-actions.ts), once per visit to the page. A file or a
+ * stream counts once it's actually playing, so a server that fails
+ * counts nothing. An embed counts when Play is pressed: it's a
+ * provider's player in a frame, which this app can't see inside.
  *
  * The Report button lives here, so every page with a player gets it.
  */
@@ -46,6 +45,7 @@ export default function WatchPlayer({
   // the top of the page.
   const [focusRequest, setFocusRequest] = useState(0);
   const frameRef = useRef<HTMLDivElement>(null);
+  const countedRef = useRef(false);
   const errorRef = useRef<HTMLDivElement>(null);
 
   const source = sources[active];
@@ -60,10 +60,15 @@ export default function WatchPlayer({
     if (failed && document.activeElement === document.body) errorRef.current?.focus();
   }, [failed]);
 
-  function handlePlay() {
+  function handleStart() {
+    if (countedRef.current) return;
+    countedRef.current = true;
     recordWatch(media);
     // A view that fails to count isn't worth bothering anyone about.
     recordView(media.id).catch(() => {});
+  }
+
+  function handlePlay() {
     setIsPlaying(true);
     setFocusRequest((n) => n + 1);
   }
@@ -94,6 +99,7 @@ export default function WatchPlayer({
             key={source.id}
             source={source}
             title={media.title}
+            onStart={handleStart}
             onFail={() => setFailedId(source.id)}
           />
         ) : (

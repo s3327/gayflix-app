@@ -4,15 +4,26 @@ import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
 import { listTitles } from "@/lib/catalog";
+import { listingMetadata } from "@/lib/page-metadata";
 import { pageParam, type SearchParams } from "@/lib/search-params";
 
-export const metadata: Metadata = { title: "Series" };
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}): Promise<Metadata> {
+  return listingMetadata(
+    "Series",
+    "/series",
+    "LGBTQ+ series on Gayflix, newest on the site first.",
+    pageParam((await searchParams).page)
+  );
+}
 
 /**
  * All published series — same shape as /movie, just type === "series"
- * instead of "movie". See that page's header comment for why this is a
- * fixed-filter page (no chips) sorted by updatedAt rather than
- * createdAt.
+ * instead of "movie". See that page's header comment for how it's
+ * sorted.
  */
 export default async function SeriesPage({
   searchParams: searchParamsPromise,

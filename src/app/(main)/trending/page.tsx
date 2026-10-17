@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { listingMetadata } from "@/lib/page-metadata";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowDown, ArrowUp } from "lucide-react";
@@ -21,7 +22,11 @@ function buildHref(params: { type: TypeFilter; sortDesc: boolean; page: number }
   return query ? `/trending?${query}` : "/trending";
 }
 
-export const metadata: Metadata = { title: "Trending" };
+export const metadata: Metadata = listingMetadata(
+  "Trending",
+  "/trending",
+  "The most watched LGBTQ+ films and series on Gayflix this week."
+);
 
 export default async function TrendingPage({
   searchParams: searchParamsPromise,
@@ -65,7 +70,7 @@ export default async function TrendingPage({
       {/* Filter chips (left) + sort toggle (right) */}
       <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex gap-2">
-          {(["movie", "series"] as const).map((type) => {
+          {([["movie", "Movies"], ["series", "Series"]] as const).map(([type, label]) => {
             const isActive = typeFilter === type;
             return (
               <FilterChipLink
@@ -73,7 +78,7 @@ export default async function TrendingPage({
                 href={buildHref({ type: isActive ? "all" : type, sortDesc, page: 1 })}
                 isActive={isActive}
               >
-                {type}
+                {label}
               </FilterChipLink>
             );
           })}

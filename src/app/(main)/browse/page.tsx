@@ -14,6 +14,7 @@ import {
   yearRange,
 } from "@/lib/browse";
 import { listFilterValues, listTitles } from "@/lib/catalog";
+import { listingMetadata } from "@/lib/page-metadata";
 import { pageParam, type SearchParams } from "@/lib/search-params";
 
 /*
@@ -63,9 +64,14 @@ export async function generateMetadata({
 }: {
   searchParams: Promise<SearchParams>;
 }): Promise<Metadata> {
-  const { query, total } = await load(searchParams);
+  const { query, page, total } = await load(searchParams);
   const label = browseLabel(query);
-  return { title: label ? `${label} · ${countText(total)}` : "Browse" };
+  const name = label ? `${label} · ${countText(total)}` : "Browse";
+  const description = label
+    ? `${label}: ${countText(total)} on Gayflix.`
+    : "Browse every LGBTQ+ film and series on Gayflix by genre, year, country and language.";
+  // The canonical address carries the filters and sort, in Browse's own order.
+  return listingMetadata(name, browseHref(query), description, page);
 }
 
 export default async function BrowsePage({

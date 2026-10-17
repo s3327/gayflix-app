@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Play, Info } from "lucide-react";
@@ -5,7 +6,14 @@ import ContinueWatchingSection from "@/components/ContinueWatchingSection";
 import TrendingNowSection from "@/components/TrendingNowSection";
 import TitleGridSection from "@/components/TitleGridSection";
 import { getHome, listContinueWatching } from "@/lib/catalog";
+import { listingMetadata } from "@/lib/page-metadata";
 import { titleHref } from "@/lib/title-href";
+
+export const metadata: Metadata = listingMetadata(
+  "Home",
+  "/home",
+  "What's new, trending and worth watching on Gayflix: LGBTQ+ films and series."
+);
 
 export default async function HomePage() {
   const [{ featured, trending, newReleases, movies, series }, continueWatching] =

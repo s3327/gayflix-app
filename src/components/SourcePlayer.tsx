@@ -19,38 +19,58 @@ const HLS_TYPE = "application/vnd.apple.mpegurl";
  *
  * Every source's host is on VIDEO_HOSTS, which the Content-Security-Policy
  * lets the page frame, play and stream from (src/lib/csp.ts).
- * `onFail` is called when a file or a stream can't play.
+ * `onFail` is called when a file or a stream can't play. `onStart` is
+ * called when watching begins: once a file or a stream is actually
+ * playing, and at once for an embed, whose frame can't tell.
  */
 export default function SourcePlayer({
   source,
   title,
+  onStart,
   onFail,
 }: {
   source: VideoSourceEntry;
   title: string;
+  onStart: () => void;
   onFail: () => void;
 }) {
   if (source.kind === "embed") {
-    return (
-      <iframe
-        src={source.url}
-        title={`${title} (${source.label})`}
-        allow="autoplay; picture-in-picture; encrypted-media"
-        allowFullScreen
-        className="absolute inset-0 h-full w-full border-0 bg-black focus-visible:-outline-offset-4"
-      />
-    );
+    return <EmbedPlayer source={source} title={title} onStart={onStart} />;
   }
-  return <VideoPlayer source={source} title={title} onFail={onFail} />;
+  return <VideoPlayer source={source} title={title} onStart={onStart} onFail={onFail} />;
+}
+
+function EmbedPlayer({
+  source,
+  title,
+  onStart,
+}: {
+  source: VideoSourceEntry;
+  title: string;
+  onStart: () => void;
+}) {
+  const start = useEffectEvent(onStart);
+  useEffect(() => start(), []);
+  return (
+    <iframe
+      src={source.url}
+      title={`${title} (${source.label})`}
+      allow="autoplay; picture-in-picture; encrypted-media"
+      allowFullScreen
+      className="absolute inset-0 h-full w-full border-0 bg-black focus-visible:-outline-offset-4"
+    />
+  );
 }
 
 function VideoPlayer({
   source,
   title,
+  onStart,
   onFail,
 }: {
   source: VideoSourceEntry;
   title: string;
+  onStart: () => void;
   onFail: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -107,6 +127,7 @@ function VideoPlayer({
       controls
       autoPlay
       playsInline
+      onPlaying={onStart}
       onError={() => {
         if (!hlsRef.current) onFail();
       }}

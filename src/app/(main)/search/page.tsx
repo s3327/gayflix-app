@@ -10,7 +10,7 @@ import { searchTitles } from "@/lib/catalog";
 import { normalizeQuery } from "@/lib/search";
 import { firstParam, pageParam, type SearchParams } from "@/lib/search-params";
 
-const QUICK_SEARCHES = ["Drama", "Romance", "Comedy", "2026", "Documentary", "Coming of Age"];
+const QUICK_SEARCHES = ["Drama", "Romance", "Comedy", "Documentary", "Coming of Age"];
 
 export async function generateMetadata({
   searchParams,
@@ -84,7 +84,7 @@ export default async function SearchPage({
 
         {/* Quick searches */}
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs">
-          <span className="text-ink-muted">Popular:</span>
+          <span className="text-ink-muted">Try:</span>
           {QUICK_SEARCHES.map((term) => (
             <Link
               key={term}
