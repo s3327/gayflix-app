@@ -207,10 +207,12 @@ test.describe("import", () => {
     const main = page.locator("main");
     await search(page, "E2E Many");
     await expect(main.getByText("50 results on TMDB")).toBeVisible();
-    await expect(main.locator("li")).toHaveCount(40);
+    // The result cards; the pager's page numbers are an <ol>.
+    const results = main.locator("ul > li");
+    await expect(results).toHaveCount(40);
     await main.getByRole("link", { name: "Next" }).click();
     await expect(page).toHaveURL(/page=2$/);
-    await expect(main.locator("li")).toHaveCount(10);
+    await expect(results).toHaveCount(10);
     await expect(main.getByText("Page 2 of 2")).toBeVisible();
 
     await search(page, "E2E TMDB down");
