@@ -37,6 +37,10 @@ export default defineConfig({
   // cores) runs one test at a time. Two at a time finish a shard about a
   // fifth sooner.
   workers: process.env.CI ? 2 : undefined,
+  // With the server, the browser and two tests sharing those two cores, a
+  // client-side navigation (Log in from the header, say) can take most of
+  // the default 5 seconds; give assertions 10 there.
+  expect: { timeout: process.env.CI ? 10_000 : 5_000 },
   forbidOnly: Boolean(process.env.CI),
   reporter: process.env.CI ? [["github"], ["list"]] : "list",
   use: {
