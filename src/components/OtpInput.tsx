@@ -7,14 +7,17 @@ import { useEffect, useRef, useState } from "react";
  * type, backspace-to-previous, paste-a-whole-code support. Originally
  * built inline for /verify-email; pulled out so the account-page email
  * and password change flows can reuse the exact same behavior instead
- * of re-implementing it.
+ * of re-implementing it. `autoFocus` puts the cursor in the first box,
+ * for pages where the code is the only thing to do.
  */
 export default function OtpInput({
   length = 6,
+  autoFocus = false,
   onChange,
   onComplete,
 }: {
   length?: number;
+  autoFocus?: boolean;
   onChange?: (code: string) => void;
   onComplete?: (code: string) => void;
 }) {
@@ -89,6 +92,7 @@ export default function OtpInput({
           type="text"
           inputMode="numeric"
           autoComplete={index === 0 ? "one-time-code" : "off"}
+          autoFocus={autoFocus && index === 0}
           maxLength={length}
           value={digit}
           // Select on focus so typing replaces the digit instead of

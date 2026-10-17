@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import FormError from "@/components/FormError";
 import OtpInput from "@/components/OtpInput";
@@ -8,7 +8,7 @@ import { authClient, authErrorMessage } from "@/lib/auth-client";
 import { useAuth } from "@/lib/auth-context";
 
 type EmailStep = "idle" | "new-email" | "verify" | "done";
-type PasswordStep = "idle" | "new-password" | "done";
+type PasswordStep = "idle" | "new-password" | "done" | "link-sent";
 
 function memberSince(createdAt: Date | string | undefined) {
   if (!createdAt) return "";
@@ -30,7 +30,9 @@ function memberSince(createdAt: Date | string | undefined) {
  *    changes only once that code is entered, and the old address is
  *    told (src/lib/auth.ts checks both).
  *  - Change Password needs the current password, and signs out every
- *    other device.
+ *    other device. An account that signs in with Google only has no
+ *    password to change: it says so, and Set a Password emails a link
+ *    (the reset-password one, which adds a password to the account).
  */
 export default function AccountPage() {
   const { user, refresh } = useAuth();
@@ -42,7 +44,8 @@ export default function AccountPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   const [emailStep, setEmailStep] = useState<EmailStep>("idle");
-  // Whether the account has a password to ask for; looked up on Change Email.
+  // Whether the account has a password; until the lookup answers, and
+  // if it fails, assume so (the server knows the real answer).
   const [hasPassword, setHasPassword] = useState(true);
   const [emailPassword, setEmailPassword] = useState("");
   const [newEmail, setNewEmail] = useState("");
@@ -54,6 +57,18 @@ export default function AccountPage() {
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [passwordMismatch, setPasswordMismatch] = useState(false);
   const [passwordError, setPasswordError] = useState("");
+
+  const userId = user?.id;
+  useEffect(() => {
+    if (!userId) return;
+    let current = true;
+    authClient.listAccounts().then(({ data }) => {
+      if (current && data) setHasPassword(data.some((account) => account.providerId === "credential"));
+    });
+    return () => {
+      current = false;
+    };
+  }, [userId]);
 
   function resetSubFlows() {
     setEmailStep("idle");
@@ -100,11 +115,21 @@ export default function AccountPage() {
     setIsEditing(false);
   }
 
-  async function handleStartEmailChange() {
-    const { data } = await authClient.listAccounts();
-    // If the lookup fails, ask anyway: the server knows the answer.
-    setHasPassword(data ? data.some((account) => account.providerId === "credential") : true);
+  function handleStartEmailChange() {
     setEmailStep("new-email");
+  }
+
+  async function handleSetPassword() {
+    setPasswordError("");
+    const { error } = await authClient.requestPasswordReset({
+      email: activeEmail,
+      redirectTo: "/reset-password",
+    });
+    if (error) {
+      setPasswordError(authErrorMessage(error));
+      return;
+    }
+    setPasswordStep("link-sent");
   }
 
   async function handleSubmitNewEmail(event: React.FormEvent) {
@@ -196,7 +221,9 @@ export default function AccountPage() {
             <span className="text-xs font-semibold uppercase tracking-wide text-ink-secondary">
               Password
             </span>
-            <p className="text-sm text-ink-primary">••••••••</p>
+            <p className="text-sm text-ink-primary">
+              {hasPassword ? "••••••••" : "None yet: you sign in with Google"}
+            </p>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -311,7 +338,7 @@ export default function AccountPage() {
                   Enter the 6-digit code we sent to{" "}
                   <span className="font-semibold text-ink-primary">{newEmail}</span>
                 </p>
-                <OtpInput onComplete={handleEmailCodeComplete} />
+                <OtpInput autoFocus onComplete={handleEmailCodeComplete} />
                 <FormError message={emailError} />
               </div>
             )}
@@ -333,16 +360,28 @@ export default function AccountPage() {
               {passwordStep === "idle" && (
                 <button
                   type="button"
-                  onClick={() => setPasswordStep("new-password")}
+                  onClick={hasPassword ? () => setPasswordStep("new-password") : handleSetPassword}
                   className="text-xs font-semibold text-ink-brand transition-colors hover:text-brand-pink-light"
                 >
-                  Change Password
+                  {hasPassword ? "Change Password" : "Set a Password"}
                 </button>
               )}
             </div>
 
             {passwordStep === "idle" && (
-              <p className="text-sm text-ink-primary">••••••••</p>
+              <>
+                <p className="text-sm text-ink-primary">
+                  {hasPassword ? "••••••••" : "None yet: you sign in with Google"}
+                </p>
+                <FormError message={passwordError} />
+              </>
+            )}
+
+            {passwordStep === "link-sent" && (
+              <div className="flex items-center gap-2 text-sm font-medium text-status-success">
+                <Check className="h-4 w-4" />
+                We&apos;ve emailed {activeEmail} a link to set one.
+              </div>
             )}
 
             {passwordStep === "new-password" && (

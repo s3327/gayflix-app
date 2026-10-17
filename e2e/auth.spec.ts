@@ -1,4 +1,12 @@
-import { accounts, codeFrom, linkFrom, newAccount, waitForEmail } from "./accounts";
+import {
+  accounts,
+  codeFrom,
+  createVerifiedAccount,
+  linkFrom,
+  newAccount,
+  sql,
+  waitForEmail,
+} from "./accounts";
 import { test, expect, logIn } from "./fixtures";
 
 test("sign up, confirm the emailed code, log out", async ({ page, consoleProblems }) => {
@@ -10,19 +18,26 @@ test("sign up, confirm the emailed code, log out", async ({ page, consoleProblem
   await page.getByLabel("Name").fill(account.name);
   await page.getByLabel("Email").fill(account.email);
   await page.getByLabel("Password").fill(account.password);
-  await page.getByRole("checkbox").check();
+  // Signing up needs the age and terms box, and says so.
+  await page.getByRole("button", { name: "Sign Up" }).click();
+  const terms = page.getByRole("checkbox", { name: /18 or older/ });
+  await expect(terms).toBeFocused();
+  await expect(terms).toHaveAccessibleDescription("Tick this box to create an account.");
+  await expect(page).toHaveURL(/\/signup$/);
+  await terms.check();
   await page.getByRole("button", { name: "Sign Up" }).click();
   await expect(page).toHaveURL(/\/verify-email\?email=/);
 
-  // A wrong code is rejected...
-  await page.getByLabel("Digit 1 of 6").fill("000000");
-  await page.getByRole("button", { name: "Verify" }).click();
+  // The code goes as soon as all six digits are in. A wrong one is
+  // rejected...
+  const firstDigit = page.getByLabel("Digit 1 of 6");
+  await expect(firstDigit).toBeFocused();
+  await firstDigit.fill("000000");
   await expect(page.locator("main").getByRole("alert")).toHaveText("That code isn't right. Check the email and try again.");
 
   // ...and the real one signs the user in.
   const code = codeFrom(await waitForEmail(account.email, since));
-  await page.getByLabel("Digit 1 of 6").fill(code);
-  await page.getByRole("button", { name: "Verify" }).click();
+  await firstDigit.fill(code);
   await expect(page).toHaveURL(/\/account$/);
 
   await page.getByRole("button", { name: "Account menu" }).click();
@@ -45,9 +60,63 @@ test("logging in before confirming the email asks for the code", async ({ page, 
   const since = Date.now();
   await logIn(page, account);
   await expect(page).toHaveURL(/\/verify-email\?email=.+&next=%2Faccount$/);
+  await expect(page.getByRole("link", { name: "Sign up again" })).toHaveAttribute(
+    "href",
+    "/signup?next=%2Faccount"
+  );
   const code = codeFrom(await waitForEmail(account.email, since));
   await page.getByLabel("Digit 1 of 6").fill(code);
-  await page.getByRole("button", { name: "Verify" }).click();
+  await expect(page).toHaveURL(/\/account$/);
+});
+
+test("password fields can show what's typed, and Google shows only where it's set up", async ({
+  page,
+}) => {
+  await page.goto("/signup");
+  const password = page.getByLabel("Password");
+  await expect(password).toHaveAccessibleDescription("At least 8 characters");
+  await password.fill("secret-words");
+  const show = page.getByRole("button", { name: "Show" });
+  await expect(show).toHaveAttribute("aria-pressed", "false");
+  await show.click();
+  await expect(password).toHaveAttribute("type", "text");
+  await show.click();
+  await expect(password).toHaveAttribute("type", "password");
+  // The e2e server has no Google credentials.
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
+  await page.goto("/login");
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
+});
+
+test("a member without a password can set one from the account page", async ({
+  page,
+  request,
+}) => {
+  const account = newAccount("google-only");
+  await createVerifiedAccount(request, account);
+  await logIn(page, account);
+  await expect(page).toHaveURL(/\/account$/);
+  // As if they'd signed up with Google: no password on the account.
+  await sql(
+    `DELETE FROM account WHERE "providerId" = 'credential'
+     AND "userId" = (SELECT id FROM "user" WHERE email = $1)`,
+    [account.email]
+  );
+  await page.reload();
+  const main = page.locator("main");
+  await expect(main.getByText("None yet: you sign in with Google")).toBeVisible();
+
+  await main.getByRole("button", { name: "Edit Profile" }).click();
+  await expect(main.getByRole("button", { name: "Change Password" })).toHaveCount(0);
+  const since = Date.now();
+  await main.getByRole("button", { name: "Set a Password" }).click();
+  await expect(main.getByText(`We've emailed ${account.email} a link to set one.`)).toBeVisible();
+
+  await page.goto(linkFrom(await waitForEmail(account.email, since)));
+  await page.getByLabel("New Password").fill("a-password-at-last");
+  await page.getByRole("button", { name: "Set New Password" }).click();
+  await expect(page.getByText("Your password has been changed")).toBeVisible();
+  await logIn(page, { ...account, password: "a-password-at-last" });
   await expect(page).toHaveURL(/\/account$/);
 });
 

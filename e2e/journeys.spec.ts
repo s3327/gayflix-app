@@ -66,7 +66,6 @@ test("a guest's favorite leads through sign-up and back to the title", async ({
 
   const code = codeFrom(await waitForEmail(account.email, since));
   await page.getByLabel("Digit 1 of 6").fill(code);
-  await page.getByRole("button", { name: "Verify" }).click();
   await expect(page).toHaveURL(/\/movie\/chosen-family$/);
   await page.getByRole("button", { name: "Add to Favorites" }).click();
   await expect(page.getByRole("button", { name: "Remove from Favorites" })).toBeVisible();

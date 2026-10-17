@@ -50,6 +50,8 @@ const authOrigin = process.env.BETTER_AUTH_URL ?? siteUrl().origin;
 // Google sign-in is offered once both credentials are set.
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+/** Whether the log-in and sign-up pages show "Continue with Google". */
+export const googleSignInEnabled = Boolean(googleClientId && googleClientSecret);
 
 /**
  * Accounts, sessions and roles (Better Auth on Prisma Postgres).

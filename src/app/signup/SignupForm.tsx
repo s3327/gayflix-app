@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import FormError from "@/components/FormError";
 import GoogleAuthButton from "@/components/GoogleAuthButton";
+import PasswordInput from "@/components/PasswordInput";
 import { authClient, authErrorMessage, signInWithGoogle } from "@/lib/auth-client";
 import { authHref } from "@/lib/safe-redirect";
 
@@ -22,19 +23,33 @@ import { authHref } from "@/lib/safe-redirect";
  * If the email already has an account, Better Auth answers the same way
  * (so sign-up can't be used to find out who has an account) and no new
  * account is created.
+ *
+ * Both ways in need the age and terms box ticked; trying without it says
+ * so next to the box rather than greying the buttons out. Google shows
+ * only where it's set up (`google`, from src/lib/auth.ts).
  */
-export default function SignupForm({ next }: { next: string | null }) {
+export default function SignupForm({ next, google }: { next: string | null; google: boolean }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [termsMissed, setTermsMissed] = useState(false);
+  const termsRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  /** False, and points at the box, when it isn't ticked. */
+  function checkTerms() {
+    if (agreedToTerms) return true;
+    setTermsMissed(true);
+    termsRef.current?.focus();
+    return false;
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!agreedToTerms) return; // guarded by disabled button too; belt-and-suspenders
+    if (!checkTerms()) return;
     setError("");
     setIsSubmitting(true);
     const { error } = await authClient.signUp.email({ name, email, password });
@@ -49,7 +64,7 @@ export default function SignupForm({ next }: { next: string | null }) {
   }
 
   async function handleGoogleAuth() {
-    if (!agreedToTerms) return;
+    if (!checkTerms()) return;
     // Google verifies the email itself, so this skips /verify-email.
     setError(await signInWithGoogle(next ?? "/account"));
   }
@@ -122,78 +137,95 @@ export default function SignupForm({ next }: { next: string | null }) {
             >
               Password
             </label>
-            <input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
               autoComplete="new-password"
               minLength={8}
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="••••••••"
-              className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+              aria-describedby="password-hint"
             />
+            <p id="password-hint" className="text-xs text-ink-muted">
+              At least 8 characters
+            </p>
+          </div>
+
+          {/* Required for both the form and the Google button below —
+              legal acceptance shouldn't depend on which sign-up path is used. */}
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-start gap-2.5 text-sm text-ink-secondary">
+              <input
+                ref={termsRef}
+                type="checkbox"
+                checked={agreedToTerms}
+                onChange={(event) => {
+                  setAgreedToTerms(event.target.checked);
+                  setTermsMissed(false);
+                }}
+                aria-invalid={termsMissed || undefined}
+                aria-describedby={termsMissed ? "terms-error" : undefined}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-border-strong bg-bg-elevated text-ink-brand accent-brand-pink"
+              />
+              <span>
+                I&apos;m 18 or older, and I agree to the{" "}
+                <Link
+                  href="/terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
+                >
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </span>
+            </label>
+            {termsMissed && (
+              <p id="terms-error" className="text-xs text-status-error">
+                Tick this box to create an account.
+              </p>
+            )}
           </div>
 
           <FormError message={error} />
 
           <button
             type="submit"
-            disabled={!agreedToTerms || isSubmitting}
-            className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isSubmitting}
+            className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-wait disabled:opacity-70"
           >
             {isSubmitting ? "Creating Account…" : "Sign Up"}
           </button>
         </form>
 
-        {/* Required for both the form above and the Google button below —
-            legal acceptance shouldn't depend on which sign-up path is used. */}
-        <label className="mt-5 flex items-start gap-2.5 text-sm text-ink-secondary">
-          <input
-            type="checkbox"
-            checked={agreedToTerms}
-            onChange={(event) => setAgreedToTerms(event.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-border-strong bg-bg-elevated text-ink-brand accent-brand-pink"
-          />
-          <span>
-            I agree to the{" "}
-            <Link
-              href="/terms"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
-            >
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link
-              href="/privacy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
-            >
-              Privacy Policy
-            </Link>
-            .
-          </span>
-        </label>
+        {google && (
+          <>
+            <div className="mt-6 flex items-center gap-3">
+              <div className="h-px flex-1 bg-border-subtle" />
+              <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                or
+              </span>
+              <div className="h-px flex-1 bg-border-subtle" />
+            </div>
 
-        <div className="mt-6 flex items-center gap-3">
-          <div className="h-px flex-1 bg-border-subtle" />
-          <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-            or
-          </span>
-          <div className="h-px flex-1 bg-border-subtle" />
-        </div>
-
-        <div className="mt-6">
-          <GoogleAuthButton
-            label="Continue with Google"
-            onClick={handleGoogleAuth}
-            disabled={!agreedToTerms}
-          />
-        </div>
+            <div className="mt-6">
+              <GoogleAuthButton
+                label="Continue with Google"
+                onClick={handleGoogleAuth}
+              />
+            </div>
+          </>
+        )}
 
         <p className="mt-6 text-center text-sm text-ink-secondary">
           Already have an account?{" "}

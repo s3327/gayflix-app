@@ -19,7 +19,9 @@ const RESEND_COOLDOWN_SECONDS = 30;
  * when an account's email was never confirmed. Reads ?email= and an
  * optional ?next= (where to go once verified).
  *
- * A correct code confirms the email and signs the user in.
+ * A correct code confirms the email and signs the user in. The code is
+ * sent as soon as all six digits are in (typed, pasted or autofilled);
+ * Verify is there for a retry.
  */
 function VerifyEmailForm() {
   const router = useRouter();
@@ -40,18 +42,22 @@ function VerifyEmailForm() {
     return () => clearTimeout(timer);
   }, [cooldown]);
 
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    if (!isComplete || !email) return;
+  async function verify(otp: string) {
+    if (otp.length !== CODE_LENGTH || !email || isSubmitting) return;
     setError("");
     setIsSubmitting(true);
-    const { error } = await authClient.emailOtp.verifyEmail({ email, otp: code });
+    const { error } = await authClient.emailOtp.verifyEmail({ email, otp });
     setIsSubmitting(false);
     if (error) {
       setError(authErrorMessage(error));
       return;
     }
     router.push(safeNextPath(searchParams.get("next")));
+  }
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    verify(code);
   }
 
   async function handleResend() {
@@ -89,7 +95,7 @@ function VerifyEmailForm() {
         </div>
 
         <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-6">
-          <OtpInput onChange={setCode} />
+          <OtpInput autoFocus onChange={setCode} onComplete={verify} />
 
           <FormError
             message={email ? error : "This link is missing the email address. Sign up or log in again."}
@@ -119,6 +125,16 @@ function VerifyEmailForm() {
               Resend code
             </button>
           )}
+        </p>
+
+        <p className="mt-2 text-center text-sm text-ink-secondary">
+          Wrong email?{" "}
+          <Link
+            href={authHref("/signup", nextParam(searchParams.get("next") ?? undefined))}
+            className="font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
+          >
+            Sign up again
+          </Link>
         </p>
 
         <p className="mt-2 text-center text-sm text-ink-secondary">
