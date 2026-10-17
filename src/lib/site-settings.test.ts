@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_SETTINGS, isRegistrationOpen, updateSiteSettings } from "./site-settings";
+import {
+  DEFAULT_SETTINGS,
+  FAIL_SAFE_SETTINGS,
+  isRegistrationOpen,
+  updateSiteSettings,
+} from "./site-settings";
 
 let mockRole = "admin";
 
@@ -58,6 +63,12 @@ describe("site-settings", () => {
       registrationOpen: false,
     });
     expect(await isRegistrationOpen()).toBe(false);
+  });
+
+  it("fails safe when the settings can't be read", async () => {
+    mockFindUnique.mockRejectedValueOnce(new Error("database unreachable"));
+    expect(await isRegistrationOpen()).toBe(false);
+    expect(FAIL_SAFE_SETTINGS.maintenanceMode).toBe(true);
   });
 
   describe("updateSiteSettings validation and partial preservation", () => {

@@ -51,6 +51,8 @@ export function titleData(type: MediaType, input: TitleInput) {
     posterUrl: input.posterUrl,
     backdropUrl: input.backdropUrl,
     status: input.status,
+    // Publishing now replaces a schedule.
+    publishAt: input.status === "published" ? null : input.publishAt,
     featured: input.featured,
     ...(type === "movie" && {
       runtimeMinutes: input.runtimeMinutes,

@@ -235,3 +235,26 @@ export type ImportState = {
   /** TMDB and IMDb disagree on the type: the admin picks one. */
   conflict?: { tmdb: MediaType; imdb: MediaType };
 };
+
+/**
+ * What TMDB says about a title already in the catalog now, with gaps
+ * filled from IMDb, for Refresh from TMDB. Unlike prepareImport it
+ * doesn't stop at "already imported": that's the point.
+ */
+export async function freshValues(
+  ref: TmdbRef,
+  type: MediaType
+): Promise<{ ok: true; values: TitleValues } | { ok: false; message: string }> {
+  let details: unknown;
+  try {
+    details = await getTmdbDetails(ref.kind, ref.id);
+  } catch (error) {
+    if (error instanceof SourceError) return { ok: false, message: error.message };
+    throw error;
+  }
+  if (details === null) return { ok: false, message: "TMDB doesn't have that title any more." };
+  let values = tmdbValues(ref.kind, details, type);
+  const imdb = await lookUpImdb(tmdbFacts(ref.kind, details));
+  if (imdb.found) values = fillGaps(values, omdbValues(imdb.answer, type)).values;
+  return { ok: true, values };
+}

@@ -54,6 +54,7 @@ export const TITLE_FIELDS = [
   "posterUrl",
   "backdropUrl",
   "status",
+  "publishAt",
   "featured",
 ] as const;
 
@@ -79,6 +80,8 @@ export type TitleInput = {
   posterUrl: string;
   backdropUrl: string | null;
   status: MediaStatus;
+  /** A draft's scheduled publishing time (UTC); null when not scheduled or published. */
+  publishAt: Date | null;
   featured: boolean;
 };
 
@@ -154,6 +157,15 @@ export function parseTitle(
   if (posterUrl !== NO_POSTER) check("posterUrl", imageUrlProblem(posterUrl, hosts));
   if (values.backdropUrl) check("backdropUrl", imageUrlProblem(values.backdropUrl, hosts));
 
+  const status: MediaStatus = values.status === "published" ? "published" : "draft";
+  let publishAt: Date | null = null;
+  if (values.publishAt && status === "draft") {
+    publishAt = utcDateTime(values.publishAt);
+    if (!publishAt || publishAt.getUTCFullYear() > lastYear) {
+      errors.publishAt = "Enter a date and time, or leave it empty.";
+    }
+  }
+
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {
     ok: true,
@@ -173,7 +185,8 @@ export function parseTitle(
       synopsis: values.synopsis,
       posterUrl,
       backdropUrl: values.backdropUrl || null,
-      status: values.status === "published" ? "published" : "draft",
+      status,
+      publishAt,
       featured: values.featured === "on",
     },
   };
@@ -307,6 +320,7 @@ export function titleValues(row: {
   posterUrl: string;
   backdropUrl: string | null;
   featured: boolean;
+  publishAt?: Date | null;
 }): TitleValues {
   const runtime =
     row.type === "movie" ? (row.runtimeMinutes ?? movieDurationMinutes(row.duration)) : null;
@@ -327,6 +341,7 @@ export function titleValues(row: {
     posterUrl: row.posterUrl === NO_POSTER ? "" : row.posterUrl,
     backdropUrl: row.backdropUrl ?? "",
     status: row.status,
+    publishAt: row.publishAt ? row.publishAt.toISOString().slice(0, 16) : "",
     featured: row.featured ? "on" : "",
   };
 }
@@ -581,6 +596,14 @@ function calendarDate(value: string): Date | null {
   if (!match) return null;
   const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
   return date.toISOString().slice(0, 10) === value ? date : null;
+}
+
+/** "2026-11-01T20:00" (a datetime-local field), read as UTC. */
+function utcDateTime(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const date = new Date(`${value}:00Z`);
+  return !isNaN(date.getTime()) && date.toISOString().slice(0, 16) === value ? date : null;
 }
 
 /** "Drama, Romance , drama" → ["Drama", "Romance"]. */

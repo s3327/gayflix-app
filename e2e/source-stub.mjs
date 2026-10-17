@@ -241,6 +241,16 @@ const TITLES = [
     omdb: { Type: "series", Year: "2024" },
     errorOnSeason: true,
   },
+  {
+    // Already in the catalog with gaps: Refresh from TMDB fills them.
+    kind: "movie",
+    id: 990012,
+    title: "E2E Refresh Me",
+    date: "2022-03-03",
+    runtime: 104,
+    imdb: "tt9900012",
+    omdb: {},
+  },
 ];
 
 /** "E2E Many" finds 50 movies: two pages of the Import page. */

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { setAdminFlash } from "@/lib/admin-flash";
 import { db } from "@/lib/db";
 import { moderationSession, FORBIDDEN_USERS } from "@/lib/admin-guard";
+import { isMediaId } from "@/lib/library-types";
 
 /*
  * Server functions behind /admin/reports. Each one checks for an admin
@@ -49,51 +50,80 @@ export async function resolveReport(
   });
 }
 
-/** Resolves all open reports for a given title or episode, optionally disabling video sources. */
-export async function resolveAllForMedia({
-  mediaId,
-  disableSources = false,
-  notes,
-}: {
-  mediaId: string;
-  disableSources?: boolean;
-  notes?: string;
-}): Promise<{ ok: boolean; resolvedCount: number }> {
+/** A triage group holds at most one page of reports. */
+const MAX_GROUP_REPORTS = 50;
+
+/**
+ * Resolves the open reports in one triage group (one title or episode, one
+ * reason), and can turn off the one video source the reports were about.
+ */
+export async function resolveAllForMedia(
+  input: unknown
+): Promise<{ ok: boolean; resolvedCount: number }> {
   const { session, allowed } = await moderationSession();
   if (!allowed) {
     await setAdminFlash({ message: FORBIDDEN_USERS });
     return { ok: false, resolvedCount: 0 };
   }
-  if (!mediaId) return { ok: false, resolvedCount: 0 };
+  const fields = (input ?? {}) as Record<string, unknown>;
+  const mediaId = fields.mediaId;
+  const reportIds = Array.isArray(fields.reportIds)
+    ? [...new Set(fields.reportIds)]
+    : [];
+  if (
+    !isMediaId(mediaId) ||
+    reportIds.length === 0 ||
+    reportIds.length > MAX_GROUP_REPORTS ||
+    !reportIds.every((id): id is string => typeof id === "string" && REPORT_ID.test(id))
+  ) {
+    return { ok: false, resolvedCount: 0 };
+  }
+  const notes =
+    typeof fields.notes === "string" ? fields.notes.trim().slice(0, 1000) || null : null;
+  const disableSourceId =
+    typeof fields.disableSourceId === "string" && fields.disableSourceId !== ""
+      ? fields.disableSourceId
+      : null;
 
-  if (disableSources) {
-    await db.videoSource.updateMany({
-      where: {
-        OR: [{ mediaId }, { episodeId: mediaId }],
-      },
+  // Only reports still open, and only ones about this title, are resolved.
+  const open = await db.report.findMany({
+    where: { id: { in: reportIds }, mediaId, resolvedAt: null },
+    select: { id: true },
+  });
+  const ids = open.map((report) => report.id);
+
+  let disabled = 0;
+  if (disableSourceId) {
+    ({ count: disabled } = await db.videoSource.updateMany({
+      where: { id: disableSourceId, OR: [{ mediaId }, { episodeId: mediaId }] },
       data: { enabled: false },
-    });
+    }));
   }
 
-  const { count } = await db.report.updateMany({
-    where: { mediaId, resolvedAt: null },
-    data: {
-      resolvedAt: new Date(),
-      resolvedBy: session.user.email,
-      resolvedByUserId: session.user.id,
-      notes: notes?.trim() || null,
-    },
-  });
+  const { count } = ids.length
+    ? await db.report.updateMany({
+        where: { id: { in: ids }, resolvedAt: null },
+        data: {
+          resolvedAt: new Date(),
+          resolvedBy: session.user.email,
+          resolvedByUserId: session.user.id,
+          notes,
+        },
+      })
+    : { count: 0 };
 
   revalidatePath("/admin/reports");
-  revalidatePath("/admin/library/movies");
-  revalidatePath("/admin/library/series");
-  revalidatePath("/admin/library/episodes");
+  if (disabled) {
+    revalidatePath("/admin/library/movies");
+    revalidatePath("/admin/library/series");
+    revalidatePath("/admin/library/episodes");
+  }
 
   await setAdminFlash({
     message: `Resolved ${count} ${count === 1 ? "report" : "reports"}${
-      disableSources ? " and disabled broken video source" : ""
+      disabled ? " and turned off that video source" : ""
     }.`,
+    ...(count > 0 && { undo: { label: "Undo", action: "reopen_report", ids } }),
   });
 
   return { ok: true, resolvedCount: count };

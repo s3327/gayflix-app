@@ -54,7 +54,7 @@ test("uploads a poster for a new movie, then a backdrop for it", async ({ page, 
     expect(stored).toEqual({ pathname: expect.any(String), contentType: "image/png", access: "public", size: PNG.length });
 
     await main.getByRole("button", { name: "Add movie" }).click();
-    await expect(page).toHaveURL(`/admin/library/movies/${id}?added=1`);
+    await expect(page).toHaveURL(`/admin/library/movies/${id}`);
     expect(await sql(`SELECT "posterUrl" FROM media WHERE id = $1`, [id])).toEqual([{ posterUrl }]);
 
     // The edit page uploads too.

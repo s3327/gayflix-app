@@ -23,7 +23,7 @@ describe("admin-flash", () => {
     await setAdminFlash(flash);
     const retrieved = await getAdminFlash();
 
-    expect(retrieved).toEqual(flash);
+    expect(retrieved).toEqual({ ...flash, id: expect.any(String) });
   });
 
   it("returns null when no flash cookie exists", async () => {

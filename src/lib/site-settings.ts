@@ -36,23 +36,39 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
 };
 
 /**
- * Cached per request. Retrieves database site settings with safe default fallbacks.
+ * What the site runs with when its settings can't be read: closed to sign-ups
+ * and in maintenance, so a database fault never opens what an admin closed.
+ */
+export const FAIL_SAFE_SETTINGS: SiteSettingsData = {
+  ...DEFAULT_SETTINGS,
+  registrationOpen: false,
+  maintenanceMode: true,
+};
+
+/** The stored settings (defaults before the first save). Throws when they can't be read. */
+export async function readSiteSettings(): Promise<SiteSettingsData> {
+  const row = await db.siteSetting.findUnique({
+    where: { id: "default" },
+  });
+  if (!row) return DEFAULT_SETTINGS;
+  return {
+    ...DEFAULT_SETTINGS,
+    ...row,
+  };
+}
+
+/**
+ * Cached per request. Falls back to FAIL_SAFE_SETTINGS, not the defaults,
+ * when the settings can't be read.
  */
 export const getSiteSettings = cache(async (): Promise<SiteSettingsData> => {
   try {
-    const row = await db.siteSetting.findUnique({
-      where: { id: "default" },
-    });
-    if (!row) return DEFAULT_SETTINGS;
-    return {
-      ...DEFAULT_SETTINGS,
-      ...row,
-    };
+    return await readSiteSettings();
   } catch (err) {
     if (process.env.NODE_ENV !== "test" && process.env.NEXT_PHASE !== "phase-production-build") {
-      console.warn("Using default site settings:", (err as Error)?.message || err);
+      console.warn("Site settings unavailable, failing safe:", (err as Error)?.message || err);
     }
-    return DEFAULT_SETTINGS;
+    return FAIL_SAFE_SETTINGS;
   }
 });
 

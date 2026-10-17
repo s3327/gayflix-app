@@ -1,4 +1,6 @@
+import type { LookupAddress, LookupOptions } from "node:dns";
 import dns from "node:dns/promises";
+import https from "node:https";
 import net from "node:net";
 
 /**
@@ -142,4 +144,64 @@ export async function assertPublicHost(hostname: string): Promise<void> {
       throw new Error(`SSRF blocked: Hostname '${hostname}' resolved to private IP '${record.address}'`);
     }
   }
+}
+
+/**
+ * A DNS lookup for outgoing requests that refuses private addresses. Checking
+ * at connection time, on the very addresses the socket connects to, means a
+ * name can't pass a check and then resolve somewhere internal (DNS rebinding).
+ */
+export function publicOnlyLookup(
+  hostname: string,
+  options: LookupOptions,
+  callback: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void
+): void {
+  dns
+    .lookup(hostname, { ...options, all: true })
+    .then((records) => {
+      const blocked = records.find((record) => isPrivateIP(record.address));
+      if (records.length === 0 || blocked) {
+        callback(new Error(`SSRF blocked: '${hostname}' resolved to a private address`), "", 0);
+        return;
+      }
+      if (options.all) callback(null, records);
+      else callback(null, records[0].address, records[0].family);
+    })
+    .catch((err: NodeJS.ErrnoException) => callback(err, "", 0));
+}
+
+/**
+ * POSTs JSON to a public HTTPS URL, connecting only to public addresses and
+ * never following redirects. Resolves with the response status.
+ */
+export async function postJsonToPublicUrl(
+  urlStr: string,
+  body: unknown,
+  timeoutMs = 3000
+): Promise<number> {
+  if (!isPublicHttpsUrl(urlStr)) throw new Error("SSRF blocked: not a public HTTPS URL");
+  const url = new URL(urlStr);
+  await assertPublicHost(url.hostname);
+  const payload = JSON.stringify(body);
+  return new Promise((resolve, reject) => {
+    const request = https.request(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload),
+        },
+        lookup: publicOnlyLookup,
+        timeout: timeoutMs,
+      },
+      (response) => {
+        response.resume();
+        resolve(response.statusCode ?? 0);
+      }
+    );
+    request.on("timeout", () => request.destroy(new Error("Webhook timed out")));
+    request.on("error", reject);
+    request.end(payload);
+  });
 }

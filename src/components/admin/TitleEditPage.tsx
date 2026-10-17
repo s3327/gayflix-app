@@ -4,6 +4,7 @@ import { ArrowLeft, Plus } from "lucide-react";
 import Badge from "@/components/Badge";
 import MediaCoverThumb from "@/components/MediaCoverThumb";
 import { BUTTON_DANGER, BUTTON_PRIMARY, BUTTON_SECONDARY } from "@/components/admin/FormFields";
+import DropQueryParams from "@/components/admin/DropQueryParams";
 import ImportEpisodesModal from "@/components/admin/ImportEpisodesModal";
 import SeasonTableEditor from "@/components/admin/SeasonTableEditor";
 import TitleForm from "@/components/admin/TitleForm";
@@ -128,12 +129,7 @@ export default async function TitleEditPage({
                 : "Added as a draft. Set its status to Published when it's ready."}
             {isSeries && " Next, add its episodes below."}
           </p>
-          <script
-            dangerouslySetInnerHTML={{
-              __html:
-                'if (typeof window !== "undefined" && window.history.replaceState) { const u = new URL(window.location.href); if (u.searchParams.has("added") || u.searchParams.has("imported")) { u.searchParams.delete("added"); u.searchParams.delete("imported"); window.history.replaceState({}, "", u.pathname + (u.search ? u.search : "")); } }',
-            }}
-          />
+          <DropQueryParams names={["added", "imported"]} />
         </>
       )}
 

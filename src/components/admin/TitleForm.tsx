@@ -73,7 +73,9 @@ export default function TitleForm({
   const formRef = useRef<HTMLFormElement>(null);
   const [dirty, setDirty] = useState(false);
   const [enteredTitle, setEnteredTitle] = useState(values.title || "");
-  const submittedRef = useRef(false);
+  // Edits are unsaved until a save goes through: a reply with problems
+  // still holds what was typed, not what's stored.
+  const unsaved = !pending && (dirty || (state.version !== undefined && hasErrors));
 
   const trimmedTitle = enteredTitle.trim().toLowerCase();
   const duplicateMatch =
@@ -81,16 +83,38 @@ export default function TitleForm({
       ? existingTitles.find((t) => t.trim().toLowerCase() === trimmedTitle)
       : null;
 
-  // Warn on unsaved changes when leaving
+  // Warn before unsaved changes are lost: closing or reloading the tab, and
+  // following a link inside the panel (which beforeunload doesn't see).
   useEffect(() => {
+    if (!unsaved) return;
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (dirty && !submittedRef.current) {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    const handleClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+        return;
+      }
+      const link = (e.target as Element | null)?.closest?.("a[href]");
+      if (!(link instanceof HTMLAnchorElement) || link.target === "_blank" || link.hasAttribute("download")) {
+        return;
+      }
+      const to = new URL(link.href, window.location.href);
+      if (to.origin !== window.location.origin) return;
+      if (to.pathname === window.location.pathname && to.search === window.location.search) return;
+      if (!window.confirm("You have unsaved changes. Leave this page without saving them?")) {
         e.preventDefault();
+        e.stopPropagation();
       }
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [dirty]);
+    // Capture, so this runs before the Link that would navigate.
+    document.addEventListener("click", handleClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("click", handleClick, true);
+    };
+  }, [unsaved]);
 
   // Problems to fix: start at the first one.
   useEffect(() => {
@@ -111,7 +135,6 @@ export default function TitleForm({
       ref={formRef}
       key={state.version ?? 0}
       action={(formData) => {
-        submittedRef.current = true;
         setDirty(false);
         formAction(formData);
       }}
@@ -130,6 +153,15 @@ export default function TitleForm({
           <option value="draft">Draft (not on the site)</option>
           <option value="published">Published</option>
         </SelectField>
+        <TextField
+          name="publishAt"
+          type="datetime-local"
+          label="Publish at (UTC)"
+          optional
+          defaultValue={values.publishAt}
+          hint="For a draft: it goes live at the first daily publishing run (03:15 UTC) from this time. Publishing it yourself clears this."
+          error={errors.publishAt}
+        />
         <div className="flex items-end pb-1">
           <CheckboxField
             name="featured"

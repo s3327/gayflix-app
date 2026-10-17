@@ -604,15 +604,28 @@ export type LibraryRow = {
   episodes?: number;
 };
 
-export type LibrarySort = "title" | "year" | "status" | "viewCount" | "publishedAt" | "createdAt" | "updatedAt";
+const LIBRARY_SORTS = [
+  "title",
+  "year",
+  "status",
+  "viewCount",
+  "publishedAt",
+  "createdAt",
+  "updatedAt",
+] as const;
+export type LibrarySort = (typeof LIBRARY_SORTS)[number];
 export type LibraryOrder = "asc" | "desc";
-export type LibraryAudit =
-  | "missing-video"
-  | "no-video"
-  | "missing-backdrop"
-  | "no-backdrop"
-  | "empty-series"
-  | "stale-drafts";
+const LIBRARY_AUDITS = [
+  "missing-video",
+  "no-video",
+  "missing-backdrop",
+  "no-backdrop",
+  "empty-series",
+  "stale-drafts",
+] as const;
+export type LibraryAudit = (typeof LIBRARY_AUDITS)[number];
+/** The most rows one library page shows (and one bulk action can check). */
+export const MAX_LIBRARY_PAGE_SIZE = 100;
 
 /**
  * The admin library: one page of movies or series, drafts included.
@@ -643,6 +656,13 @@ export async function listLibrary({
 }) {
   await requireAdmin();
   await connection();
+  // These come from the address bar: anything unknown falls back to the default.
+  sort = LIBRARY_SORTS.find((known) => known === sort) ?? "createdAt";
+  order = order === "asc" ? "asc" : "desc";
+  audit = LIBRARY_AUDITS.find((known) => known === audit);
+  pageSize = Number.isInteger(pageSize)
+    ? Math.min(Math.max(pageSize, 1), MAX_LIBRARY_PAGE_SIZE)
+    : LIBRARY_PAGE_SIZE;
   const search = normalizeQuery(query);
   const where: Prisma.MediaWhereInput = {
     type,
@@ -679,7 +699,7 @@ export async function listLibrary({
     updatedAt: { updatedAt: order },
   };
   const orderBy: Prisma.MediaOrderByWithRelationInput[] = [
-    sortMap[sort] ?? { createdAt: "desc" },
+    sortMap[sort],
     { id: "desc" },
   ];
 
@@ -728,7 +748,7 @@ export async function listLibrary({
     videoSourcesCount: _count.videoSources,
     ...(_count.episodes > 0 ? { seasons: seasons.get(row.id), episodes: _count.episodes } : {}),
   }));
-  return { items, page, totalPages, total };
+  return { items, page, totalPages, total, sort, order, audit, pageSize };
 }
 
 // --- Admin editor ---------------------------------------------------------------

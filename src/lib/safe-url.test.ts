@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isPublicHttpsUrl, isPrivateIPv4, isPrivateIPv6, assertPublicHost } from "./safe-url";
+import {
+  isPublicHttpsUrl,
+  isPrivateIPv4,
+  isPrivateIPv6,
+  assertPublicHost,
+  publicOnlyLookup,
+} from "./safe-url";
 
 describe("safe-url SSRF prevention", () => {
   it("rejects non-https URLs", () => {
@@ -55,5 +61,12 @@ describe("safe-url SSRF prevention", () => {
     await expect(assertPublicHost("localhost")).rejects.toThrow("SSRF blocked");
     await expect(assertPublicHost("127.0.0.1")).rejects.toThrow("SSRF blocked");
     await expect(assertPublicHost("169.254.169.254")).rejects.toThrow("SSRF blocked");
+  });
+
+  it("refuses at connection time a name that resolves to a private address", async () => {
+    const err = await new Promise<Error | null>((resolve) =>
+      publicOnlyLookup("localhost", {}, (lookupErr) => resolve(lookupErr))
+    );
+    expect(err?.message).toContain("SSRF blocked");
   });
 });

@@ -5,7 +5,13 @@ import LibraryTable from "@/components/admin/LibraryTable";
 import AuditFilterPills from "@/components/admin/AuditFilterPills";
 import FilterChipsBar from "@/components/admin/FilterChipsBar";
 import Pagination from "@/components/Pagination";
-import { listLibrary, type LibrarySort, type LibraryOrder, type LibraryAudit } from "@/lib/catalog";
+import {
+  LIBRARY_PAGE_SIZE,
+  listLibrary,
+  type LibrarySort,
+  type LibraryOrder,
+  type LibraryAudit,
+} from "@/lib/catalog";
 import type { MediaStatus, MediaType } from "@/lib/media";
 import { normalizeQuery } from "@/lib/search";
 import { firstParam, pageParam, type SearchParams } from "@/lib/search-params";
@@ -29,22 +35,22 @@ export default async function LibraryPage({
 }) {
   const query = normalizeQuery(firstParam(searchParams.q) ?? "");
   const status = statusParam(firstParam(searchParams.status));
-  const sort = (firstParam(searchParams.sort) as LibrarySort) ?? "createdAt";
-  const order = (firstParam(searchParams.order) as LibraryOrder) ?? "desc";
-  const audit = firstParam(searchParams.audit) as LibraryAudit | undefined;
+  // listLibrary checks these and replaces unknown ones; the links below use what it used.
+  const requestedSort = firstParam(searchParams.sort) as LibrarySort | undefined;
+  const requestedOrder = firstParam(searchParams.order) as LibraryOrder | undefined;
+  const requestedAudit = firstParam(searchParams.audit) as LibraryAudit | undefined;
   const genre = firstParam(searchParams.genre);
-  const pageSizeParam = Number(firstParam(searchParams.pageSize));
-  const pageSize = !isNaN(pageSizeParam) && pageSizeParam > 0 ? pageSizeParam : 50;
+  const requestedPageSize = Number(firstParam(searchParams.pageSize) ?? LIBRARY_PAGE_SIZE);
 
-  const { items, page, totalPages, total } = await listLibrary({
+  const { items, page, totalPages, total, sort, order, audit, pageSize } = await listLibrary({
     type,
     page: pageParam(searchParams.page),
     query,
     status,
-    sort,
-    order,
-    pageSize,
-    audit,
+    sort: requestedSort,
+    order: requestedOrder,
+    pageSize: requestedPageSize,
+    audit: requestedAudit,
     genre,
   });
 
@@ -57,7 +63,7 @@ export default async function LibraryPage({
     if (order && order !== "desc") qs.set("order", order);
     if (audit) qs.set("audit", audit);
     if (genre) qs.set("genre", genre);
-    if (pageSize !== 50) qs.set("pageSize", String(pageSize));
+    if (pageSize !== LIBRARY_PAGE_SIZE) qs.set("pageSize", String(pageSize));
     if (target !== 1) qs.set("page", String(target));
     const search = qs.toString();
     return search ? `${basePath}?${search}` : basePath;

@@ -48,7 +48,7 @@ test.describe("admin title editor", () => {
       await fillTitle(page, title, "95");
       await main.getByRole("button", { name: "Add movie" }).click();
 
-      await expect(page).toHaveURL(`/admin/library/movies/${id}?added=1`);
+      await expect(page).toHaveURL(`/admin/library/movies/${id}`);
       await expect(main.getByRole("status")).toHaveText(
         "Added as a draft. Set its status to Published when it's ready."
       );
@@ -140,7 +140,7 @@ test.describe("admin title editor", () => {
       await fillTitle(page, `E2E Series ${uid}`);
       await main.getByLabel("Status").selectOption("published");
       await main.getByRole("button", { name: "Add series" }).click();
-      await expect(page).toHaveURL(`/admin/library/series/${id}?added=1`);
+      await expect(page).toHaveURL(`/admin/library/series/${id}`);
       await expect(main.getByRole("status")).toHaveText(
         "Added and published. Next, add its episodes below."
       );
