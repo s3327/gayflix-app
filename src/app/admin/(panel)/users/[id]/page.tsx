@@ -22,7 +22,7 @@ import {
 } from "@/lib/admin-user-actions";
 import { getUserForAdmin } from "@/lib/admin-users";
 import { getEntityActivity } from "@/lib/activity-logger";
-import { isOwner } from "@/lib/admin-roles";
+import { canChangeRoles, isOwner, roleLabel, staffTargetProblem } from "@/lib/admin-roles";
 import { requireAdmin } from "@/lib/session";
 import {
   BAN_LENGTHS,
@@ -67,6 +67,8 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
   if (!user) notFound();
 
   const isSelf = user.id === session.user.id;
+  // Edit user and Reset 2FA follow the same rule as their server functions.
+  const canChange = !isSelf && staffTargetProblem(session.user.role, user.role) === null;
   const admin = isAdmin(user);
   const banned = isBanned(user);
   const problem = (action: UserAction) => userActionProblem(action, session.user.id, user);
@@ -91,14 +93,16 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
           </div>
           <p className="mt-1 break-all text-sm text-ink-secondary">{user.email}</p>
         </div>
-        <EditUserModal
-          user={{
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            emailVerified: user.emailVerified,
-          }}
-        />
+        {canChange && (
+          <EditUserModal
+            user={{
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              emailVerified: user.emailVerified,
+            }}
+          />
+        )}
       </div>
 
       {isSelf && (
@@ -122,12 +126,18 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
 
       <div className="mt-10 flex max-w-2xl flex-col gap-6">
         <Section title="Role & Permissions">
-          <UserRoleSection
-            userId={user.id}
-            currentRole={user.role ?? "user"}
-            isSelf={isSelf}
-            isViewerOwner={isOwner(session.user.role)}
-          />
+          {canChangeRoles(session.user.role) ? (
+            <UserRoleSection
+              userId={user.id}
+              currentRole={user.role ?? "user"}
+              isSelf={isSelf}
+              isViewerOwner={isOwner(session.user.role)}
+            />
+          ) : (
+            <p>
+              {roleLabel(user.role)}. Only an Owner or an Admin can change roles.
+            </p>
+          )}
         </Section>
 
         <Section title="Admin access">
@@ -243,7 +253,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
         {user.twoFactorEnabled && (
           <Section title="Two-Factor Authentication">
             <p>Two-factor authentication is active on this account.</p>
-            {!isSelf && (
+            {canChange && (
               <div className="mt-4">
                 <Reset2FaButton userId={user.id} userEmail={user.email} />
               </div>
