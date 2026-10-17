@@ -14,6 +14,7 @@ type ListsContextValue = {
   createList: (name: string, firstItem?: FavoriteEntry) => MediaList | undefined;
   deleteList: (id: string) => void;
   renameList: (id: string, name: string) => void;
+  setListPublic: (id: string, isPublic: boolean) => void;
   addToList: (listId: string, entry: FavoriteEntry) => void;
   removeFromList: (listId: string, itemId: string) => void;
   isInList: (listId: string, itemId: string) => boolean;
@@ -25,8 +26,9 @@ type ListsRecord = Record<string, MediaList>;
 
 /**
  * The signed-in user's lists, stored in their account (see
- * src/lib/library-actions.ts). Anyone with a list's link can view it at
- * /list/[id]; only the owner can change it. Changes show immediately and
+ * src/lib/library-actions.ts). A list is private until its owner shares
+ * it; then anyone with the link can view it at /list/[id]. Only the
+ * owner can change it. Changes show immediately and
  * are undone, with a toast, if the server rejects them.
  *
  * List ids are random UUIDs made here, so a new list can be used (and
@@ -80,6 +82,7 @@ export function ListsProvider({
       const newList: MediaList = {
         id: crypto.randomUUID(),
         name: cleanListName(name),
+        isPublic: false,
         createdAt: new Date().toISOString(),
         items: firstItem ? [firstItem] : [],
       };
@@ -125,6 +128,17 @@ export function ListsProvider({
       showToast("List renamed");
     },
     [commit, showToast]
+  );
+
+  const setListPublic = useCallback(
+    (id: string, isPublic: boolean) => {
+      commit(
+        id,
+        (prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], isPublic } } : prev),
+        () => library.setListPublic(id, isPublic)
+      );
+    },
+    [commit]
   );
 
   const addToList = useCallback(
@@ -176,11 +190,22 @@ export function ListsProvider({
       createList,
       deleteList,
       renameList,
+      setListPublic,
       addToList,
       removeFromList,
       isInList,
     }),
-    [lists, getList, createList, deleteList, renameList, addToList, removeFromList, isInList]
+    [
+      lists,
+      getList,
+      createList,
+      deleteList,
+      renameList,
+      setListPublic,
+      addToList,
+      removeFromList,
+      isInList,
+    ]
   );
 
   return <ListsContext.Provider value={value}>{children}</ListsContext.Provider>;
@@ -194,7 +219,7 @@ export function useLists() {
   return context;
 }
 
-/** Copies a list's share link, which works for anyone who opens it. */
+/** Copies a list's link, which works for anyone once the list is shared. */
 export async function copyListLink(listId: string, showToast: (message: string) => void) {
   try {
     await navigator.clipboard.writeText(`${window.location.origin}/list/${listId}`);
