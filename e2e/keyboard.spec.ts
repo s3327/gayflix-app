@@ -231,7 +231,7 @@ test("search by keyboard", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Gayflix home" })).toBeFocused();
   expect(await hiddenRingSides(page)).toEqual([]);
 
-  const button = page.getByRole("button", { name: "Search" });
+  const button = page.getByRole("banner").getByRole("button", { name: "Search" });
   const input = page.getByPlaceholder("Search titles...");
   await page.keyboard.press("Tab");
   await expect(button).toBeFocused();
@@ -241,19 +241,32 @@ test("search by keyboard", async ({ page }) => {
   await expect(input).toBeHidden();
   await expect(button).toBeFocused();
 
-  // Tab moves through the suggestions; past the last one, the dropdown
-  // closes.
+  // The arrows move through the suggestions while focus stays in the
+  // box; Enter opens the one picked.
   await page.keyboard.press("Enter");
   await expect(input).toBeFocused();
   await page.keyboard.type("brownstone");
-  const suggestions = page.getByRole("banner").getByRole("listitem").getByRole("link");
-  await expect(suggestions.first()).toHaveAccessibleName(/^The Brownstone/);
-  const count = await suggestions.count();
-  for (let i = 0; i < count; i++) {
-    await page.keyboard.press("Tab");
-    await expect(suggestions.nth(i)).toBeFocused();
-    expect(await hiddenRingSides(page)).toEqual([]);
-  }
+  const box = page.getByRole("combobox", { name: "Search titles" });
+  const options = page.getByRole("listbox", { name: "Suggestions" }).getByRole("option");
+  await expect(options.first()).toHaveAccessibleName(/^The Brownstone/);
+  await expect(options.last()).toHaveText("See 1 title");
+  await expect(box).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("ArrowDown");
+  await expect(box).toBeFocused();
+  await expect(options.first()).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowDown");
+  await expect(options.last()).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowDown");
+  await expect(options.first()).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/search\?q=brownstone$/);
+  await expect(input).toBeHidden();
+
+  // Tab leaves the box, and the dropdown closes.
+  await button.click();
+  await page.keyboard.type("brownstone");
+  await expect(options.first()).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(input).toBeHidden();
   await expect(page.getByRole("link", { name: "Log in" })).toBeFocused();

@@ -5,8 +5,9 @@ import { getSession } from "@/lib/session";
 import { isStaffRole } from "@/lib/admin-roles";
 
 /**
- * Live suggestions for the header search box. Runs on the server so the
- * catalog never has to ship in the client bundle.
+ * Live suggestions for the header search box, and how many titles the
+ * search page would find. Runs on the server so the catalog never has to
+ * ship in the client bundle.
  */
 export async function GET(request: NextRequest) {
   const [settings, session] = await Promise.all([getSiteSettings(), getSession()]);
@@ -21,8 +22,9 @@ export async function GET(request: NextRequest) {
   }
 
   const query = request.nextUrl.searchParams.get("q") ?? "";
+  const { items, total } = await suggestTitles(query);
   return NextResponse.json(
-    { results: await suggestTitles(query) },
+    { results: items, total },
     { headers: { "Cache-Control": "public, max-age=60" } }
   );
 }
