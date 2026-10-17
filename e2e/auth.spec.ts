@@ -103,13 +103,18 @@ test("signing up again with a taken email emails the owner instead", async ({ pa
   const account = newAccount("signup-again");
   since = Date.now();
   await request.post("/api/auth/sign-up/email", { data: account });
-  // The first code is sent after the response; wait for it, so it isn't
-  // mistaken for the new one.
-  await waitForEmail(account.email, since);
-  since = Date.now();
+  // Both codes are sent after the response. Wait for the new one by its
+  // code, not its time: the first email can carry the same millisecond as
+  // a timestamp taken just after it arrives.
+  const first = codeFrom(await waitForEmail(account.email, since));
   await request.post("/api/auth/sign-up/email", { data: account });
-  const code = codeFrom(await waitForEmail(account.email, since));
+  let code = first;
+  for (let attempt = 0; attempt < 50 && code === first; attempt++) {
+    code = codeFrom(await waitForEmail(account.email, since));
+    if (code === first) await new Promise((resolve) => setTimeout(resolve, 100));
+  }
   expect(code).not.toBe("");
+  expect(code).not.toBe(first);
   const verify = await request.post("/api/auth/email-otp/verify-email", {
     data: { email: account.email, otp: code },
   });
