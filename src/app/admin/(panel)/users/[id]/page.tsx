@@ -69,6 +69,9 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="px-6 py-10 sm:px-10">
+      {/* Also rendered here, so the tab keeps its title while a ban or
+          role change re-renders the page (generateMetadata streams in later). */}
+      <title>{user.name ? `${user.name} (${user.email}) · Gayflix Admin` : `${user.email} · Gayflix Admin`}</title>
       <Link
         href="/admin/users"
         className="inline-flex items-center gap-1.5 text-sm text-ink-secondary transition-colors hover:text-ink-primary"
