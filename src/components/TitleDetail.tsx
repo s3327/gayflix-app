@@ -75,13 +75,17 @@ export default function TitleDetail({
             <h1 className="flex flex-wrap items-baseline gap-2 font-display text-xl font-bold sm:text-2xl">
               {title.title}
               <span className="text-base font-normal text-ink-secondary">({title.year})</span>
-              {title.rating !== undefined && (
-                <span className="flex items-center gap-1 text-sm font-semibold text-pride-yellow">
-                  <Star className="h-4 w-4 fill-current" />
-                  {title.rating.toFixed(1)}
-                </span>
-              )}
             </h1>
+            {title.rating !== undefined && (
+              <p className="mt-1 flex items-center gap-1 text-sm font-semibold text-pride-yellow">
+                <Star className="h-4 w-4 fill-current" aria-hidden />
+                <span className="sr-only">Rating: </span>
+                <span>
+                  {title.rating.toFixed(1)}
+                  <span className="font-normal text-ink-muted">/5</span>
+                </span>
+              </p>
+            )}
 
             {title.tagline && (
               <p className="mt-1 text-sm italic leading-snug text-ink-muted">{title.tagline}</p>

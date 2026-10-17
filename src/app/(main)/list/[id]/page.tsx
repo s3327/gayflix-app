@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { findList } from "@/lib/library";
+import { OPEN_GRAPH } from "@/lib/page-metadata";
 import { getSession } from "@/lib/session";
 import ListView from "./ListView";
 
@@ -41,9 +42,10 @@ export async function generateMetadata({
     robots: { index: false },
     openGraph: list.isPublic
       ? {
+          ...OPEN_GRAPH,
           title: list.name,
           description,
-          images: list.items.find((item) => item.posterUrl)?.posterUrl,
+          images: list.items.find((item) => item.posterUrl)?.posterUrl ?? OPEN_GRAPH.images,
         }
       : undefined,
   };
