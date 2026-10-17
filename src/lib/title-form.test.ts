@@ -14,6 +14,7 @@ import {
   parseBulkTags,
   parseEpisode,
   parseQuickEdit,
+  parseSeasonRows,
   parseTitle,
   seriesDuration,
   slugify,
@@ -372,5 +373,45 @@ describe("parseBulkTags", () => {
     expect(bulkTagsProblem(["a"], ["Drama"])).toBeNull();
     expect(bulkTagsProblem(["a"], [])).toBe("Every title needs at least one genre.");
     expect(bulkTagsProblem(Array.from({ length: 21 }, (_, i) => `t${i}`), ["Drama"])).not.toBeNull();
+  });
+});
+
+describe("parseSeasonRows", () => {
+  const hosts = ["image.tmdb.org"];
+  const row = { id: "show-season-1-episode-1", episodeNumber: 1, title: " Pilot ", duration: "42 min", airDate: null };
+
+  it("cleans the rows", () => {
+    expect(parseSeasonRows(1, [{ ...row, airDate: "2026-10-10T00:00:00.000Z", stillUrl: "" }], hosts)).toEqual({
+      ok: true,
+      seasonNumber: 1,
+      rows: [{ id: row.id, episodeNumber: 1, title: "Pilot", minutes: 42, airDate: new Date("2026-10-10T00:00:00Z"), stillUrl: null }],
+    });
+  });
+
+  it("allows a swap", () => {
+    const swap = [
+      { ...row, episodeNumber: 2 },
+      { ...row, id: "show-season-1-episode-2", episodeNumber: 1 },
+    ];
+    expect(parseSeasonRows(1, swap, hosts).ok).toBe(true);
+  });
+
+  it("turns away bad rows", () => {
+    expect(parseSeasonRows(0, [row], hosts).ok).toBe(false);
+    expect(parseSeasonRows(1, "rows", hosts).ok).toBe(false);
+    expect(parseSeasonRows(1, [row, row], hosts).ok).toBe(false);
+    expect(parseSeasonRows(1, [{ ...row, id: "../x" }], hosts).ok).toBe(false);
+    for (const bad of [
+      { episodeNumber: 0 },
+      { title: "" },
+      { duration: "long" },
+      { airDate: "soon" },
+      { stillUrl: "http://example.com/a.jpg" },
+    ]) {
+      expect(parseSeasonRows(1, [{ ...row, ...bad }], hosts)).toMatchObject({ ok: false });
+    }
+    expect(
+      parseSeasonRows(1, [row, { ...row, id: "show-season-1-episode-2" }], hosts)
+    ).toMatchObject({ ok: false, errors: { "show-season-1-episode-2-episodeNumber": "Season 1 already has an episode 1." } });
   });
 });

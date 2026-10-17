@@ -417,6 +417,84 @@ export function episodeId(seriesId: string, season: number, episode: number) {
   return `${seriesId}-season-${season}-episode-${episode}`;
 }
 
+/** One row of a season's table editor, as checked. */
+export type SeasonRowInput = {
+  id: string;
+  episodeNumber: number;
+  title: string;
+  minutes: number;
+  airDate: Date | null;
+  stillUrl: string | null;
+};
+
+/** A season holds at most this many episodes in the table editor. */
+export const SEASON_ROWS_MAX = 1000;
+
+/**
+ * Checks a season's table editor. Errors are keyed "<episode id>-<field>",
+ * as the table shows them.
+ */
+export function parseSeasonRows(
+  seasonArg: unknown,
+  rowsArg: unknown,
+  hosts: string[]
+): { ok: true; seasonNumber: number; rows: SeasonRowInput[] } | { ok: false; message: string; errors?: Record<string, string> } {
+  if (typeof seasonArg !== "number" || !Number.isInteger(seasonArg) || seasonArg < 1 || seasonArg > 100) {
+    return { ok: false, message: "Enter a season from 1 to 100." };
+  }
+  if (!Array.isArray(rowsArg) || rowsArg.length === 0 || rowsArg.length > SEASON_ROWS_MAX) {
+    return { ok: false, message: "Nothing to save." };
+  }
+  const errors: Record<string, string> = {};
+  const rows: SeasonRowInput[] = [];
+  const ids = new Set<string>();
+  const numbers = new Set<number>();
+  for (const raw of rowsArg as unknown[]) {
+    const row = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+    if (!isMediaId(row.id) || ids.has(row.id)) {
+      return { ok: false, message: "This table is out of date. Reload the page." };
+    }
+    const id = row.id;
+    ids.add(id);
+    const fail = (field: string, problem: string) => {
+      errors[`${id}-${field}`] ??= problem;
+    };
+
+    const episodeNumber = row.episodeNumber;
+    if (typeof episodeNumber !== "number" || !Number.isInteger(episodeNumber) || episodeNumber < 1 || episodeNumber > 1000) {
+      fail("episodeNumber", "Enter an episode number from 1 to 1000.");
+    } else if (numbers.has(episodeNumber)) {
+      fail("episodeNumber", `Season ${seasonArg} already has an episode ${episodeNumber}.`);
+    } else {
+      numbers.add(episodeNumber);
+    }
+
+    const title = typeof row.title === "string" ? row.title.trim() : "";
+    const titleProblem = requiredText(title, 200, "Enter the title.");
+    if (titleProblem) fail("title", titleProblem);
+
+    const minutesMatch = typeof row.duration === "string" ? /^(\d{1,3})\s*(?:min|m)?$/i.exec(row.duration.trim()) : null;
+    const minutes = minutesMatch ? Number(minutesMatch[1]) : 0;
+    if (minutes < 1) fail("duration", "Enter the length in minutes, like 42 min.");
+
+    // A date input's "2026-10-10", or the same day as a full ISO time.
+    const airDateText = typeof row.airDate === "string" ? row.airDate.slice(0, 10) : "";
+    const airDate = airDateText ? calendarDate(airDateText) : null;
+    if (row.airDate != null && row.airDate !== "" && !airDate) fail("airDate", "Enter a date, or leave it empty.");
+
+    const stillUrl = typeof row.stillUrl === "string" && row.stillUrl.trim() ? row.stillUrl.trim() : null;
+    if (row.stillUrl != null && typeof row.stillUrl !== "string") fail("stillUrl", "That isn't a link.");
+    const stillProblem = stillUrl && imageUrlProblem(stillUrl, hosts);
+    if (stillProblem) fail("stillUrl", stillProblem);
+
+    rows.push({ id, episodeNumber: episodeNumber as number, title, minutes, airDate, stillUrl });
+  }
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, message: Object.values(errors)[0], errors };
+  }
+  return { ok: true, seasonNumber: seasonArg, rows };
+}
+
 // --- Durations, addresses and gradients ---------------------------------------
 
 /** A movie card's duration: "1h 52m", "2h 05m", "48m". */

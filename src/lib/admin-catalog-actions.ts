@@ -21,11 +21,11 @@ import {
   episodeId,
   formValues,
   bulkTagsProblem,
-  imageUrlProblem,
   libraryPath,
   parseBulkTags,
   parseEpisode,
   parseQuickEdit,
+  parseSeasonRows,
   parseTitle,
   seriesDuration,
   splitList,
@@ -947,116 +947,61 @@ export type SeasonEpisodeRow = {
   stillUrl?: string | null;
 };
 
+/**
+ * Saves a season's table editor. Episodes keep their ids (their addresses)
+ * when renumbered, like the episode edit page, so their video sources,
+ * watch history and links stay with them. Numbers can be swapped or
+ * shifted in one save.
+ */
 export async function saveSeasonEpisodesAction(
-  seriesId: string,
-  seasonNumber: number,
-  episodes: SeasonEpisodeRow[]
+  seriesIdArg: unknown,
+  seasonArg: unknown,
+  episodesArg: unknown
 ): Promise<{ ok: boolean; message?: string; errors?: Record<string, string> }> {
   const { allowed } = await catalogSession();
   if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
-  if (!isMediaId(seriesId)) throw new Error("Invalid series ID");
+  const seriesId = itemId(seriesIdArg);
+  const parsed = parseSeasonRows(seasonArg, episodesArg, imageHosts());
+  if (!parsed.ok) return { ok: false, message: parsed.message, errors: parsed.errors };
+  const { seasonNumber, rows } = parsed;
 
-  const errors: Record<string, string> = {};
-  const hosts = imageHosts();
-  const seen = new Set<number>();
+  const series = await db.media.findUnique({ where: { id: seriesId }, select: { type: true, trashedAt: true } });
+  if (!series || series.type !== "series") return { ok: false, message: "This series was deleted." };
+  if (series.trashedAt) return { ok: false, message: SERIES_IN_TRASH };
 
-  for (const ep of episodes) {
-    if (!ep.title.trim()) {
-      errors[`${ep.id}-title`] = "Enter the title.";
-    }
-    if (!ep.episodeNumber || ep.episodeNumber < 1) {
-      errors[`${ep.id}-episodeNumber`] = "Enter a valid episode number.";
-    } else if (seen.has(ep.episodeNumber)) {
-      errors[`${ep.id}-episodeNumber`] = `Season ${seasonNumber} already has an episode ${ep.episodeNumber}.`;
-    } else {
-      seen.add(ep.episodeNumber);
-    }
-    if (ep.stillUrl) {
-      const prob = imageUrlProblem(ep.stillUrl, hosts);
-      if (prob) {
-        errors[`${ep.id}-stillUrl`] = prob;
+  const OUT_OF_DATE = "This season changed since the page loaded. Reload the page and try again.";
+  try {
+    await db.$transaction(async (tx) => {
+      const existing = await tx.episode.findMany({
+        where: { mediaId: seriesId, seasonNumber, id: { in: rows.map((row) => row.id) } },
+        select: { id: true },
+      });
+      if (existing.length !== rows.length) throw new Error(OUT_OF_DATE);
+
+      // Out of the way first (negative numbers no episode uses), so a swap
+      // or a shift doesn't trip over the one-number-per-episode rule.
+      for (const [index, row] of rows.entries()) {
+        await tx.episode.update({ where: { id: row.id }, data: { episodeNumber: -(index + 1) } });
       }
-    }
-  }
-
-  if (Object.keys(errors).length > 0) {
-    const errorMsg = Object.values(errors)[0] ?? "Some fields need fixing.";
-    return { ok: false, message: errorMsg, errors };
-  }
-
-  await db.$transaction(async (tx) => {
-    const existing = await tx.episode.findMany({
-      where: { mediaId: seriesId, seasonNumber },
-    });
-    const existingById = new Map(existing.map((e) => [e.id, e]));
-
-    for (const ep of episodes) {
-      const newSlug = `${seriesId}-season-${seasonNumber}-episode-${ep.episodeNumber}`;
-      const prev = existingById.get(ep.id);
-
-      if (prev) {
-        if (prev.episodeNumber !== ep.episodeNumber) {
-          await tx.episodeRedirect.upsert({
-            where: { oldSlug: prev.id },
-            create: {
-              mediaId: seriesId,
-              oldSlug: prev.id,
-              newSlug,
-              oldSeasonNumber: prev.seasonNumber,
-              oldEpisodeNumber: prev.episodeNumber,
-              newSeasonNumber: seasonNumber,
-              newEpisodeNumber: ep.episodeNumber,
-            },
-            update: {
-              newSlug,
-              newSeasonNumber: seasonNumber,
-              newEpisodeNumber: ep.episodeNumber,
-            },
-          });
-          await tx.$executeRaw`
-            UPDATE episode
-            SET id = ${newSlug},
-                "episodeNumber" = ${ep.episodeNumber},
-                title = ${ep.title.trim()},
-                duration = ${ep.duration.trim() || '45 min'},
-                "airDate" = ${ep.airDate ? new Date(ep.airDate) : null},
-                "stillUrl" = ${ep.stillUrl?.trim() || null}
-            WHERE id = ${prev.id}
-          `;
-          await tx.$executeRaw`
-            UPDATE video_source
-            SET "episodeId" = ${newSlug}
-            WHERE "episodeId" = ${prev.id}
-          `;
-        } else {
-          await tx.episode.update({
-            where: { id: prev.id },
-            data: {
-              title: ep.title.trim(),
-              duration: ep.duration.trim() || "45 min",
-              airDate: ep.airDate ? new Date(ep.airDate) : null,
-              stillUrl: ep.stillUrl?.trim() || null,
-            },
-          });
-        }
-      } else {
-        await tx.episode.create({
+      for (const row of rows) {
+        await tx.episode.update({
+          where: { id: row.id },
           data: {
-            id: newSlug,
-            mediaId: seriesId,
-            seasonNumber,
-            episodeNumber: ep.episodeNumber,
-            title: ep.title.trim(),
-            duration: ep.duration.trim() || "45 min",
-            airDate: ep.airDate ? new Date(ep.airDate) : null,
-            stillUrl: ep.stillUrl?.trim() || null,
+            episodeNumber: row.episodeNumber,
+            title: row.title,
+            duration: episodeDuration(row.minutes),
+            airDate: row.airDate,
+            stillUrl: row.stillUrl,
           },
         });
       }
-    }
-
-    await refreshSeasons(tx, seriesId);
-  });
+      await refreshSeasons(tx, seriesId);
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === OUT_OF_DATE) return { ok: false, message: OUT_OF_DATE };
+    if (!isUniqueViolation(error)) throw error;
+    return { ok: false, message: "Another episode of this season already has one of those numbers." };
+  }
 
   refreshPages();
   return { ok: true, message: "Saved." };

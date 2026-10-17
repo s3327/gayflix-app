@@ -341,7 +341,7 @@ test.describe("bulk season table editor and slug management", () => {
     }
   });
 
-  test("T1-Catalog-3: renumbering an episode generates new slug and records redirect in episode_redirect", async ({
+  test("T1-Catalog-3: renumbering swaps episode numbers, keeps each episode's address, and saves again", async ({
     page,
     consoleProblems,
   }) => {
@@ -349,46 +349,43 @@ test.describe("bulk season table editor and slug management", () => {
     const uid = uniqueId();
     const seriesId = `e2e-renumber-${uid}`;
     await seedSeriesWithEpisodes(seriesId, `E2E Renumber ${uid}`, 3);
-    const oldSlug = `${seriesId}-season-1-episode-2`;
-    const newSlug = `${seriesId}-season-1-episode-4`;
-    try {
-      await page.goto(`/admin/library/series/${seriesId}`);
-      const editor = page.locator("section").filter({ hasText: /season 1|episodes/i });
-
-      // Locate Episode 2 row and change episode number to 4
-      const ep2Row = editor.getByRole("row").filter({ hasText: /Episode 2/ });
-      const epNumInput = ep2Row.getByRole("spinbutton").or(ep2Row.getByLabel(/episode/i)).or(ep2Row.locator("input[type='number']"));
-      await epNumInput.fill("4");
-
-      const saveBtn = editor.getByRole("button", { name: /save season|save changes/i }).first();
-      await saveBtn.click();
-      await expect(page.getByText(/saved/i).first()).toBeVisible();
-
-      // Check episode table has new slug
-      const newEp = await sql<{ id: string; episodeNumber: number }>(
-        `SELECT id, "episodeNumber" FROM episode WHERE id = $1`,
-        [newSlug]
-      );
-      expect(newEp.length).toBe(1);
-      expect(newEp[0].episodeNumber).toBe(4);
-
-      // Check episode_redirect table
-      const redirects = await sql<{ oldSlug: string; newSlug: string; oldEpisodeNumber: number; newEpisodeNumber: number }>(
-        `SELECT "oldSlug", "newSlug", "oldEpisodeNumber", "newEpisodeNumber" FROM episode_redirect WHERE "mediaId" = $1`,
+    const numbers = () =>
+      sql<{ id: string; episodeNumber: number }>(
+        `SELECT id, "episodeNumber" FROM episode WHERE "mediaId" = $1 ORDER BY id`,
         [seriesId]
       );
-      expect(redirects.length).toBeGreaterThanOrEqual(1);
-      const match = redirects.find((r) => r.oldSlug === oldSlug);
-      expect(match).toBeDefined();
-      expect(match?.newSlug).toBe(newSlug);
-      expect(match?.oldEpisodeNumber).toBe(2);
-      expect(match?.newEpisodeNumber).toBe(4);
+    try {
+      await page.goto(`/admin/library/series/${seriesId}`);
+      const editor = page.getByRole("region", { name: "Season table editor Season 1" });
+      const numberOf = (n: number) => editor.getByRole("row").filter({ hasText: `Episode ${n}` }).getByLabel("Episode");
+      const save = editor.getByRole("button", { name: /save season|save changes/i }).first();
+
+      // Swap 1 and 2.
+      await numberOf(1).fill("2");
+      await numberOf(2).fill("1");
+      await save.click();
+      await expect(editor.getByText("Saved.")).toBeVisible();
+      expect(await numbers()).toEqual([
+        { id: `${seriesId}-season-1-episode-1`, episodeNumber: 2 },
+        { id: `${seriesId}-season-1-episode-2`, episodeNumber: 1 },
+        { id: `${seriesId}-season-1-episode-3`, episodeNumber: 3 },
+      ]);
+
+      // Shift 3 to 4, from the same page without reloading.
+      await numberOf(3).fill("4");
+      await save.click();
+      await expect(editor.getByText("Saved.")).toBeVisible();
+      expect((await numbers())[2]).toEqual({ id: `${seriesId}-season-1-episode-3`, episodeNumber: 4 });
+
+      // The address still opens the episode, now numbered 4.
+      await page.goto(`/episode/${seriesId}-season-1-episode-3`);
+      await expect(page).toHaveURL(new RegExp(`/episode/${seriesId}-season-1-episode-3$`));
     } finally {
       await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
     }
   });
 
-  test("T1-Catalog-4: renumbering an episode migrates video sources from old episode ID to new episode ID", async ({
+  test("T1-Catalog-4: renumbering an episode keeps its video sources", async ({
     page,
     consoleProblems,
   }) => {
@@ -396,34 +393,30 @@ test.describe("bulk season table editor and slug management", () => {
     const uid = uniqueId();
     const seriesId = `e2e-mig-src-${uid}`;
     await seedSeriesWithEpisodes(seriesId, `E2E Mig Src ${uid}`, 3);
-    const oldSlug = `${seriesId}-season-1-episode-2`;
-    const newSlug = `${seriesId}-season-1-episode-4`;
+    const slug = `${seriesId}-season-1-episode-2`;
     const sourceId = `src-${uid}`;
 
     // Attach video source to Episode 2
     await sql(
       `INSERT INTO video_source (id, "episodeId", label, kind, url, position, enabled, "updatedAt")
        VALUES ($1, $2, 'Server 1', 'embed'::video_source_kind, 'https://player.e2e.example/embed/1', 1, true, now())`,
-      [sourceId, oldSlug]
+      [sourceId, slug]
     );
 
     try {
       await page.goto(`/admin/library/series/${seriesId}`);
-      const editor = page.locator("section").filter({ hasText: /season 1|episodes/i });
+      const editor = page.getByRole("region", { name: "Season table editor Season 1" });
       const ep2Row = editor.getByRole("row").filter({ hasText: /Episode 2/ });
-      const epNumInput = ep2Row.getByRole("spinbutton").or(ep2Row.getByLabel(/episode/i)).or(ep2Row.locator("input[type='number']"));
-      await epNumInput.fill("4");
+      await ep2Row.getByLabel("Episode").fill("4");
 
       const saveBtn = editor.getByRole("button", { name: /save season|save changes/i }).first();
       await saveBtn.click();
-      await expect(page.getByText(/saved/i).first()).toBeVisible();
+      await expect(editor.getByText("Saved.")).toBeVisible();
 
-      // Verify video source was migrated to new episode ID
-      const [src] = await sql<{ episodeId: string }>(
-        `SELECT "episodeId" FROM video_source WHERE id = $1`,
-        [sourceId]
-      );
-      expect(src.episodeId).toBe(newSlug);
+      const [src] = await sql<{ episodeId: string }>(`SELECT "episodeId" FROM video_source WHERE id = $1`, [sourceId]);
+      expect(src.episodeId).toBe(slug);
+      const [episode] = await sql<{ episodeNumber: number }>(`SELECT "episodeNumber" FROM episode WHERE id = $1`, [slug]);
+      expect(episode.episodeNumber).toBe(4);
     } finally {
       await sql(`DELETE FROM media WHERE id = $1`, [seriesId]);
     }
