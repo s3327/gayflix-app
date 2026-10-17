@@ -591,22 +591,28 @@ test.describe("bulk season table editor and slug management", () => {
     consoleProblems,
   }) => {
     void consoleProblems;
-    await page.goto("/admin/library/episodes");
-    const countBefore = await page.getByRole("row").count();
-    // Filter by specific series
-    const seriesSelect = page.getByLabel("Series");
-    const options = await seriesSelect.locator("option").all();
-    if (options.length > 1) {
-      const val = await options[1].getAttribute("value");
-      if (val) {
-        await seriesSelect.selectOption(val);
-        await page.getByRole("button", { name: "Show" }).click();
-        // Clear back to All series
-        await seriesSelect.selectOption("");
-        await page.getByRole("button", { name: "Show" }).click();
-        const countAfter = await page.getByRole("row").count();
-        expect(countAfter).toBe(countBefore);
-      }
+    // Its own episodes, so episodes other tests add meanwhile don't count.
+    const uid = uniqueId();
+    const first = `e2e-clear-a-${uid}`;
+    const second = `e2e-clear-b-${uid}`;
+    await seedSeriesWithEpisodes(first, `E2E Clear A ${uid}`, 2);
+    await seedSeriesWithEpisodes(second, `E2E Clear B ${uid}`, 1);
+    await sql(`UPDATE episode SET title = title || ' ' || $1 WHERE "mediaId" = ANY($2)`, [uid, [first, second]]);
+    try {
+      await page.goto(`/admin/library/episodes?q=${encodeURIComponent(uid)}`);
+      const ours = page.getByRole("row").filter({ hasText: uid });
+      await expect(ours).toHaveCount(3);
+
+      const seriesSelect = page.getByLabel("Series");
+      await seriesSelect.selectOption(first);
+      await page.getByRole("button", { name: "Show" }).click();
+      await expect(ours).toHaveCount(2);
+
+      await seriesSelect.selectOption("");
+      await page.getByRole("button", { name: "Show" }).click();
+      await expect(ours).toHaveCount(3);
+    } finally {
+      await sql(`DELETE FROM media WHERE id = ANY($1)`, [[first, second]]);
     }
   });
 

@@ -3,6 +3,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { admin, emailOTP, twoFactor } from "better-auth/plugins";
+import { adminAc, userAc } from "better-auth/plugins/admin/access";
 import { after } from "next/server";
 import { accountDeletionProblem } from "@/lib/account-deletion";
 import { adminAccess } from "@/lib/admin-access";
@@ -221,9 +222,14 @@ export const auth = betterAuth({
         });
       },
     }),
-    // The staff roles that manage accounts, so the panel's ban, sign-out
-    // and role calls work for them; the hook above decides who may change whom.
-    admin({ defaultRole: "user", adminRoles: ["owner", "admin", "moderator"] }),
+    // Every role in src/lib/admin-roles.ts. The ones that manage accounts
+    // get the plugin's admin permissions, so the panel's ban, sign-out and
+    // role calls work for them; the hook above decides who may change whom.
+    admin({
+      defaultRole: "user",
+      roles: { owner: adminAc, admin: adminAc, moderator: adminAc, editor: userAc, user: userAc },
+      adminRoles: ["owner", "admin", "moderator"],
+    }),
     twoFactor({ issuer: "Gayflix" }),
     // Must stay last: lets server actions set auth cookies.
     nextCookies(),
