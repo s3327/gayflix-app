@@ -27,6 +27,7 @@ import { getSiteSettings } from "@/lib/site-settings";
 import { videoHosts, videoUrlAllowed } from "@/lib/video-hosts";
 import type { VideoSourceEntry } from "@/lib/video-source";
 import { trendingSince } from "@/lib/views";
+import { isFinished } from "@/lib/watch-progress";
 
 /*
  * The catalog: every read of titles and episodes goes through here.
@@ -230,27 +231,44 @@ export async function getHome() {
 /**
  * Continue Watching on the home page: the titles the signed-in user
  * played last, newest first, one card per title (a series at the episode
- * played last). Empty for guests, whose history stays in their browser
- * until they sign in.
+ * played last). A movie watched to the end drops off; a series moves on
+ * to the next episode, and drops off after its last. Titles they took
+ * off the row stay off until they watch them again. Empty for guests,
+ * whose history stays in their browser until they sign in.
  */
 export async function listContinueWatching(): Promise<RecentlyWatched[]> {
   await connection();
   const session = await getSession();
   if (!session) return [];
-  // History holds movie and episode ids; an episode stands for its series.
+  // History holds movie and episode ids; an episode stands for its
+  // series. Some of these drop off below (watched to the end), so it
+  // reads more than the row shows.
   const rows = await db.$queryRaw<
     (CardRow & {
       backdropUrl: string | null;
+      historyId: string;
+      progressSeconds: number;
+      durationSeconds: number;
       episodeId: string | null;
       seasonNumber: number | null;
       episodeNumber: number | null;
       episodeTitle: string | null;
+      nextId: string | null;
+      nextSeasonNumber: number | null;
+      nextEpisodeNumber: number | null;
+      nextTitle: string | null;
     })[]
   >`
-    SELECT ${CARD_COLUMNS}, "backdropUrl", "episodeId", "seasonNumber", "episodeNumber", "episodeTitle"
+    SELECT ${CARD_COLUMNS}, "backdropUrl", "historyId", "progressSeconds", "durationSeconds",
+      "episodeId", "seasonNumber", "episodeNumber", "episodeTitle",
+      "nextId", "nextSeasonNumber", "nextEpisodeNumber", "nextTitle"
     FROM (
       SELECT DISTINCT ON (COALESCE(e."mediaId", h."mediaId"))
         COALESCE(e."mediaId", h."mediaId") AS id,
+        h."mediaId" AS "historyId",
+        h."progressSeconds",
+        h."durationSeconds",
+        h."hiddenFromContinue",
         e.id AS "episodeId",
         e."seasonNumber",
         e."episodeNumber",
@@ -262,22 +280,54 @@ export async function listContinueWatching(): Promise<RecentlyWatched[]> {
       ORDER BY COALESCE(e."mediaId", h."mediaId"), h."watchedAt" DESC
     ) latest
     JOIN media USING (id)
-    WHERE status = 'published'
+    LEFT JOIN LATERAL (
+      -- Renamed, so they don't clash with the title's own columns.
+      SELECT n.id AS "nextId", n."seasonNumber" AS "nextSeasonNumber",
+        n."episodeNumber" AS "nextEpisodeNumber", n.title AS "nextTitle"
+      FROM episode n
+      WHERE n."mediaId" = latest.id
+        AND (n."seasonNumber", n."episodeNumber") > (latest."seasonNumber", latest."episodeNumber")
+      ORDER BY n."seasonNumber", n."episodeNumber"
+      LIMIT 1
+    ) next ON latest."episodeId" IS NOT NULL
+    WHERE status = 'published' AND NOT latest."hiddenFromContinue"
     ORDER BY "watchedAt" DESC, id
-    LIMIT ${CONTINUE_WATCHING_SIZE}`;
-  return rows.map((row) => ({
-    ...toMedia(row),
-    backdropUrl: row.backdropUrl ?? undefined,
-    episode:
-      row.episodeId === null
-        ? undefined
-        : {
-            id: row.episodeId,
-            seasonNumber: row.seasonNumber!,
-            episodeNumber: row.episodeNumber!,
-            title: row.episodeTitle!,
-          },
-  }));
+    LIMIT ${CONTINUE_WATCHING_SIZE * 4}`;
+
+  const items: RecentlyWatched[] = [];
+  for (const row of rows) {
+    const progress = { position: row.progressSeconds, duration: row.durationSeconds };
+    const base = { ...toMedia(row), backdropUrl: row.backdropUrl ?? undefined, historyId: row.historyId };
+    if (!isFinished(progress)) {
+      items.push({
+        ...base,
+        progress: progress.duration > 0 ? progress : undefined,
+        episode:
+          row.episodeId === null
+            ? undefined
+            : {
+                id: row.episodeId,
+                seasonNumber: row.seasonNumber!,
+                episodeNumber: row.episodeNumber!,
+                title: row.episodeTitle!,
+              },
+      });
+    } else if (row.nextId !== null) {
+      // Only an episode has a next one.
+      items.push({
+        ...base,
+        episode: {
+          id: row.nextId,
+          seasonNumber: row.nextSeasonNumber!,
+          episodeNumber: row.nextEpisodeNumber!,
+          title: row.nextTitle!,
+          isNext: true,
+        },
+      });
+    }
+    if (items.length === CONTINUE_WATCHING_SIZE) break;
+  }
+  return items;
 }
 
 // --- Listings ----------------------------------------------------------------

@@ -22,22 +22,40 @@ const HLS_TYPE = "application/vnd.apple.mpegurl";
  * `onFail` is called when a file or a stream can't play. `onStart` is
  * called when watching begins: once a file or a stream is actually
  * playing, and at once for an embed, whose frame can't tell.
+ *
+ * A file or a stream also starts `startAt` seconds in, and reports how
+ * far it got with `onProgress`: every 15 seconds of playing, on pause,
+ * at the end, when the tab is hidden and when the player goes away.
+ * An embed does neither.
  */
 export default function SourcePlayer({
   source,
   title,
+  startAt = 0,
   onStart,
+  onProgress,
   onFail,
 }: {
   source: VideoSourceEntry;
   title: string;
+  startAt?: number;
   onStart: () => void;
+  onProgress: (position: number, duration: number) => void;
   onFail: () => void;
 }) {
   if (source.kind === "embed") {
     return <EmbedPlayer source={source} title={title} onStart={onStart} />;
   }
-  return <VideoPlayer source={source} title={title} onStart={onStart} onFail={onFail} />;
+  return (
+    <VideoPlayer
+      source={source}
+      title={title}
+      startAt={startAt}
+      onStart={onStart}
+      onProgress={onProgress}
+      onFail={onFail}
+    />
+  );
 }
 
 function EmbedPlayer({
@@ -62,21 +80,54 @@ function EmbedPlayer({
   );
 }
 
+/** How often a playing video reports how far it got, in seconds of video. */
+const PROGRESS_EVERY_SECONDS = 15;
+
 function VideoPlayer({
   source,
   title,
+  startAt,
   onStart,
+  onProgress,
   onFail,
 }: {
   source: VideoSourceEntry;
   title: string;
+  startAt: number;
   onStart: () => void;
+  onProgress: (position: number, duration: number) => void;
   onFail: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   // While hls.js plays the stream, it reports the video's errors itself.
   const hlsRef = useRef<Hls | null>(null);
   const fail = useEffectEvent(onFail);
+  // Where the video is, kept as it plays: hls.js empties the video when
+  // the player goes away, before it could be read there.
+  const latestRef = useRef<{ position: number; duration: number } | null>(null);
+  const reportedAtRef = useRef(0);
+  const resumedRef = useRef(false);
+
+  function report() {
+    const latest = latestRef.current;
+    if (!latest) return;
+    reportedAtRef.current = latest.position;
+    onProgress(latest.position, latest.duration);
+  }
+  const reportOnLeave = useEffectEvent(report);
+
+  // Saves where it got to when the tab is hidden (it may be closed next)
+  // and when the player goes away.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") reportOnLeave();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      reportOnLeave();
+    };
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -127,7 +178,29 @@ function VideoPlayer({
       controls
       autoPlay
       playsInline
-      onPlaying={onStart}
+      onLoadedMetadata={(event) => {
+        // Once: hls.js can load the stream again to get past an error.
+        const video = event.currentTarget;
+        if (resumedRef.current) return;
+        resumedRef.current = true;
+        if (startAt > 0 && startAt < video.duration) video.currentTime = startAt;
+      }}
+      onPlaying={() => {
+        // Nothing is saved before it plays, so a server that fails saves nothing.
+        const video = videoRef.current;
+        if (video) latestRef.current = { position: video.currentTime, duration: video.duration };
+        reportedAtRef.current = video?.currentTime ?? 0;
+        onStart();
+      }}
+      onTimeUpdate={(event) => {
+        if (!latestRef.current) return;
+        const video = event.currentTarget;
+        latestRef.current = { position: video.currentTime, duration: video.duration };
+        // Either way, so a jump back or ahead is saved too.
+        if (Math.abs(video.currentTime - reportedAtRef.current) >= PROGRESS_EVERY_SECONDS) report();
+      }}
+      onPause={report}
+      onEnded={report}
       onError={() => {
         if (!hlsRef.current) onFail();
       }}

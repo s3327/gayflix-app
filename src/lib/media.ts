@@ -1,3 +1,5 @@
+import type { WatchProgress } from "@/lib/watch-progress";
+
 export type MediaType = "movie" | "series";
 export type MediaStatus = "draft" | "published";
 
@@ -33,17 +35,24 @@ export type TrendingMedia = Media & {
 
 /**
  * A title on Continue Watching: one the signed-in user played lately. A
- * series comes with the episode they played last.
+ * series comes with the episode they played last, or the next one once
+ * that was watched to the end.
  */
 export type RecentlyWatched = Media & {
   /** 16:9, when the title has one; cards fall back to the poster. */
   backdropUrl?: string;
+  /** The History entry's id (a movie's or an episode's): what Remove takes off the row. */
+  historyId: string;
   episode?: {
     id: string;
     seasonNumber: number;
     episodeNumber: number;
     title: string;
+    /** The episode after the one watched to the end, not started yet. */
+    isNext?: true;
   };
+  /** How far in, when the player could tell (a file or a stream, not an embed). */
+  progress?: WatchProgress;
 };
 
 /** One episode of a series. */

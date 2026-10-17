@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Star } from "lucide-react";
 import { getTitle, getVideoSources } from "@/lib/catalog";
+import { getResumePosition } from "@/lib/library";
 import WatchPlayer from "@/components/WatchPlayer";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import TagList from "@/components/TagList";
@@ -28,7 +29,11 @@ export default async function WatchPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [movie, sources] = await Promise.all([getTitle(id), getVideoSources({ mediaId: id })]);
+  const [movie, sources, resumeAt] = await Promise.all([
+    getTitle(id),
+    getVideoSources({ mediaId: id }),
+    getResumePosition(id),
+  ]);
   if (!movie) notFound();
   // A series has no single video: play its first episode instead.
   if (movie.type === "series") {
@@ -49,11 +54,12 @@ export default async function WatchPage({
 
   return (
     <main className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
-      {/* Player and its server tabs — records watch history on play click */}
+      {/* Player and its server tabs; it records History and picks up where it stopped */}
       <WatchPlayer
         media={entry}
         sources={sources}
         backdropUrl={movie.backdropUrl}
+        resumeAt={resumeAt}
       />
 
       {/* Mini poster + title/rating/tagline/tags; the poster and title lead
