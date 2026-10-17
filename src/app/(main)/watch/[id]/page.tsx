@@ -80,13 +80,17 @@ export default async function WatchPage({
               {movie.title}
             </Link>
             <span className="text-base font-normal text-ink-secondary">({movie.year})</span>
-            {movie.rating !== undefined && (
-              <span className="flex items-center gap-1 text-sm font-semibold text-pride-yellow">
-                <Star className="h-4 w-4 fill-current" />
-                {movie.rating.toFixed(1)}
-              </span>
-            )}
           </h1>
+          {movie.rating !== undefined && (
+            <p className="mt-1 flex items-center gap-1 text-sm font-semibold text-pride-yellow">
+              <Star className="h-4 w-4 fill-current" aria-hidden />
+              <span className="sr-only">Rating: </span>
+              <span>
+                {movie.rating.toFixed(1)}
+                <span className="font-normal text-ink-muted">/5</span>
+              </span>
+            </p>
+          )}
 
           {movie.tagline && <p className="mt-1 text-sm italic text-ink-muted">{movie.tagline}</p>}
 

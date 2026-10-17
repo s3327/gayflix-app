@@ -13,16 +13,26 @@ export const SITE_NAME = "Gayflix";
 export const SITE_TITLE = "Gayflix — Love. Stories. Ours.";
 export const SITE_DESCRIPTION = "LGBTQ+ stories, films, and series, hand-picked for our community.";
 
+/** The picture a link to the site shows when the page has none of its own. */
+const SHARE_IMAGE = { url: "/brand/gayflix-share.png", width: 1200, height: 630, alt: SITE_TITLE };
+
 /**
  * The link preview every page starts from. A page that sets its own
  * openGraph replaces this whole object rather than adding to it, so
- * title pages spread it into theirs.
+ * title pages spread it into theirs (and set their own images).
  */
 export const OPEN_GRAPH = {
   siteName: SITE_NAME,
   type: "website",
   locale: "en_US",
+  images: [SHARE_IMAGE],
 } as const satisfies Metadata["openGraph"];
+
+/** The X card every page starts from, with the same picture. */
+export const TWITTER = {
+  card: "summary_large_image",
+  images: [SHARE_IMAGE],
+} as const satisfies Metadata["twitter"];
 
 /**
  * Head tags for a listing page such as /movie: its name in the tab, a
@@ -81,7 +91,7 @@ function previewMetadata({
     title: name,
     description,
     alternates: { canonical: path },
-    openGraph: { ...OPEN_GRAPH, type: kind, title: name, description, url: path, images },
+    openGraph: { ...OPEN_GRAPH, type: kind, title: name, description, url: path, images: images ?? OPEN_GRAPH.images },
     twitter: {
       card: title.backdropUrl ? "summary_large_image" : "summary",
       title: name,

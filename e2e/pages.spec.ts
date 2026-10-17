@@ -148,6 +148,11 @@ test("listing pages describe themselves and name their own address", async ({ pa
   await expect(page).toHaveTitle("Home · Gayflix");
   await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /trending/);
   await expect(canonical).toHaveAttribute("href", /\/home$/);
+  // Pages with no picture of their own share the site's.
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+    "content",
+    /\/brand\/gayflix-share\.png$/
+  );
 
   await page.goto("/browse?sort=title&genre=Drama");
   await expect(canonical).toHaveAttribute("href", /\/browse\?genre=Drama&sort=title$/);

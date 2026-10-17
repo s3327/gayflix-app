@@ -18,28 +18,16 @@ export default function TrendingNowSection({ media }: { media: Media[] }) {
         </Link>
       </div>
 
-      {/* Mobile (<sm): fixed 3x2 grid, all 6 titles, no scroll */}
-      <div className="mt-4 grid grid-cols-3 gap-3 px-4 sm:hidden">
+      {/* One set of cards for every screen: a 3 × 2 grid on phones, a
+          swipeable row with about 4 showing on tablets, and all 6 in one
+          row on desktops. */}
+      <SwipeableRow className="mt-2 grid grid-cols-3 gap-3 px-4 py-2 sm:flex sm:gap-4 sm:overflow-x-auto sm:px-8 sm:snap-x sm:snap-mandatory scrollbar-none lg:mx-auto lg:grid lg:max-w-[1440px] lg:grid-cols-6 lg:overflow-visible">
         {media.map((m) => (
-          <PosterCard key={m.id} media={m} />
-        ))}
-      </div>
-
-      {/* Tablet (sm–lg): swipeable row, ~4 visible of 6 */}
-      <SwipeableRow className="mt-2 hidden gap-4 overflow-x-auto px-8 py-2 snap-x snap-mandatory scrollbar-none sm:flex lg:hidden">
-        {media.map((m) => (
-          <div key={m.id} className="shrink-0 basis-1/4 snap-start">
+          <div key={m.id} className="min-w-0 sm:shrink-0 sm:basis-1/4 sm:snap-start lg:basis-auto">
             <PosterCard media={m} />
           </div>
         ))}
       </SwipeableRow>
-
-      {/* Desktop (lg+): all 6 in a single row, centered on screen */}
-      <div className="mx-auto mt-4 hidden max-w-[1440px] grid-cols-6 gap-4 px-8 lg:grid">
-        {media.map((m) => (
-          <PosterCard key={m.id} media={m} />
-        ))}
-      </div>
     </section>
   );
 }

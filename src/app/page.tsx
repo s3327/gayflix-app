@@ -28,8 +28,20 @@ const PRIMARY_BUTTON =
 const SECONDARY_BUTTON =
   "flex items-center justify-center gap-2 rounded-card border border-border-strong bg-bg-base/40 px-7 py-3 text-sm font-bold text-ink-primary backdrop-blur-sm transition-colors hover:bg-bg-elevated";
 
-/** Enough posters to cover the hero at every size (8 columns × 4 rows). */
+/**
+ * Enough posters to cover the hero at every size: 4 rows of 4 columns on
+ * phones, 6 on tablets and 8 on desktops. Smaller screens leave out the
+ * tiles they have no room for, so they never download them.
+ */
 const POSTER_WALL_SIZE = 32;
+const PHONE_WALL_SIZE = 16;
+const TABLET_WALL_SIZE = 24;
+
+function wallTileVisibility(index: number) {
+  if (index >= TABLET_WALL_SIZE) return "hidden lg:block";
+  if (index >= PHONE_WALL_SIZE) return "hidden sm:block";
+  return "";
+}
 /** The New row: 6 on phones (3 × 2), 8 on tablets (4 × 2), 12 on desktops (6 × 2). */
 const NEW_ROW_SIZE = 12;
 
@@ -149,13 +161,13 @@ export default async function LandingPage() {
                 {posterWall.map((title, i) => (
                   <div
                     key={i}
-                    className={`relative aspect-2/3 overflow-hidden rounded-card bg-bg-surface bg-linear-to-br ${title.gradient ?? ""}`}
+                    className={`relative aspect-2/3 overflow-hidden rounded-card bg-bg-surface bg-linear-to-br ${title.gradient ?? ""} ${wallTileVisibility(i)}`}
                   >
+                    {/* Lazy, so a tile left out at this size isn't fetched. */}
                     <Image
                       src={title.posterUrl}
                       alt=""
                       fill
-                      loading="eager"
                       fetchPriority="low"
                       sizes="(min-width: 1024px) 200px, (min-width: 640px) 170px, 150px"
                       className="object-cover"

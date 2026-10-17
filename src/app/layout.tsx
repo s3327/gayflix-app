@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { AuthProvider } from "@/lib/auth-context";
-import { OPEN_GRAPH, SITE_DESCRIPTION, SITE_TITLE } from "@/lib/page-metadata";
+import { OPEN_GRAPH, SITE_DESCRIPTION, SITE_TITLE, TWITTER } from "@/lib/page-metadata";
 import { siteUrl } from "@/lib/site-url";
 import { fontVariables } from "./fonts";
 import "./globals.css";
@@ -11,6 +11,7 @@ export const metadata: Metadata = {
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
   openGraph: OPEN_GRAPH,
+  twitter: TWITTER,
 };
 
 export default async function RootLayout({
