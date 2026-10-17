@@ -7,12 +7,14 @@ import { User } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { useDropdown } from "@/lib/use-dropdown";
+import { authHref } from "@/lib/safe-redirect";
+import { useCurrentPath } from "@/lib/use-current-path";
 
 /**
  * Header's account icon — branches on the real session (see
- * auth-context.tsx). Guests get a plain link straight to /login,
- * same as clicking Search used to just link to /search: no menu, no
- * interactivity needed for a single destination.
+ * auth-context.tsx). Guests get a plain link to /login that comes back
+ * to this page, query string included: no menu, no interactivity needed
+ * for a single destination.
  *
  * Logged-in is where this earns being its own component: the icon
  * becomes a dropdown trigger with two items, My Account and Log Out,
@@ -23,6 +25,7 @@ export default function AccountMenu() {
   const { showToast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
+  const here = useCurrentPath();
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdown = useDropdown(isOpen, setIsOpen, buttonRef);
@@ -46,7 +49,7 @@ export default function AccountMenu() {
   if (!isLoggedIn) {
     return (
       <Link
-        href="/login"
+        href={authHref("/login", here)}
         aria-label="Log in"
         className="flex h-10 w-10 items-center justify-center rounded-full text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary"
       >

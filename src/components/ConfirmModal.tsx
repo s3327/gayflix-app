@@ -25,7 +25,7 @@ export default function ConfirmModal({
             onConfirm();
             onClose();
           }}
-          className="rounded-card bg-status-error px-5 py-2 text-sm font-bold text-ink-onBrand transition-colors hover:brightness-110"
+          className="rounded-card border border-status-error/40 bg-status-error/10 px-5 py-2 text-sm font-bold text-status-error transition-colors hover:bg-status-error/20"
         >
           {confirmLabel}
         </button>

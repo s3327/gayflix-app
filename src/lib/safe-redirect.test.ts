@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeAdminNextPath, safeNextPath } from "@/lib/safe-redirect";
+import { authHref, nextParam, safeAdminNextPath, safeNextPath } from "@/lib/safe-redirect";
 
 describe("safeNextPath", () => {
   it("keeps same-site paths", () => {
@@ -43,6 +43,30 @@ describe("safeAdminNextPath", () => {
       "/\t/evil.example",
     ]) {
       expect(safeAdminNextPath(bad)).toBe("/admin/dashboard");
+    }
+  });
+});
+
+describe("authHref", () => {
+  it("carries the page to come back to", () => {
+    expect(authHref("/login", "/watch/chosen-family")).toBe("/login?next=%2Fwatch%2Fchosen-family");
+    expect(authHref("/signup", "/genre?genre=Drama")).toBe("/signup?next=%2Fgenre%3Fgenre%3DDrama");
+  });
+
+  it("leaves it off when there's none", () => {
+    expect(authHref("/login")).toBe("/login");
+    expect(authHref("/signup", null)).toBe("/signup");
+  });
+});
+
+describe("nextParam", () => {
+  it("keeps a path on this site", () => {
+    expect(nextParam("/series/the-brownstone")).toBe("/series/the-brownstone");
+  });
+
+  it("drops anything else", () => {
+    for (const bad of [undefined, "", "https://evil.example", "//evil.example", ["/a", "/b"]]) {
+      expect(nextParam(bad)).toBeNull();
     }
   });
 });
