@@ -202,8 +202,10 @@ on an `admin.` subdomain.
 - **`.github/workflows/ci.yml`** runs on every push to `main` and every PR,
   in parallel jobs: lint → typecheck → unit tests →
   `npm audit --omit=dev --audit-level=high` in one, and build → e2e + axe
-  in three shards, each with its own Postgres. A `check` job passes once
-  they all have. Playwright traces are uploaded per shard when e2e fails.
+  in five shards, each with its own Postgres and running two tests at a
+  time. The build restores the Next.js cache (`.next/cache`) that the last
+  run on `main` saved. A `check` job passes once they all have. Playwright
+  traces are uploaded per shard when e2e fails.
 - **`npm run check`** runs lint, typecheck, unit tests and build locally.
 - **Dependabot** (`.github/dependabot.yml`) opens weekly update PRs for npm
   (minor and patch grouped, majors one by one) and GitHub Actions.
