@@ -12,9 +12,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Three kinds of job run side by side: the fast checks, and the end-to-end
-# suite split into three shards. "check" waits for all of them, so a branch
-# rule or a reader can still look at one result.
+# The fast checks and five shards of the end-to-end suite run side by side.
+# "check" waits for all of them, so a branch rule or a reader can still
+# look at one result.
 jobs:
   fast:
     name: lint, types, unit tests
@@ -35,14 +35,14 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high
 
   e2e:
-    name: e2e ${{ matrix.shard }}/3
+    name: e2e ${{ matrix.shard }}/5
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       # Let every shard finish, so one failure shows all the others too.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5]
     # Each shard gets its own throwaway Postgres (the catalog, accounts,
     # roles), and its own copy of the setup project's accounts.
     services:
@@ -76,10 +76,24 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run db:deploy
+      # Next.js keeps its compile work in .next/cache and rebuilds only what
+      # changed. Pull requests restore the cache main saved last; only
+      # pushes to main save one, from one shard.
+      - id: build-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**', 'prisma/**', '*.mjs', '*.ts', 'tsconfig.json') }}
+          restore-keys: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
       - run: npm run build
+      - if: matrix.shard == 1 && github.event_name == 'push' && steps.build-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .next/cache
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
       # End-to-end + accessibility (axe) tests against the production build.
       - run: npx playwright install --with-deps chromium
-      - run: npx playwright test --shard=${{ matrix.shard }}/3
+      - run: npx playwright test --shard=${{ matrix.shard }}/5
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

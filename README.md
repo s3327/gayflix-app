@@ -74,8 +74,9 @@ sign-in needs a code, and lasts 12 hours.
 CI (`.github/workflows/ci.yml`) runs on every push to `main` and on every
 pull request, in jobs that run side by side: lint, typecheck, unit tests
 and `npm audit --omit=dev` in one, and the build plus the e2e + axe suite
-split three ways (`playwright test --shard`), each with its own database.
-The `check` job passes once all of them have. Dependabot opens weekly
+split five ways (`playwright test --shard`), each with its own database.
+The build reuses the Next.js cache that the last run on `main` saved. The
+`check` job passes once all of them have. Dependabot opens weekly
 dependency update PRs.
 
 ## Environment variables
