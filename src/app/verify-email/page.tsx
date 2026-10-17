@@ -69,14 +69,16 @@ function VerifyEmailForm() {
     <main className="flex min-h-screen items-center justify-center bg-bg-base px-4">
       <div className="w-full max-w-sm rounded-card border border-border-subtle bg-bg-surface p-8">
         <div className="flex flex-col items-center text-center">
-          <Image
-            src="/brand/gayflix-icon.png"
-            alt="Gayflix"
-            width={500}
-            height={500}
-            priority
-            className="h-10 w-10"
-          />
+          <Link href="/" aria-label="Gayflix home" className="rounded-full">
+            <Image
+              src="/brand/gayflix-icon.png"
+              alt=""
+              width={500}
+              height={500}
+              priority
+              className="h-10 w-10"
+            />
+          </Link>
           <h1 className="mt-4 font-display text-2xl font-bold">
             Verify Your Email
           </h1>

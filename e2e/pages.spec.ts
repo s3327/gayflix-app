@@ -61,6 +61,36 @@ test.describe("signed in", () => {
     ).toHaveAttribute("href", "/home");
     await expect(page.getByRole("link", { name: "Sign Up" })).toHaveCount(0);
   });
+
+  test("the account menu reaches every account page", async ({ page }) => {
+    await page.goto("/home");
+    await page.getByRole("button", { name: "Account menu" }).click();
+    for (const [name, href] of [
+      ["My Account", "/account"],
+      ["Favorites", "/account/favorite"],
+      ["My Lists", "/account/favorite?tab=lists"],
+      ["History", "/account/history"],
+      ["Settings", "/account/setting"],
+    ]) {
+      await expect(page.getByRole("link", { name, exact: true })).toHaveAttribute("href", href);
+    }
+
+    // My Lists opens the Lists tab, even from the Favorites tab.
+    await page.getByRole("link", { name: "Favorites", exact: true }).click();
+    await expect(page).toHaveURL(/\/account\/favorite$/);
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("link", { name: "My Lists", exact: true }).click();
+    await expect(page).toHaveURL(/\/account\/favorite\?tab=lists$/);
+    await expect(page.getByRole("button", { name: "Create List" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "My Lists" })).toHaveCount(0);
+  });
+});
+
+test("the sign-in pages' logo leads back to the landing page", async ({ page }) => {
+  for (const path of ["/login", "/signup", "/forgot-password"]) {
+    await page.goto(path);
+    await expect(page.getByRole("link", { name: "Gayflix home" })).toHaveAttribute("href", "/");
+  }
 });
 
 test("pages name themselves in the tab, and title pages carry a link preview", async ({

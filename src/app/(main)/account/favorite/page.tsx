@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Heart, Plus } from "lucide-react";
 import { useFavorites } from "@/lib/favorites-context";
 import { useLists } from "@/lib/lists-context";
@@ -21,11 +22,18 @@ type Tab = "favorites" | "lists";
  * list does not remove it from Favorites, and removing a title from
  * Favorites does not remove it from any list it's already in (a list
  * holds its own snapshot — see lists-context.tsx).
+ *
+ * The tab is in the address (?tab=lists), so the account menu's My
+ * Lists link and the Back button land on the right one.
  */
 export default function AccountFavoritePage() {
   const { favorites } = useFavorites();
   const { lists, createList } = useLists();
-  const [activeTab, setActiveTab] = useState<Tab>("favorites");
+  const router = useRouter();
+  const pathname = usePathname();
+  const activeTab: Tab = useSearchParams().get("tab") === "lists" ? "lists" : "favorites";
+  const setActiveTab = (tab: Tab) =>
+    router.replace(tab === "lists" ? `${pathname}?tab=lists` : pathname, { scroll: false });
   const [isCreatingList, setIsCreatingList] = useState(false);
 
   return (

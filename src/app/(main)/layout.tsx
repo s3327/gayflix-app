@@ -63,9 +63,19 @@ export default async function MainGroupLayout({
         <Suspense>
           <NavigationProgress />
         </Suspense>
+        {/* The first stop for a keyboard: past the header and menus to
+            the page itself. Hidden until it has focus. */}
+        <a
+          href="#content"
+          className="sr-only rounded-card bg-brand-pink px-4 py-2 text-sm font-bold text-ink-onBrand focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-100"
+        >
+          Skip to content
+        </a>
         <Header />
         <NavMenu />
-        {children}
+        <div id="content" tabIndex={-1} className="outline-hidden">
+          {children}
+        </div>
         <Footer />
       </LibraryProviders>
     </ToastProvider>

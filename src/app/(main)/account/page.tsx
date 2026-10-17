@@ -252,30 +252,39 @@ export default function AccountPage() {
                     ? "Enter your new email address and your password"
                     : "Enter your new email address"}
                 </p>
-                <input
-                  type="email"
-                  aria-label="New email"
-                  autoComplete="email"
-                  required
-                  value={newEmail}
-                  onChange={(event) => setNewEmail(event.target.value)}
-                  placeholder="new@example.com"
-                  className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
-                />
-                {hasPassword && (
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="newEmail" className="text-sm text-ink-secondary">
+                    New email
+                  </label>
                   <input
-                    type="password"
-                    aria-label="Current password"
-                    autoComplete="current-password"
+                    id="newEmail"
+                    type="email"
+                    autoComplete="email"
                     required
-                    value={emailPassword}
-                    onChange={(event) => {
-                      setEmailPassword(event.target.value);
-                      setEmailError("");
-                    }}
-                    placeholder="Current password"
+                    value={newEmail}
+                    onChange={(event) => setNewEmail(event.target.value)}
+                    placeholder="new@example.com"
                     className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
                   />
+                </div>
+                {hasPassword && (
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="emailPassword" className="text-sm text-ink-secondary">
+                      Current password
+                    </label>
+                    <input
+                      id="emailPassword"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      value={emailPassword}
+                      onChange={(event) => {
+                        setEmailPassword(event.target.value);
+                        setEmailError("");
+                      }}
+                      className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+                    />
+                  </div>
                 )}
                 <FormError message={emailError} />
                 <div className="flex gap-2">
@@ -338,46 +347,58 @@ export default function AccountPage() {
 
             {passwordStep === "new-password" && (
               <form onSubmit={handleSubmitNewPassword} className="flex flex-col gap-3">
-                <input
-                  type="password"
-                  aria-label="Current password"
-                  autoComplete="current-password"
-                  required
-                  value={currentPassword}
-                  onChange={(event) => {
-                    setCurrentPassword(event.target.value);
-                    setPasswordError("");
-                  }}
-                  placeholder="Current password"
-                  className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
-                />
-                <input
-                  type="password"
-                  aria-label="New password"
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                  value={newPassword}
-                  onChange={(event) => {
-                    setNewPassword(event.target.value);
-                    setPasswordMismatch(false);
-                  }}
-                  placeholder="New password"
-                  className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
-                />
-                <input
-                  type="password"
-                  aria-label="Confirm new password"
-                  autoComplete="new-password"
-                  required
-                  value={confirmNewPassword}
-                  onChange={(event) => {
-                    setConfirmNewPassword(event.target.value);
-                    setPasswordMismatch(false);
-                  }}
-                  placeholder="Confirm new password"
-                  className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
-                />
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="currentPassword" className="text-sm text-ink-secondary">
+                    Current password
+                  </label>
+                  <input
+                    id="currentPassword"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    value={currentPassword}
+                    onChange={(event) => {
+                      setCurrentPassword(event.target.value);
+                      setPasswordError("");
+                    }}
+                    className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="newPassword" className="text-sm text-ink-secondary">
+                    New password
+                  </label>
+                  <input
+                    id="newPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={8}
+                    required
+                    value={newPassword}
+                    onChange={(event) => {
+                      setNewPassword(event.target.value);
+                      setPasswordMismatch(false);
+                    }}
+                    className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="confirmNewPassword" className="text-sm text-ink-secondary">
+                    Confirm new password
+                  </label>
+                  <input
+                    id="confirmNewPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    value={confirmNewPassword}
+                    onChange={(event) => {
+                      setConfirmNewPassword(event.target.value);
+                      setPasswordMismatch(false);
+                    }}
+                    className="w-full max-w-sm rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+                  />
+                </div>
                 {passwordMismatch && (
                   <p className="text-xs text-status-error">
                     Passwords don&apos;t match.
