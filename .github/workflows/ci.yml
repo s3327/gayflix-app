@@ -12,11 +12,39 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Three kinds of job run side by side: the fast checks, and the end-to-end
+# suite split into three shards. "check" waits for all of them, so a branch
+# rule or a reader can still look at one result.
 jobs:
-  check:
+  fast:
+    name: lint, types, unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      # Production dependencies only: dev tooling (ESLint's file globbing)
+      # can have advisories that never reach the deployed app.
+      - run: npm audit --omit=dev --audit-level=high
+
+  e2e:
+    name: e2e ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # A throwaway Postgres for the e2e suite (the catalog, accounts, roles).
+    strategy:
+      # Let every shard finish, so one failure shows all the others too.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    # Each shard gets its own throwaway Postgres (the catalog, accounts,
+    # roles), and its own copy of the setup project's accounts.
     services:
       postgres:
         image: postgres:16
@@ -47,20 +75,26 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
       - run: npm run db:deploy
       - run: npm run build
       # End-to-end + accessibility (axe) tests against the production build.
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - run: npx playwright test --shard=${{ matrix.shard }}/3
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-traces
+          name: playwright-traces-${{ matrix.shard }}
           path: test-results/
           retention-days: 7
-      # Production dependencies only: dev tooling (ESLint's file globbing)
-      # can have advisories that never reach the deployed app.
-      - run: npm audit --omit=dev --audit-level=high
+
+  check:
+    if: always()
+    needs: [fast, e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Every job passed
+        run: |
+          echo "fast: ${{ needs.fast.result }}, e2e: ${{ needs.e2e.result }}"
+          test "${{ needs.fast.result }}" = success
+          test "${{ needs.e2e.result }}" = success
