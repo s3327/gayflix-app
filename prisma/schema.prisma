@@ -174,7 +174,10 @@ model Media {
   featuredBeforeTrash Boolean?     @default(false)
   backdropFocus       String?
   lockedFields        String[]      @default([])
+  /// The first time the title was published; kept when it is unpublished.
   publishedAt    DateTime?
+  /// A draft's "Publish at": the publish_due job publishes it then.
+  publishAt      DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   episodes       Episode[]
@@ -188,6 +191,7 @@ model Media {
   @@index([status, createdAt])
   @@index([status, publishedAt])
   @@index([status, type, publishedAt])
+  @@index([publishAt])
   @@map("media")
 }
 

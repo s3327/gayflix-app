@@ -20,11 +20,15 @@ import {
   episodeDuration,
   episodeId,
   formValues,
+  bulkTagsProblem,
   imageUrlProblem,
   libraryPath,
+  parseBulkTags,
   parseEpisode,
+  parseQuickEdit,
   parseTitle,
   seriesDuration,
+  splitList,
   type FormState,
 } from "@/lib/title-form";
 import {
@@ -64,7 +68,13 @@ function itemId(value: unknown): string {
 
 /** The checked rows of a library page. */
 function selectedIds(form: FormData) {
-  return [...new Set(form.getAll("ids").filter(isMediaId))].slice(0, MAX_SELECTED);
+  return mediaIds(form.getAll("ids"));
+}
+
+/** Title ids sent by the browser: valid ones only, each once, at most MAX_SELECTED. */
+function mediaIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter(isMediaId))].slice(0, MAX_SELECTED);
 }
 
 /** Titles show up all over the public site and the admin panel. */
@@ -176,9 +186,8 @@ export async function updateTitle(
     summary: `Updated title metadata for "${parsed.data.title}"`,
   });
 
-  const shouldSetPublishedAt =
-    parsed.data.status === "published" &&
-    (existing.status !== "published" || existing.publishedAt === null);
+  // Kept from the first time it was published.
+  const shouldSetPublishedAt = parsed.data.status === "published" && existing.publishedAt === null;
 
   const saved = await db.$transaction(async (tx) => {
     // Not if it was trashed meanwhile: a trashed title must stay a draft.
@@ -187,6 +196,7 @@ export async function updateTitle(
       data: {
         ...titleData(existing.type, parsed.data),
         ...(shouldSetPublishedAt ? { publishedAt: new Date() } : {}),
+        ...(parsed.data.status === "published" ? { publishAt: null } : {}),
       },
     });
     if (count > 0 && parsed.data.featured && parsed.data.status === "published") {
@@ -211,24 +221,29 @@ export async function updateTitle(
   return { ok: true, message: "Saved.", values, version: Date.now() };
 }
 
-export async function updateMediaStatusBatch(ids: string[], status: MediaStatus) {
+/**
+ * Publishes or unpublishes titles that aren't in the trash. A title keeps
+ * the date it was first published.
+ */
+export async function updateMediaStatusBatch(idsArg: unknown, statusArg: unknown) {
   const { allowed } = await catalogSession();
+  const ids = mediaIds(idsArg);
   if (!allowed || ids.length === 0) return;
+  const status = mediaStatus(statusArg);
   await db.$transaction(async (tx) => {
+    const where = { id: { in: ids }, trashedAt: null };
     if (status === "published") {
-      await tx.media.updateMany({
-        where: { id: { in: ids }, trashedAt: null },
-        data: { status, publishedAt: new Date() },
-      });
+      await tx.media.updateMany({ where, data: { status, publishAt: null } });
+      await tx.media.updateMany({ where: { ...where, publishedAt: null }, data: { publishedAt: new Date() } });
       const featured = await tx.media.findFirst({
-        where: { id: { in: ids }, featured: true, trashedAt: null },
+        where: { ...where, featured: true },
         select: { id: true },
       });
       if (featured) {
         await unfeatureOthers(tx, featured.id);
       }
     } else {
-      await tx.media.updateMany({ where: { id: { in: ids }, trashedAt: null }, data: { status } });
+      await tx.media.updateMany({ where, data: { status } });
     }
   });
   refreshPages();
@@ -496,57 +511,45 @@ export async function bulkDeleteForGoodTrash(form: FormData): Promise<void> {
 }
 
 /** Quick inline metadata update without leaving the library page. */
-export async function quickUpdateTitle({
-  id,
-  title,
-  year,
-  status,
-  duration,
-  genres,
-  tagline,
-  rating,
-}: {
-  id: string;
-  title: string;
-  year: number;
-  status: "draft" | "published";
-  duration?: string;
-  genres?: string[];
-  tagline?: string | null;
-  rating?: number | null;
-}): Promise<{ ok: boolean; message?: string }> {
+export async function quickUpdateTitle(input: unknown): Promise<{ ok: boolean; message?: string }> {
   const { session, allowed } = await catalogSession();
   if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
+  const id = typeof input === "object" && input !== null ? (input as { id?: unknown }).id : undefined;
   if (!isMediaId(id)) return { ok: false, message: "Invalid title ID" };
   const existing = await db.media.findUnique({
     where: { id },
-    select: { type: true, status: true, publishedAt: true, trashedAt: true },
+    select: { type: true, featured: true, publishedAt: true, trashedAt: true },
   });
   if (!existing || existing.trashedAt) return { ok: false, message: "Title not found or in trash" };
+  const parsed = parseQuickEdit(input, existing.type);
+  if (!parsed.ok) return { ok: false, message: parsed.message };
+  const { title, year, status, duration, genres, tagline, rating } = parsed.data;
 
   // Save revision snapshot before applying quick updates
   await createTitleRevision({
     mediaId: id,
     actorId: session.user.id,
     actorEmail: session.user.email,
-    summary: `Quick edited metadata for "${title.trim()}"`,
+    summary: `Quick edited metadata for "${title}"`,
   });
 
-  const shouldSetPublishedAt =
-    status === "published" && (existing.status !== "published" || existing.publishedAt === null);
-
-  await db.media.update({
-    where: { id },
-    data: {
-      title: title.trim(),
-      year,
-      status,
-      ...(duration ? { duration } : {}),
-      ...(genres ? { genres } : {}),
-      ...(tagline !== undefined ? { tagline } : {}),
-      ...(rating !== undefined ? { rating } : {}),
-      ...(shouldSetPublishedAt ? { publishedAt: new Date() } : {}),
-    },
+  await db.$transaction(async (tx) => {
+    const { count } = await tx.media.updateMany({
+      where: { id, trashedAt: null },
+      data: {
+        title,
+        year,
+        status,
+        ...(duration ? { duration } : {}),
+        ...(genres ? { genres } : {}),
+        ...(tagline !== undefined ? { tagline } : {}),
+        ...(rating !== undefined ? { rating } : {}),
+        // Kept from the first time it was published.
+        ...(status === "published" && existing.publishedAt === null ? { publishedAt: new Date() } : {}),
+        ...(status === "published" ? { publishAt: null } : {}),
+      },
+    });
+    if (count > 0 && existing.featured && status === "published") await unfeatureOthers(tx, id);
   });
 
   await logActivity({
@@ -556,8 +559,8 @@ export async function quickUpdateTitle({
     action: "title.quick_edit",
     entityType: "media",
     entityId: id,
-    summary: `Quick edited "${title.trim()}"`,
-    details: { title: title.trim(), year, status },
+    summary: `Quick edited "${title}"`,
+    details: { title, year, status },
   });
 
   refreshPages();
@@ -565,49 +568,36 @@ export async function quickUpdateTitle({
 }
 
 /** Batch add or remove tags and genres across multiple selected titles. */
-export async function bulkTagTitles({
-  ids,
-  addTags = [],
-  removeTags = [],
-  addGenres = [],
-  removeGenres = [],
-}: {
-  ids: string[];
-  addTags?: string[];
-  removeTags?: string[];
-  addGenres?: string[];
-  removeGenres?: string[];
-}): Promise<{ ok: boolean; count: number }> {
+export async function bulkTagTitles(input: unknown): Promise<{ ok: boolean; count: number; message?: string }> {
   const { allowed } = await catalogSession();
-  if (!allowed) return { ok: false, count: 0 };
-  if (!ids || ids.length === 0) return { ok: true, count: 0 };
+  if (!allowed) return { ok: false, count: 0, message: FORBIDDEN_CATALOG };
+  const raw = typeof input === "object" && input !== null ? (input as { ids?: unknown }) : {};
+  const ids = mediaIds(raw.ids);
+  if (ids.length === 0) return { ok: true, count: 0 };
+  const parsed = parseBulkTags(input);
+  if (!parsed.ok) return { ok: false, count: 0, message: parsed.message };
+  const { addTags, removeTags, addGenres, removeGenres } = parsed.data;
+  const removing = (list: string[]) => new Set(list.map((item) => item.toLowerCase()));
+  const removeTagSet = removing(removeTags);
+  const removeGenreSet = removing(removeGenres);
+
   const items = await db.media.findMany({
     where: { id: { in: ids }, trashedAt: null },
-    select: { id: true, tags: true, genres: true },
+    select: { id: true, title: true, tags: true, genres: true },
   });
+  const changes = items.map((item) => ({
+    item,
+    tags: splitList([...item.tags, ...addTags].join(",")).filter((t) => !removeTagSet.has(t.toLowerCase())),
+    genres: splitList([...item.genres, ...addGenres].join(",")).filter((g) => !removeGenreSet.has(g.toLowerCase())),
+  }));
+  for (const { item, tags, genres } of changes) {
+    const problem = bulkTagsProblem(tags, genres);
+    if (problem) return { ok: false, count: 0, message: `${item.title}: ${problem}` };
+  }
 
   await db.$transaction(async (tx) => {
-    for (const item of items) {
-      let tags = item.tags;
-      let genres = item.genres;
-
-      if (addTags.length > 0) {
-        tags = Array.from(new Set([...tags, ...addTags.map((t) => t.trim()).filter(Boolean)]));
-      }
-      if (removeTags.length > 0) {
-        tags = tags.filter((t) => !removeTags.includes(t));
-      }
-      if (addGenres.length > 0) {
-        genres = Array.from(new Set([...genres, ...addGenres.map((g) => g.trim()).filter(Boolean)]));
-      }
-      if (removeGenres.length > 0) {
-        genres = genres.filter((g) => !removeGenres.includes(g));
-      }
-
-      await tx.media.update({
-        where: { id: item.id },
-        data: { tags, genres },
-      });
+    for (const { item, tags, genres } of changes) {
+      await tx.media.update({ where: { id: item.id }, data: { tags, genres } });
     }
   });
 

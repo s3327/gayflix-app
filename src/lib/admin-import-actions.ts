@@ -2,11 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { parseTmdbRef } from "@/lib/import-mapping";
+import { isImdbId, isTmdbId, parseTmdbRef } from "@/lib/import-mapping";
+import { isMediaId } from "@/lib/library-types";
 import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
 import { libraryPath, uploadPath } from "@/lib/title-form";
 import { prepareImport, type ImportState } from "@/lib/title-import";
-import { insertTitle } from "@/lib/title-store";
+import { insertTitle, isUniqueViolation } from "@/lib/title-store";
 
 /*
  * The Import page's server function. Like the title editor's, it checks
@@ -46,12 +47,19 @@ export async function importTitle(
   redirect(`${libraryPath(plan.type)}/${id}?imported=1`);
 }
 
+/** One search page's worth (TMDB pages of movies and series hold 20 each). */
+const MAX_BATCH_IMPORT = 40;
+
 /** Import multiple titles from TMDB search in batch. */
 export async function importMultipleTitles(
-  tmdbIds: string[]
+  tmdbIdsArg: unknown
 ): Promise<{ ok: boolean; imported: number; skipped: number; errors: string[] }> {
   const { allowed } = await catalogSession();
   if (!allowed) return { ok: false, imported: 0, skipped: 0, errors: [FORBIDDEN_CATALOG] };
+  if (!Array.isArray(tmdbIdsArg) || tmdbIdsArg.length > MAX_BATCH_IMPORT) {
+    return { ok: false, imported: 0, skipped: 0, errors: [`Import up to ${MAX_BATCH_IMPORT} titles at a time.`] };
+  }
+  const tmdbIds = [...new Set(tmdbIdsArg)];
   let imported = 0;
   let skipped = 0;
   const errors: string[] = [];
@@ -168,29 +176,43 @@ export async function refreshTitleFromTmdb({
   return { ok: true, updatedFields };
 }
 
-/** Re-link a title to a different TMDB or IMDb ID. */
-export async function fixTitleMatch({
-  id,
-  tmdbId,
-  imdbId,
-}: {
-  id: string;
-  tmdbId?: string;
-  imdbId?: string;
-}): Promise<{ ok: boolean; message?: string }> {
+/**
+ * Re-link a title to a different TMDB or IMDb ID ("movie/603",
+ * "tt0133093"). A field left out stays as it is.
+ */
+export async function fixTitleMatch(input: unknown): Promise<{ ok: boolean; message?: string }> {
   const { allowed } = await catalogSession();
   if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
+  const raw = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+  if (!isMediaId(raw.id)) return { ok: false, message: "Invalid title ID" };
+  const id = raw.id;
+  const tmdbId = typeof raw.tmdbId === "string" ? raw.tmdbId.trim() : raw.tmdbId;
+  const imdbId = typeof raw.imdbId === "string" ? raw.imdbId.trim().toLowerCase() : raw.imdbId;
+  if (tmdbId !== undefined && !isTmdbId(tmdbId)) {
+    return { ok: false, message: "Enter the TMDB ID like movie/603 or tv/1399." };
+  }
+  if (imdbId !== undefined && !isImdbId(imdbId)) {
+    return { ok: false, message: "Enter the IMDb ID like tt0133093." };
+  }
   const { db } = await import("@/lib/db");
-  const existing = await db.media.findUnique({ where: { id } });
-  if (!existing) return { ok: false, message: "Title not found" };
+  const existing = await db.media.findUnique({ where: { id }, select: { type: true, trashedAt: true } });
+  if (!existing || existing.trashedAt) return { ok: false, message: "Title not found or in trash" };
+  if (tmdbId !== undefined && parseTmdbRef(tmdbId)?.kind !== (existing.type === "movie" ? "movie" : "tv")) {
+    return { ok: false, message: `That TMDB ID isn't a ${existing.type}.` };
+  }
 
-  await db.media.update({
-    where: { id },
-    data: {
-      ...(tmdbId !== undefined ? { tmdbId: tmdbId.trim() || null } : {}),
-      ...(imdbId !== undefined ? { imdbId: imdbId.trim() || null } : {}),
-    },
-  });
+  try {
+    await db.media.update({
+      where: { id },
+      data: {
+        ...(tmdbId !== undefined ? { tmdbId } : {}),
+        ...(imdbId !== undefined ? { imdbId } : {}),
+      },
+    });
+  } catch (error: unknown) {
+    if (isUniqueViolation(error)) return { ok: false, message: "Another title already has that ID." };
+    throw error;
+  }
 
   revalidatePath("/", "layout");
   return { ok: true };

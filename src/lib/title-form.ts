@@ -179,6 +179,105 @@ export function parseTitle(
   };
 }
 
+/** What the library's quick edit drawer may change. */
+export type QuickEditInput = {
+  id: string;
+  title: string;
+  year: number;
+  status: MediaStatus;
+  /** Movies only: the runtime as a card shows it ("1h 52m"). */
+  duration?: string;
+  genres?: string[];
+  tagline?: string | null;
+  rating?: number | null;
+};
+
+/**
+ * Checks the quick edit drawer's fields with the title form's rules.
+ * Returns the cleaned fields, or the first problem as a sentence.
+ */
+export function parseQuickEdit(
+  input: unknown,
+  type: MediaType,
+  { now = new Date() }: { now?: Date } = {}
+): { ok: true; data: QuickEditInput } | { ok: false; message: string } {
+  if (typeof input !== "object" || input === null) return { ok: false, message: "Nothing to save." };
+  const raw = input as Record<string, unknown>;
+  if (!isMediaId(raw.id)) return { ok: false, message: "Invalid title ID" };
+  const title = typeof raw.title === "string" ? raw.title.trim() : "";
+  const titleProblem = requiredText(title, 200, "Enter the title.");
+  if (titleProblem) return { ok: false, message: titleProblem };
+  const lastYear = now.getUTCFullYear() + 5;
+  if (typeof raw.year !== "number" || !Number.isInteger(raw.year) || raw.year < FIRST_YEAR || raw.year > lastYear) {
+    return { ok: false, message: `Enter a year from ${FIRST_YEAR} to ${lastYear}.` };
+  }
+  if (raw.status !== "draft" && raw.status !== "published") return { ok: false, message: "Invalid status" };
+  const data: QuickEditInput = { id: raw.id, title, year: raw.year, status: raw.status };
+
+  // A series' duration is its season count, worked out from its episodes.
+  if (raw.duration !== undefined && type === "movie") {
+    const minutes = typeof raw.duration === "string" ? movieDurationMinutes(raw.duration) : null;
+    if (minutes === null || minutes < 1 || minutes > 999) {
+      return { ok: false, message: "Enter the runtime like 1h 52m or 112." };
+    }
+    data.duration = movieDuration(minutes);
+  }
+  if (raw.genres !== undefined) {
+    if (!Array.isArray(raw.genres) || !raw.genres.every((genre) => typeof genre === "string")) {
+      return { ok: false, message: "Invalid genres" };
+    }
+    const genres = splitList(raw.genres.join(","));
+    const problem = genres.length === 0 ? "Enter at least one genre." : listProblem(genres, 10, 40, "genres");
+    if (problem) return { ok: false, message: problem };
+    data.genres = genres;
+  }
+  if (raw.tagline !== undefined) {
+    if (raw.tagline !== null && typeof raw.tagline !== "string") return { ok: false, message: "Invalid tagline" };
+    const tagline = raw.tagline?.trim() || null;
+    const problem = tagline && optionalText(tagline, 200);
+    if (problem) return { ok: false, message: problem };
+    data.tagline = tagline;
+  }
+  if (raw.rating !== undefined) {
+    if (raw.rating !== null && (typeof raw.rating !== "number" || !Number.isFinite(raw.rating) || raw.rating < 0 || raw.rating > 5)) {
+      return { ok: false, message: "Enter a rating from 0 to 5, or leave it empty." };
+    }
+    data.rating = raw.rating === null ? null : Math.round(raw.rating * 10) / 10;
+  }
+  return { ok: true, data };
+}
+
+/** The bulk tag modal's changes. */
+export type BulkTagInput = {
+  addTags: string[];
+  removeTags: string[];
+  addGenres: string[];
+  removeGenres: string[];
+};
+
+/** Checks the bulk tag modal's lists, or says what's wrong with them. */
+export function parseBulkTags(input: unknown): { ok: true; data: BulkTagInput } | { ok: false; message: string } {
+  const raw = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+  const data: BulkTagInput = { addTags: [], removeTags: [], addGenres: [], removeGenres: [] };
+  for (const key of Object.keys(data) as (keyof BulkTagInput)[]) {
+    const value = raw[key] ?? [];
+    if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+      return { ok: false, message: "Invalid tags or genres" };
+    }
+    const items = splitList(value.join(","));
+    const problem = key.endsWith("Genres") ? listProblem(items, 10, 40, "genres") : listProblem(items, 20, 40, "tags");
+    if (problem) return { ok: false, message: problem };
+    data[key] = items;
+  }
+  return { ok: true, data };
+}
+
+/** Whether a title's tags and genres fit the title form's limits after a bulk change. */
+export function bulkTagsProblem(tags: string[], genres: string[]): string | null {
+  if (genres.length === 0) return "Every title needs at least one genre.";
+  return listProblem(genres, 10, 40, "genres") ?? listProblem(tags, 20, 40, "tags");
+}
+
 /** The form for a new title. */
 export function emptyTitleValues(): TitleValues {
   const values = Object.fromEntries(TITLE_FIELDS.map((field) => [field, ""])) as TitleValues;

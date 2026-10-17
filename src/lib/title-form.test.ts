@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { imageHosts, uploadHost } from "@/lib/image-hosts.mjs";
 import {
+  bulkTagsProblem,
   emptyTitleValues,
   episodeDurationMinutes,
   episodeId,
@@ -10,7 +11,9 @@ import {
   movieDuration,
   movieDurationMinutes,
   NO_POSTER,
+  parseBulkTags,
   parseEpisode,
+  parseQuickEdit,
   parseTitle,
   seriesDuration,
   slugify,
@@ -309,5 +312,65 @@ describe("durations and addresses", () => {
   it("gives a title the same gradient every time", () => {
     expect(gradientFor("chosen-family")).toBe(gradientFor("chosen-family"));
     expect(gradientFor("chosen-family")).toMatch(/^from-\S+ to-\S+$/);
+  });
+});
+
+describe("parseQuickEdit", () => {
+  const now = new Date("2026-10-17T00:00:00Z");
+  const base = { id: "chosen-family", title: " Chosen Family ", year: 2024, status: "published" };
+
+  it("cleans what the drawer sends", () => {
+    expect(
+      parseQuickEdit({ ...base, duration: "112", genres: ["Drama", " drama", "Romance"], tagline: "  ", rating: 4.26 }, "movie", { now })
+    ).toEqual({
+      ok: true,
+      data: { ...base, title: "Chosen Family", duration: "1h 52m", genres: ["Drama", "Romance"], tagline: null, rating: 4.3 },
+    });
+  });
+
+  it("leaves a series' duration alone", () => {
+    const parsed = parseQuickEdit({ ...base, duration: "2 Seasons" }, "series", { now });
+    expect(parsed.ok && parsed.data.duration).toBeUndefined();
+  });
+
+  it("turns away what the title form would", () => {
+    for (const input of [
+      null,
+      { ...base, id: "../x" },
+      { ...base, title: "" },
+      { ...base, title: "x".repeat(201) },
+      { ...base, year: 1700 },
+      { ...base, year: "2024" },
+      { ...base, status: "trashed" },
+      { ...base, duration: "forever" },
+      { ...base, genres: [] },
+      { ...base, genres: "Drama" },
+      { ...base, tagline: "x".repeat(201) },
+      { ...base, rating: 9 },
+    ]) {
+      expect(parseQuickEdit(input, "movie", { now }).ok).toBe(false);
+    }
+  });
+});
+
+describe("parseBulkTags", () => {
+  it("cleans the lists and fills in missing ones", () => {
+    expect(parseBulkTags({ addTags: ["queer", " Queer ", ""], addGenres: ["Drama"] })).toEqual({
+      ok: true,
+      data: { addTags: ["queer"], removeTags: [], addGenres: ["Drama"], removeGenres: [] },
+    });
+  });
+
+  it("turns away lists that aren't lists of short words", () => {
+    expect(parseBulkTags({ addTags: "queer" }).ok).toBe(false);
+    expect(parseBulkTags({ addTags: [1] }).ok).toBe(false);
+    expect(parseBulkTags({ addTags: ["x".repeat(41)] }).ok).toBe(false);
+    expect(parseBulkTags({ addTags: Array.from({ length: 21 }, (_, i) => `t${i}`) }).ok).toBe(false);
+  });
+
+  it("keeps each title within the title form's limits", () => {
+    expect(bulkTagsProblem(["a"], ["Drama"])).toBeNull();
+    expect(bulkTagsProblem(["a"], [])).toBe("Every title needs at least one genre.");
+    expect(bulkTagsProblem(Array.from({ length: 21 }, (_, i) => `t${i}`), ["Drama"])).not.toBeNull();
   });
 });

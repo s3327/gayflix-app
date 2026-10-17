@@ -21,7 +21,7 @@ export const AVAILABLE_JOBS: {
   {
     name: "publish_due",
     label: "Publish Due Scheduled Drafts",
-    description: "Finds draft titles with a scheduled publication timestamp in the past and sets status to published.",
+    description: "Publishes draft titles whose Publish at time has come.",
     schedule: "Daily at 03:15 UTC",
   },
   {
@@ -122,27 +122,28 @@ export async function runTrashPurgeJob(triggeredBy = "scheduler") {
   }
 }
 
-/** Publishes drafts whose scheduled publishedAt timestamp has arrived. */
+/**
+ * Publishes drafts whose "Publish at" (publishAt) has come. publishedAt
+ * isn't a schedule: an unpublished title keeps it, and must stay a draft.
+ */
 export async function runPublishDueJob(triggeredBy = "scheduler") {
   const startTime = Date.now();
   const now = new Date();
 
   try {
     const due = await db.media.findMany({
-      where: {
-        status: "draft",
-        trashedAt: null,
-        publishedAt: { lte: now, not: null },
-      },
-      select: { id: true, title: true },
+      where: { status: "draft", trashedAt: null, publishAt: { lte: now } },
+      select: { id: true, publishedAt: true, publishAt: true },
     });
 
-    if (due.length > 0) {
-      await db.media.updateMany({
-        where: { id: { in: due.map((m) => m.id) } },
-        data: { status: "published" },
-      });
-    }
+    await db.$transaction(
+      due.map((m) =>
+        db.media.update({
+          where: { id: m.id, status: "draft", trashedAt: null },
+          data: { status: "published", publishAt: null, publishedAt: m.publishedAt ?? m.publishAt },
+        })
+      )
+    );
 
     const durationMs = Date.now() - startTime;
     const run = await db.scheduledJobRun.create({

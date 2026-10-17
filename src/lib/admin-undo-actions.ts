@@ -8,15 +8,25 @@ import { requireAdmin } from "@/lib/session";
 import { canManageCatalog, canManageUsers } from "@/lib/admin-roles";
 import { FORBIDDEN_CATALOG, FORBIDDEN_USERS } from "@/lib/admin-guard";
 
+const UNDO_ACTIONS: AdminFlashUndo["action"][] = [
+  "restore_media",
+  "publish_media",
+  "unpublish_media",
+  "resolve_report",
+  "reopen_report",
+];
+
 /**
  * Server action to execute reversible admin actions triggered from the Undo banner (A7).
  */
-export async function performUndo(
-  action: AdminFlashUndo["action"],
-  ids: string[]
-): Promise<void> {
+export async function performUndo(actionArg: unknown, idsArg: unknown): Promise<void> {
   const session = await requireAdmin();
-  if (!ids || ids.length === 0) return;
+  const action = UNDO_ACTIONS.find((known) => known === actionArg);
+  // Undo covers what one library page can check (100 rows).
+  const ids = Array.isArray(idsArg)
+    ? [...new Set(idsArg.filter((id): id is string => typeof id === "string" && id.length <= 200))].slice(0, 100)
+    : [];
+  if (!action || ids.length === 0) return;
 
   switch (action) {
     case "restore_media":
