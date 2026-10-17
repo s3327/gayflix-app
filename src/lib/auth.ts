@@ -102,17 +102,17 @@ export const auth = betterAuth({
       twoFactorVerified: { type: "boolean", required: false, defaultValue: false, input: false },
     },
   },
-  advanced: {
-    ipAddress: { disableIpTracking: true },
-  },
   databaseHooks: {
     session: {
       create: {
+        // Sessions never keep the IP address. Better Auth still reads it
+        // from the request for its rate limits, which is why IP tracking
+        // stays on (turning it off turns the rate limits off too). The
+        // browser string stays: /account/setting names devices with it.
         before: async (session, ctx) => ({
           data: {
             ...session,
             ipAddress: null,
-            userAgent: null,
             twoFactorVerified: TWO_FACTOR_VERIFY_PATHS.has(ctx?.path ?? ""),
           },
         }),
@@ -167,13 +167,17 @@ export const auth = betterAuth({
       }
     }),
   },
-  // Disabled Better Auth endpoints: the panel uses its own server actions and rules,
-  // and code sign-in would skip two-factor.
   disabledPaths: [
+    // Sign-in and password reset by emailed code: the UI doesn't use
+    // them, and code sign-in would skip two-factor.
     "/sign-in/email-otp",
     "/email-otp/request-password-reset",
     "/forget-password/email-otp",
     "/email-otp/reset-password",
+    // Admin endpoints that would get around the panel's rules
+    // (src/lib/user-admin.ts): the panel never calls them.
+    "/admin/create-user",
+    "/admin/update-user",
     "/admin/remove-user",
     "/admin/set-user-password",
     "/admin/impersonate-user",
