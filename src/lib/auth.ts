@@ -10,11 +10,13 @@ import { adminAccess } from "@/lib/admin-access";
 import { canManageUsers, roleChangeProblem, staffTargetProblem } from "@/lib/admin-roles";
 import { db } from "@/lib/db";
 import { sendEmail, type Email } from "@/lib/email";
+import { codeEmail, emailChangedEmail, existingAccountEmail, resetPasswordEmail } from "@/lib/email-templates";
 import { siteUrl } from "@/lib/site-url";
 import { ADMIN_API_PATHS, ADMIN_ENDPOINT_ACTIONS, isUserId, userActionProblem } from "@/lib/user-admin";
 
 /** Length of the email verification code; the /verify-email boxes match it. */
 export const OTP_LENGTH = 6;
+const OTP_MINUTES = 10;
 
 /**
  * Sends after the response is finished. Better Auth recommends not
@@ -28,13 +30,6 @@ function deliver(email: Email) {
     })
   );
 }
-
-const OTP_SUBJECTS = {
-  "email-verification": "Your Gayflix verification code",
-  "sign-in": "Your Gayflix sign-in code", // unused: code sign-in is disabled
-  "forget-password": "Your Gayflix password reset code",
-  "change-email": "Confirm your new Gayflix email",
-} as const;
 
 // The only endpoints that create a session after checking a second
 // factor. Sessions made anywhere else (password alone, Google, email
@@ -91,11 +86,7 @@ export const auth = betterAuth({
     minPasswordLength: 8,
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, url }) => {
-      deliver({
-        to: user.email,
-        subject: "Reset your Gayflix password",
-        text: `Someone asked to reset the password for this Gayflix account.\n\nReset it here (the link works for 1 hour):\n${url}\n\nIf this wasn't you, you can ignore this email.`,
-      });
+      deliver({ to: user.email, ...resetPasswordEmail(url, authOrigin) });
     },
     onExistingUserSignUp: async ({ user }) => {
       if (!user.emailVerified) {
@@ -108,11 +99,7 @@ export const auth = betterAuth({
         );
         return;
       }
-      deliver({
-        to: user.email,
-        subject: "You already have a Gayflix account",
-        text: `Someone tried to sign up for Gayflix with this email, which already has an account.\n\nIf it was you, log in here:\n${authOrigin}/login\n\nForgot your password? Reset it here:\n${authOrigin}/forgot-password\n\nIf it wasn't you, you can ignore this email. Nothing about your account has changed.`,
-      });
+      deliver({ to: user.email, ...existingAccountEmail(authOrigin) });
     },
   },
   emailVerification: {
@@ -154,11 +141,7 @@ export const auth = betterAuth({
           if (ctx?.path !== "/email-otp/change-email") return;
           const previous = ctx.context.session?.user.email;
           if (!previous || previous.toLowerCase() === user.email.toLowerCase()) return;
-          deliver({
-            to: previous,
-            subject: "Your Gayflix email was changed",
-            text: `The email for your Gayflix account was just changed to ${user.email}. Codes and password resets now go there.\n\nIf you made this change, there's nothing more to do.\n\nIf you didn't, someone else may be signed in to your account. Reply to this email and we'll help you get it back.`,
-          });
+          deliver({ to: previous, ...emailChangedEmail(user.email, authOrigin) });
         },
       },
     },
@@ -263,7 +246,7 @@ export const auth = betterAuth({
   plugins: [
     emailOTP({
       otpLength: OTP_LENGTH,
-      expiresIn: 10 * 60,
+      expiresIn: OTP_MINUTES * 60,
       allowedAttempts: 5,
       storeOTP: "hashed",
       sendVerificationOnSignUp: true,
@@ -272,11 +255,7 @@ export const auth = betterAuth({
       // the change only happens once that code is entered.
       changeEmail: { enabled: true },
       async sendVerificationOTP({ email, otp, type }) {
-        deliver({
-          to: email,
-          subject: OTP_SUBJECTS[type],
-          text: `Your Gayflix code is ${otp}\n\nIt expires in 10 minutes. If you didn't ask for it, you can ignore this email.`,
-        });
+        deliver({ to: email, ...codeEmail(type, otp, OTP_MINUTES, authOrigin) });
       },
     }),
     // Every role in src/lib/admin-roles.ts. The ones that manage accounts

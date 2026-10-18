@@ -20,6 +20,16 @@ describe("sendEmail", () => {
       to: ["a@example.com"],
       text: EMAIL.text,
     });
+    expect(JSON.parse(String(init?.body))).not.toHaveProperty("html");
+  });
+
+  it("sends the HTML version alongside the text", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
+    await sendEmail({ ...EMAIL, html: "<p>Your code is 123456</p>" }, { RESEND_API_KEY: "re_test" });
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
+      text: EMAIL.text,
+      html: "<p>Your code is 123456</p>",
+    });
   });
 
   it("fails loudly when the provider rejects the message", async () => {
