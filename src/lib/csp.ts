@@ -1,3 +1,5 @@
+import { TRAILER_ORIGIN } from "@/lib/title-extras";
+
 /**
  * The site's Content Security Policy, built per request by src/proxy.ts.
  *
@@ -17,7 +19,8 @@
  * - `videoSources` are the video hosts (videoHostSources() in
  *   src/lib/video-hosts.ts): embeds load in frames from them, video files
  *   play from them, and HLS players fetch playlists and segments from
- *   them. Without any, nothing may be framed.
+ *   them. Without any, only trailers may be framed: YouTube's
+ *   privacy-enhanced player (TRAILER_ORIGIN in src/lib/title-extras.ts).
  */
 export function buildContentSecurityPolicy(
   nonce: string,
@@ -42,7 +45,7 @@ export function buildContentSecurityPolicy(
     `media-src 'self' blob:${video}`,
     // HLS players parse streams in a worker they start from a blob.
     "worker-src 'self' blob:",
-    video ? `frame-src${video}` : "frame-src 'none'",
+    `frame-src ${TRAILER_ORIGIN}${video}`,
     "frame-ancestors 'none'",
     "object-src 'none'",
     "base-uri 'self'",

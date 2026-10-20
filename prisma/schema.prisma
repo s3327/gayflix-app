@@ -151,6 +151,12 @@ model Media {
   posterUrl      String
   /// 16:9, for the home page hero.
   backdropUrl    String?
+  /// A YouTube watch link, played on the title page (src/lib/title-extras.ts).
+  trailerUrl     String?
+  /// The youngest age it's for: MATURITY_RATINGS in src/lib/title-extras.ts.
+  maturityRating String?
+  /// What it contains that viewers may want to know: CONTENT_NOTES codes.
+  contentNotes   String[]
   /// Tailwind gradient stops shown behind the poster.
   gradient       String?
   /// The home page hero shows the most recently updated featured title.

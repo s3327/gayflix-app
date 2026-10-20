@@ -13,6 +13,7 @@ import {
 } from "@/components/admin/FormFields";
 import ImageField from "@/components/admin/ImageField";
 import type { MediaType } from "@/lib/media";
+import { CONTENT_NOTES, maturityLabel, MATURITY_RATINGS } from "@/lib/title-extras";
 import { FIRST_YEAR, type FormState, type TitleValues } from "@/lib/title-form";
 
 type Action = (state: FormState, form: FormData) => Promise<FormState>;
@@ -312,12 +313,69 @@ export default function TitleForm({
           kind="backdrop"
           label="Backdrop image link"
           optional
-          hint="A wide (16:9) image, shown at the top of the home page when the title is featured."
+          hint="A wide (16:9) image, shown at the top of the title's page, and of the home page when the title is featured."
           defaultValue={values.backdropUrl}
           error={errors.backdropUrl}
           canUpload={canUpload}
           className="sm:col-span-2"
         />
+
+        <TextField
+          name="trailerUrl"
+          label="Trailer"
+          type="url"
+          optional
+          hint="A YouTube link. The title's page plays it in YouTube's privacy-enhanced player."
+          defaultValue={values.trailerUrl}
+          error={errors.trailerUrl}
+          autoComplete="off"
+          spellCheck={false}
+          className="sm:col-span-2"
+        />
+        <SelectField
+          name="maturityRating"
+          label="Maturity rating"
+          hint="The youngest age it's suitable for."
+          defaultValue={values.maturityRating}
+          error={errors.maturityRating}
+        >
+          <option value="">Not rated</option>
+          {MATURITY_RATINGS.map((rating) => (
+            <option key={rating} value={rating}>
+              {maturityLabel(rating)}
+            </option>
+          ))}
+        </SelectField>
+        <fieldset
+          aria-describedby={errors.contentNotes ? "field-contentNotes-error" : "field-contentNotes-hint"}
+          className="sm:col-span-2"
+        >
+          <legend className="text-xs font-semibold uppercase tracking-wide text-ink-secondary">
+            Content notes <span className="font-normal normal-case tracking-normal text-ink-muted">(optional)</span>
+          </legend>
+          <p id="field-contentNotes-hint" className="mt-1 text-xs text-ink-muted">
+            Shown on the title&apos;s page as &ldquo;Contains: …&rdquo;, so viewers can choose.
+          </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {CONTENT_NOTES.map(([code, label]) => (
+              <label key={code} className="flex items-center gap-3 text-sm text-ink-primary">
+                <input
+                  type="checkbox"
+                  name="contentNotes"
+                  value={code}
+                  defaultChecked={values.contentNotes.split(",").includes(code)}
+                  className="h-4 w-4 rounded-sm border-border-strong accent-brand-pink"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          {errors.contentNotes && (
+            <p id="field-contentNotes-error" className="mt-1 text-xs font-medium text-status-error">
+              {errors.contentNotes}
+            </p>
+          )}
+        </fieldset>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

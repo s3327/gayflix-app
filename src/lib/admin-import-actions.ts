@@ -99,6 +99,8 @@ const REFRESH_FIELDS = [
   ["tagline", "tagline"],
   ["posterUrl", "posterUrl"],
   ["backdropUrl", "backdropUrl"],
+  ["trailerUrl", "trailerUrl"],
+  ["maturityRating", "maturityRating"],
   ["credit", "director"],
   ["credit", "creator"],
   ["cast", "cast"],

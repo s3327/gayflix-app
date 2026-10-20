@@ -58,7 +58,10 @@ describe("TMDB", () => {
     expect(await getTmdbDetails("movie", 603)).toEqual({ id: 603 });
     const { url, headers } = requested();
     expect(url.origin + url.pathname).toBe("http://localhost:3101/tmdb/3/movie/603");
-    expect(url.searchParams.get("append_to_response")).toBe("credits,keywords,external_ids");
+    // With the trailer and the certifications (a series asks for content_ratings).
+    expect(url.searchParams.get("append_to_response")).toBe(
+      "credits,keywords,external_ids,videos,release_dates"
+    );
     expect(url.searchParams.has("api_key")).toBe(false);
     expect(headers.get("authorization")).toBe("Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJ4In0.sig");
   });
@@ -72,6 +75,9 @@ describe("TMDB", () => {
   it("answers null for a title TMDB doesn't have", async () => {
     fetchMock.mockImplementation(async () => answer(404, { status_code: 34 }));
     expect(await getTmdbDetails("tv", 1)).toBeNull();
+    expect(requested().url.searchParams.get("append_to_response")).toBe(
+      "credits,keywords,external_ids,videos,content_ratings"
+    );
   });
 
   it("says what went wrong", async () => {
