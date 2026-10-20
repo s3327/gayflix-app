@@ -35,6 +35,7 @@ export default async function UploadEpisodesPage({
     title: "",
     minutes: "",
     airDate: "",
+    synopsis: "",
   };
 
   return (

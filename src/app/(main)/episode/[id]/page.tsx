@@ -39,10 +39,11 @@ export async function generateMetadata({
  * episode isn't a movie:
  *   1. No per-episode rating/tagline exists in the data model (only the
  *      series as a whole has one) — the header shows a "SX · EY" badge
- *      instead of a star rating, and the synopsis/meta list below shows
- *      the series' own info (genre/creator/cast/country/language),
- *      since that's genuinely shared across every episode. Details the
- *      series doesn't have are left out.
+ *      instead of a star rating. Below, the episode's own synopsis (when
+ *      it has one) comes first, then the series' synopsis and meta list
+ *      (genre/creator/cast/country/language), since that's genuinely
+ *      shared across every episode. Details the series doesn't have are
+ *      left out.
  *   2. Previous/Next episode buttons directly below the player, since
  *      that's the one navigation action a movie's watch page has no
  *      equivalent for.
@@ -238,10 +239,16 @@ export default async function EpisodePage({
 
       <hr className="my-8 border-border-subtle" />
 
-      {/* Series synopsis — shared across every episode, since there's
-          no per-episode synopsis in the data model */}
+      {/* The episode's own synopsis, then the series' (shared by every
+          episode), whichever there are. */}
+      {episode.synopsis && (
+        <p className="max-w-3xl leading-relaxed text-ink-primary">{episode.synopsis}</p>
+      )}
       {series.synopsis && (
-        <p className="max-w-3xl text-sm leading-relaxed text-ink-secondary">
+        <p
+          className={`max-w-3xl text-sm leading-relaxed text-ink-secondary ${episode.synopsis ? "mt-4" : ""}`}
+        >
+          {episode.synopsis && <span className="font-semibold text-ink-muted">About the series: </span>}
           {series.synopsis}
         </p>
       )}

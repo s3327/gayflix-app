@@ -235,6 +235,7 @@ describe("parseEpisode", () => {
     title: "Moving Day",
     minutes: "42",
     airDate: "",
+    synopsis: "",
   };
 
   it("accepts an episode", () => {
@@ -247,8 +248,18 @@ describe("parseEpisode", () => {
         title: "Moving Day",
         minutes: 42,
         airDate: null,
+        synopsis: "",
       },
     });
+  });
+
+  it("keeps a synopsis, up to 1000 characters", () => {
+    const result = parseEpisode({ ...episode, synopsis: "Boxes everywhere." });
+    expect(result.ok && result.data.synopsis).toBe("Boxes everywhere.");
+    const tooLong = parseEpisode({ ...episode, synopsis: "a".repeat(1001) });
+    expect(tooLong.ok).toBe(false);
+    if (tooLong.ok) return;
+    expect(Object.keys(tooLong.errors)).toEqual(["synopsis"]);
   });
 
   it("rejects bad numbers and a made-up series", () => {
@@ -266,6 +277,7 @@ describe("parseEpisode", () => {
       title: "Rent Day",
       duration: "42 min",
       airDate: new Date("2026-01-05T00:00:00Z"),
+      synopsis: "The rent goes up.",
     });
     expect(values).toEqual({
       series: "the-brownstone",
@@ -274,6 +286,7 @@ describe("parseEpisode", () => {
       title: "Rent Day",
       minutes: "42",
       airDate: "2026-01-05",
+      synopsis: "The rent goes up.",
     });
     expect(parseEpisode(values).ok).toBe(true);
   });

@@ -124,6 +124,7 @@ function toEpisode(row: Prisma.EpisodeModel): Episode {
     duration: row.duration,
     airDate: row.airDate ? longDate.format(row.airDate) : undefined,
     stillUrl: row.stillUrl ?? undefined,
+    synopsis: row.synopsis || undefined,
   };
 }
 

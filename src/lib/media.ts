@@ -67,6 +67,8 @@ export type Episode = {
   airDate?: string;
   /** 16:9 still thumbnail image URL */
   stillUrl?: string | null;
+  /** One or two sentences; absent when there's none. */
+  synopsis?: string;
 };
 
 /**

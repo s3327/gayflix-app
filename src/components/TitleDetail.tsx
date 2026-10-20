@@ -187,7 +187,7 @@ export default function TitleDetail({
           <div className="mt-10">
             <h2 className="font-display text-lg font-semibold">Episodes</h2>
             <div className="mt-4">
-              <SeasonTabs episodes={episodes} />
+              <SeasonTabs episodes={episodes} fallbackImageUrl={title.backdropUrl ?? title.posterUrl} />
             </div>
           </div>
         )}
