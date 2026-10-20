@@ -67,11 +67,13 @@ export default function TitleDetail({
   return (
     <main>
       {/* Header */}
-      <section aria-labelledby="title-heading" className="relative isolate overflow-hidden">
+      {/* No stacking context of its own (no isolate or z-index), so a
+          dialog opened in it, the trailer's, stays above the site header. */}
+      <section aria-labelledby="title-heading" className="relative overflow-hidden">
         {/* The backdrop: a 16:9 band on phones, behind the whole header
-            from md up. */}
+            from md up. The content comes after it, so it's drawn over it. */}
         <div
-          className={`relative -z-10 aspect-video w-full bg-bg-surface bg-linear-to-br md:absolute md:inset-0 md:aspect-auto ${title.gradient ?? ""}`}
+          className={`relative aspect-video w-full bg-bg-surface bg-linear-to-br md:absolute md:inset-0 md:aspect-auto ${title.gradient ?? ""}`}
         >
           {title.backdropUrl ? (
             <Image src={title.backdropUrl} alt="" fill priority sizes="100vw" className="object-cover" />
@@ -94,7 +96,7 @@ export default function TitleDetail({
           <div className="absolute inset-0 hidden bg-linear-to-r from-bg-base/90 via-bg-base/40 to-transparent md:block" />
         </div>
 
-        <div className="mx-auto flex max-w-[1200px] items-end gap-8 px-4 pb-8 sm:px-8 md:min-h-[min(72vh,620px)] md:pb-12 md:pt-24">
+        <div className="relative mx-auto flex max-w-[1200px] items-end gap-8 px-4 pb-8 sm:px-8 md:min-h-[min(72vh,620px)] md:pb-12 md:pt-24">
           <div
             className={`relative hidden aspect-2/3 w-44 shrink-0 overflow-hidden rounded-card bg-bg-surface bg-linear-to-br shadow-xl md:block lg:w-52 ${title.gradient ?? ""}`}
           >
