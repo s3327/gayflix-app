@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { Star } from "lucide-react";
-import { getTitle, getVideoSources } from "@/lib/catalog";
+import { getSubtitles, getTitle, getVideoSources } from "@/lib/catalog";
 import { getResumePosition } from "@/lib/library";
 import WatchPlayer from "@/components/WatchPlayer";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
@@ -29,9 +29,10 @@ export default async function WatchPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [movie, sources, resumeAt] = await Promise.all([
+  const [movie, sources, subtitles, resumeAt] = await Promise.all([
     getTitle(id),
     getVideoSources({ mediaId: id }),
+    getSubtitles({ mediaId: id }),
     getResumePosition(id),
   ]);
   if (!movie) notFound();
@@ -58,6 +59,7 @@ export default async function WatchPage({
       <WatchPlayer
         media={entry}
         sources={sources}
+        subtitles={subtitles}
         backdropUrl={movie.backdropUrl}
         resumeAt={resumeAt}
       />

@@ -4,7 +4,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getEpisode, getVideoSources, resolveEpisodeRedirect } from "@/lib/catalog";
+import { getEpisode, getSubtitles, getVideoSources, resolveEpisodeRedirect } from "@/lib/catalog";
 import { getResumePosition } from "@/lib/library";
 import WatchPlayer from "@/components/WatchPlayer";
 import EpisodeSelectorDrawer from "@/components/watch/EpisodeSelectorDrawer";
@@ -13,6 +13,7 @@ import TagList from "@/components/TagList";
 import TitleActions from "@/components/TitleActions";
 import { countryHref, genreHref, languageHref, searchHref } from "@/lib/browse-href";
 import { episodeMetadata } from "@/lib/page-metadata";
+import type { SearchParams } from "@/lib/search-params";
 
 export async function generateMetadata({
   params,
@@ -48,13 +49,18 @@ export async function generateMetadata({
  */
 export default async function EpisodePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<SearchParams>;
 }) {
   const { id } = await params;
-  const [found, sources, resumeAt] = await Promise.all([
+  // Set by Up next on the episode before: start playing without Play.
+  const autoplay = (await searchParams).autoplay === "1";
+  const [found, sources, subtitles, resumeAt] = await Promise.all([
     getEpisode(id),
     getVideoSources({ episodeId: id }),
+    getSubtitles({ episodeId: id }),
     getResumePosition(id),
   ]);
   if (!found) {
@@ -76,7 +82,7 @@ export default async function EpisodePage({
     <main className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
       {/* Player and its server tabs. Play (inside WatchPlayer) records a
           History entry. Keyed so the next episode starts on its own
-          first server, not playing. */}
+          first server, not playing unless Up next sent it. */}
       <WatchPlayer
         key={episode.id}
         media={{
@@ -91,8 +97,17 @@ export default async function EpisodePage({
           posterUrl: series.posterUrl,
         }}
         sources={sources}
+        subtitles={subtitles}
         backdropUrl={series.backdropUrl}
         resumeAt={resumeAt}
+        next={
+          next && {
+            id: next.id,
+            label: `S${next.seasonNumber} · E${next.episodeNumber} — ${next.title}`,
+            imageUrl: next.stillUrl || series.posterUrl,
+          }
+        }
+        autoplay={autoplay}
       />
 
       {/* Previous / Next episode & episode selector */}

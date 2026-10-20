@@ -2,15 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { Flag, Play, RotateCcw } from "lucide-react";
 import { useHistory } from "@/lib/history-context";
 import type { FavoriteEntry } from "@/lib/favorites-context";
+import type { SubtitleTrack } from "@/lib/subtitles";
 import type { VideoSourceEntry } from "@/lib/video-source";
 import { recordView } from "@/lib/view-actions";
 import { formatTimestamp, parseProgress, resumePosition } from "@/lib/watch-progress";
 import ReportModal from "@/components/ReportModal";
 import ServerTabs from "@/components/ServerTabs";
 import SourcePlayer from "@/components/SourcePlayer";
+import UpNext, { type NextEpisode } from "@/components/watch/UpNext";
 
 /**
  * The player on /watch/[id] and /episode/[id]. `sources` are the movie's
@@ -29,6 +32,13 @@ import SourcePlayer from "@/components/SourcePlayer";
  * counts nothing. An embed counts when Play is pressed: it's a
  * provider's player in a frame, which this app can't see inside.
  *
+ * `next` is the episode after this one. When a file or a stream plays
+ * to the end, Up next offers it and counts down to it; it then opens on
+ * its own page with `autoplay`, which starts playing at once, without
+ * Play. (An embed can't say when it ends; the page's Next link is there.)
+ *
+ * `subtitles` (getSubtitles) are offered by a file or a stream.
+ *
  * The Report button lives here, so every page with a player gets it.
  */
 export default function WatchPlayer({
@@ -36,15 +46,23 @@ export default function WatchPlayer({
   sources,
   backdropUrl,
   resumeAt = 0,
+  next,
+  autoplay = false,
+  subtitles = [],
 }: {
   media: FavoriteEntry;
   sources: VideoSourceEntry[];
+  subtitles?: SubtitleTrack[];
   backdropUrl?: string;
   resumeAt?: number;
+  next?: NextEpisode;
+  autoplay?: boolean;
 }) {
+  const router = useRouter();
   const { recordWatch, recordProgress } = useHistory();
   const [active, setActive] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(autoplay && sources.length > 0);
+  const [showUpNext, setShowUpNext] = useState(false);
   // The server that couldn't play, while it's still the chosen one.
   const [failedId, setFailedId] = useState<string | null>(null);
   const [isReportOpen, setIsReportOpen] = useState(false);
@@ -54,7 +72,7 @@ export default function WatchPlayer({
   // Bumped when focus should move to the video: Play and Try again
   // replace their own buttons, so focus follows rather than dropping to
   // the top of the page.
-  const [focusRequest, setFocusRequest] = useState(0);
+  const [focusRequest, setFocusRequest] = useState(autoplay ? 1 : 0);
   const frameRef = useRef<HTMLDivElement>(null);
   const countedRef = useRef(false);
   const errorRef = useRef<HTMLDivElement>(null);
@@ -66,6 +84,16 @@ export default function WatchPlayer({
   useEffect(() => {
     if (focusRequest > 0) frameRef.current?.querySelector<HTMLElement>("iframe, video")?.focus();
   }, [focusRequest]);
+
+  // Started from Up next: the address loses ?autoplay, so reloading or
+  // sharing it doesn't start playing. Next.js keeps its router in step
+  // with history.replaceState.
+  useEffect(() => {
+    if (!autoplay) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("autoplay");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  }, [autoplay]);
 
   // The video had focus until it was replaced by the error.
   useEffect(() => {
@@ -85,6 +113,19 @@ export default function WatchPlayer({
     if (!progress) return;
     recordProgress(media.id, progress.position, progress.duration);
     setStartAt(resumePosition(progress));
+  }
+
+  function handleEnded() {
+    if (next) setShowUpNext(true);
+  }
+
+  function playNext() {
+    if (next) router.push(`/episode/${next.id}?autoplay=1`);
+  }
+
+  function handleCancelNext() {
+    setShowUpNext(false);
+    setFocusRequest((n) => n + 1);
   }
 
   function handlePlay() {
@@ -121,7 +162,9 @@ export default function WatchPlayer({
             startAt={startAt}
             onStart={handleStart}
             onProgress={handleProgress}
+            onEnded={handleEnded}
             onFail={() => setFailedId(source.id)}
+            subtitles={subtitles}
           />
         ) : (
           <>
@@ -201,6 +244,9 @@ export default function WatchPlayer({
               </button>
             )}
           </>
+        )}
+        {showUpNext && next && (
+          <UpNext next={next} onPlay={playNext} onCancel={handleCancelNext} />
         )}
       </div>
 

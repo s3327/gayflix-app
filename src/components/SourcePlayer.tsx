@@ -2,6 +2,7 @@
 
 import { useEffect, useEffectEvent, useRef } from "react";
 import type Hls from "hls.js";
+import { subtitleUrl, type SubtitleTrack } from "@/lib/subtitles";
 import type { VideoSourceEntry } from "@/lib/video-source";
 
 /** How browsers that play HLS themselves (Safari) name its playlists. */
@@ -26,7 +27,10 @@ const HLS_TYPE = "application/vnd.apple.mpegurl";
  * A file or a stream also starts `startAt` seconds in, and reports how
  * far it got with `onProgress`: every 15 seconds of playing, on pause,
  * at the end, when the tab is hidden and when the player goes away.
- * An embed does neither.
+ * `onEnded` is called when it plays to the end. Its `subtitles` are in
+ * the video player's captions menu, and the language last chosen there
+ * (or Off) is chosen again next time, in any title. An embed does none
+ * of these.
  */
 export default function SourcePlayer({
   source,
@@ -34,13 +38,17 @@ export default function SourcePlayer({
   startAt = 0,
   onStart,
   onProgress,
+  onEnded,
   onFail,
+  subtitles = [],
 }: {
   source: VideoSourceEntry;
   title: string;
   startAt?: number;
+  subtitles?: SubtitleTrack[];
   onStart: () => void;
   onProgress: (position: number, duration: number) => void;
+  onEnded?: () => void;
   onFail: () => void;
 }) {
   if (source.kind === "embed") {
@@ -53,7 +61,9 @@ export default function SourcePlayer({
       startAt={startAt}
       onStart={onStart}
       onProgress={onProgress}
+      onEnded={onEnded}
       onFail={onFail}
+      subtitles={subtitles}
     />
   );
 }
@@ -80,6 +90,25 @@ function EmbedPlayer({
   );
 }
 
+/** The subtitle language last chosen, or "off", kept in the browser. */
+const SUBTITLE_CHOICE_KEY = "gayflix:subtitles";
+
+function readSubtitleChoice(): string | null {
+  try {
+    return window.localStorage.getItem(SUBTITLE_CHOICE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveSubtitleChoice(choice: string) {
+  try {
+    window.localStorage.setItem(SUBTITLE_CHOICE_KEY, choice);
+  } catch {
+    // Private mode or storage turned off: it just isn't remembered.
+  }
+}
+
 /** How often a playing video reports how far it got, in seconds of video. */
 const PROGRESS_EVERY_SECONDS = 15;
 
@@ -89,13 +118,17 @@ function VideoPlayer({
   startAt,
   onStart,
   onProgress,
+  onEnded,
   onFail,
+  subtitles,
 }: {
   source: VideoSourceEntry;
   title: string;
   startAt: number;
+  subtitles: SubtitleTrack[];
   onStart: () => void;
   onProgress: (position: number, duration: number) => void;
+  onEnded?: () => void;
   onFail: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -128,6 +161,26 @@ function VideoPlayer({
       reportOnLeave();
     };
   }, []);
+
+  // Shows the subtitles last chosen, and remembers what's chosen in the
+  // captions menu. Only the <track>s here: a stream's own text tracks
+  // (hls.js adds them) aren't remembered.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || subtitles.length === 0) return;
+    const ours = () => [...video.querySelectorAll("track")].map((element) => element.track);
+    const choice = readSubtitleChoice();
+    for (const track of ours()) {
+      if (track.language === choice) track.mode = "showing";
+    }
+    const onChange = () => {
+      const tracks = ours();
+      if (tracks.length === 0) return;
+      saveSubtitleChoice(tracks.find((track) => track.mode === "showing")?.language ?? "off");
+    };
+    video.textTracks.addEventListener("change", onChange);
+    return () => video.textTracks.removeEventListener("change", onChange);
+  }, [subtitles]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -200,11 +253,24 @@ function VideoPlayer({
         if (Math.abs(video.currentTime - reportedAtRef.current) >= PROGRESS_EVERY_SECONDS) report();
       }}
       onPause={report}
-      onEnded={report}
+      onEnded={() => {
+        report();
+        onEnded?.();
+      }}
       onError={() => {
         if (!hlsRef.current) onFail();
       }}
       className="absolute inset-0 h-full w-full bg-black focus-visible:-outline-offset-4"
-    />
+    >
+      {subtitles.map((track) => (
+        <track
+          key={track.id}
+          kind="subtitles"
+          src={subtitleUrl(track.id)}
+          srcLang={track.language}
+          label={track.label}
+        />
+      ))}
+    </video>
   );
 }

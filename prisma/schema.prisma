@@ -185,6 +185,7 @@ model Media {
   views          MediaView[]
   /// Movies only: a series' video is on its episodes.
   videoSources   VideoSource[]
+  subtitles      Subtitle[]
   revisions      TitleRevision[]
 
   @@index([status, type, updatedAt])
@@ -208,6 +209,7 @@ model Episode {
   stillUrl      String?
   media         Media         @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   videoSources  VideoSource[]
+  subtitles     Subtitle[]
 
   @@unique([mediaId, seasonNumber, episodeNumber])
   @@map("episode")
@@ -264,6 +266,30 @@ model VideoSource {
   @@index([mediaId, position])
   @@index([episodeId, position])
   @@map("video_source")
+}
+
+/// A movie's or an episode's subtitles in one language, as WebVTT, for
+/// Gayflix's own player (a file or a stream; an embed has its own). It
+/// belongs to exactly one of the two, which the migration's CHECK
+/// constraint enforces. Changed only through
+/// src/lib/admin-subtitle-actions.ts; served by src/app/subtitles/[id].
+model Subtitle {
+  id        String   @id @default(cuid())
+  mediaId   String?
+  episodeId String?
+  /// A BCP 47 code from SUBTITLE_LANGUAGES (src/lib/subtitles.ts).
+  language  String
+  /// The uploaded file, converted to WebVTT.
+  content   String
+  /// The uploaded file's name, shown in the admin panel.
+  fileName  String
+  createdAt DateTime @default(now())
+  media     Media?   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  episode   Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([mediaId, language])
+  @@unique([episodeId, language])
+  @@map("subtitle")
 }
 
 /// One view for Trending: someone pressed Play on a movie, or on an

@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import ConfirmSubmitButton from "@/components/admin/ConfirmSubmitButton";
 import EpisodeForm from "@/components/admin/EpisodeForm";
 import { BUTTON_DANGER, BUTTON_SECONDARY } from "@/components/admin/FormFields";
+import Subtitles from "@/components/admin/Subtitles";
 import VideoSources from "@/components/admin/VideoSources";
 import { deleteEpisode, updateEpisode } from "@/lib/admin-catalog-actions";
 import { getEpisodeForEdit } from "@/lib/catalog";
@@ -66,6 +67,7 @@ export default async function EditEpisodePage({ params }: { params: Promise<{ id
           </div>
 
           <VideoSources owner="episode" ownerId={row.id} sources={row.videoSources} />
+          <Subtitles owner="episode" ownerId={row.id} subtitles={row.subtitles} />
 
           <section
             aria-labelledby="delete-heading"
