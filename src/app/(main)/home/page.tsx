@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Play, Info } from "lucide-react";
+import ContentRow from "@/components/ContentRow";
 import ContinueWatchingSection from "@/components/ContinueWatchingSection";
-import TrendingNowSection from "@/components/TrendingNowSection";
 import TitleGridSection from "@/components/TitleGridSection";
-import { getHome, listContinueWatching } from "@/lib/catalog";
+import TopTenSection from "@/components/TopTenSection";
+import { getHome, listBecauseYouWatched, listContinueWatching } from "@/lib/catalog";
 import { listingMetadata } from "@/lib/page-metadata";
 import { titleHref } from "@/lib/title-href";
 
@@ -16,8 +17,8 @@ export const metadata: Metadata = listingMetadata(
 );
 
 export default async function HomePage() {
-  const [{ featured, trending, newReleases, movies, series }, continueWatching] =
-    await Promise.all([getHome(), listContinueWatching()]);
+  const [{ featured, topTen, newReleases, movies, series }, continueWatching, becauseYouWatched] =
+    await Promise.all([getHome(), listContinueWatching(), listBecauseYouWatched()]);
 
   return (
     <main>
@@ -87,7 +88,18 @@ export default async function HomePage() {
       {/* Rows (a row with no titles is left out) */}
       <div className="pb-20">
         <ContinueWatchingSection items={continueWatching} />
-        {trending.length > 0 && <TrendingNowSection media={trending} />}
+        {topTen.length > 0 && <TopTenSection media={topTen} />}
+        {becauseYouWatched.map(({ seed, media }) => (
+          <ContentRow
+            key={seed.id}
+            heading={
+              <>
+                Because You Watched <span className="text-ink-brand">{seed.title}</span>
+              </>
+            }
+            media={media}
+          />
+        ))}
         {newReleases.length > 0 && (
           <TitleGridSection title="Recently Added" media={newReleases} seeMoreHref="/new-releases" />
         )}

@@ -27,17 +27,23 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
  *
  * The row needs vertical padding for a focused card's ring and a
  * hovered card's scale-up, which it would otherwise cut off.
+ *
+ * `as="ol"` makes the row itself a numbered list (its children <li>s),
+ * for a ranking such as Top 10.
  */
 export default function SwipeableRow({
   children,
   className = "",
   scrollPaddingClassName = "scroll-pl-4 sm:scroll-pl-8",
+  as: Row = "div",
 }: {
   children: React.ReactNode;
   className?: string;
   scrollPaddingClassName?: string;
+  as?: "div" | "ol";
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // Either element: only HTMLElement's scrolling and children are used.
+  const scrollRef = useRef<HTMLDivElement & HTMLOListElement>(null);
   const leftFadeRef = useRef<HTMLDivElement>(null);
   const rightFadeRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -71,7 +77,7 @@ export default function SwipeableRow({
   };
 
   // Mouse-only drag-to-scroll. Touch keeps native scrolling untouched.
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLElement>) => {
     if (e.pointerType !== "mouse") return;
     const el = scrollRef.current;
     if (!el) return;
@@ -80,7 +86,7 @@ export default function SwipeableRow({
     el.setPointerCapture(e.pointerId);
   };
 
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLElement>) => {
     if (!isDragging) return;
     const el = scrollRef.current;
     if (!el) return;
@@ -89,7 +95,7 @@ export default function SwipeableRow({
     el.scrollLeft = drag.current.startScrollLeft - dx;
   };
 
-  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+  const endDrag = (e: React.PointerEvent<HTMLElement>) => {
     if (!isDragging) return;
     setIsDragging(false);
     scrollRef.current?.releasePointerCapture(e.pointerId);
@@ -99,7 +105,7 @@ export default function SwipeableRow({
   // the row back so the card is still cut off or under a fade. Once it's
   // done, move to the nearest snap position that shows the card clear of
   // both fades. Mouse focus (a drag that starts on a card) is left alone.
-  const handleFocus = (e: React.FocusEvent<HTMLDivElement>) => {
+  const handleFocus = (e: React.FocusEvent<HTMLElement>) => {
     const target = e.target;
     if (!target.matches(":focus-visible")) return;
     requestAnimationFrame(() => {
@@ -136,7 +142,7 @@ export default function SwipeableRow({
 
   return (
     <div className="relative overflow-hidden">
-      <div
+      <Row
         ref={scrollRef}
         className={`${className} ${scrollPaddingClassName} ${
           isDragging ? "cursor-grabbing select-none" : "cursor-grab"
@@ -149,7 +155,7 @@ export default function SwipeableRow({
         onFocus={handleFocus}
       >
         {children}
-      </div>
+      </Row>
 
       {canScrollLeft && (
         <>

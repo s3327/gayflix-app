@@ -130,9 +130,17 @@ test("Trending ranks titles by this week's views", async ({ page, consoleProblem
     await page.goto("/home");
     const row = page
       .locator("section")
-      .filter({ has: page.getByRole("heading", { name: "Trending Now" }) });
-    // The first link is See More.
-    await expect(row.getByRole("link").nth(1)).toHaveAttribute("href", `/movie/${hot.id}`);
+      .filter({ has: page.getByRole("heading", { name: "Top 10 This Week" }) });
+    await expect(row.getByRole("link", { name: "See More" })).toHaveAttribute("href", "/trending");
+    // A numbered list, the most watched first, ten at most.
+    const ranked = row.getByRole("listitem");
+    await expect(ranked.first()).toContainText("1");
+    await expect(ranked.first().getByRole("link").first()).toHaveAttribute(
+      "href",
+      `/movie/${hot.id}`
+    );
+    expect(await ranked.count()).toBeLessThanOrEqual(10);
+    await expect(row.locator(`a[href="/movie/${old.id}"]`)).toHaveCount(0);
   } finally {
     await sql(`DELETE FROM media WHERE id = ANY($1)`, [[hot.id, old.id]]);
   }

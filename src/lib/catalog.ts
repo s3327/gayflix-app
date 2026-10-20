@@ -45,7 +45,8 @@ const PUBLISHED = { status: "published" } as const;
 
 /** Home rows and "You Might Also Like" (listRecommendations). */
 const ROW_SIZE = 12;
-const TRENDING_ROW_SIZE = 6;
+/** Top 10 This Week on the home page. */
+const TOP_TEN_SIZE = 10;
 const CONTINUE_WATCHING_SIZE = 6;
 /** /trending ranks the 100 most viewed titles. */
 export const TRENDING_SIZE = 100;
@@ -194,19 +195,19 @@ export async function getLiveHero(): Promise<{ id: string; title: string; type: 
 
 /**
  * The home page: the hero (the most recently published featured title, or
- * else the newest one) and the Trending Now, Recently Added, Movies and
- * Series rows.
+ * else the newest one) and the Top 10 This Week (Trending's first ten),
+ * Recently Added, Movies and Series rows.
  */
 export async function getHome() {
   await connection();
   const heroSelect = { ...CARD, synopsis: true, backdropUrl: true } satisfies Prisma.MediaSelect;
-  const [featured, trending, newReleases, movies, series] = await Promise.all([
+  const [featured, topTen, newReleases, movies, series] = await Promise.all([
     db.media.findFirst({
       where: { ...PUBLISHED, featured: true },
       orderBy: ORDER.added,
       select: heroSelect,
     }),
-    trendingRows(TRENDING_ROW_SIZE),
+    trendingRows(TOP_TEN_SIZE),
     cards(PUBLISHED, ORDER.added, ROW_SIZE),
     cards({ ...PUBLISHED, type: "movie" }, ORDER.added, ROW_SIZE),
     cards({ ...PUBLISHED, type: "series" }, ORDER.added, ROW_SIZE),
@@ -221,7 +222,7 @@ export async function getHome() {
       synopsis: hero.synopsis,
       backdropUrl: hero.backdropUrl ?? undefined,
     } satisfies Featured),
-    trending: trending.map(toMedia),
+    topTen: topTen.map(toMedia),
     newReleases,
     movies,
     series,
@@ -437,32 +438,113 @@ export async function listTrending(): Promise<TrendingMedia[]> {
 }
 
 /**
- * "You Might Also Like" on a title's page: the other published titles
- * most like it. Each shared genre scores 3, each shared tag or cast
- * member 2, the same director or creator 3, and the same type 1. Ties
- * (including titles that share nothing, which fill out the row) go to
- * the most viewed, then the newest.
+ * The published titles most like title `id`, most alike first. Each
+ * shared genre scores 3, each shared tag or cast member 2, the same
+ * director or creator 3, and the same type 1. Ties go to the most
+ * viewed, then the newest. Titles scoring under `minScore`, those in
+ * `excludeIds` and, with `unwatchedBy`, those that user has played are
+ * left out.
  */
-export async function listRecommendations(id: string): Promise<Media[]> {
-  await connection();
-  return (
-    await db.$queryRaw<CardRow[]>`
-      WITH this AS (
-        SELECT genres AS g, tags AS t, "cast" AS c, director AS d, creator AS cr, type AS ty
-        FROM media WHERE id = ${id}
-      )
-      SELECT ${CARD_COLUMNS} FROM media, this
-      WHERE status = 'published' AND "trashedAt" IS NULL AND id <> ${id}
-      ORDER BY
+async function relatedRows(
+  id: string,
+  {
+    minScore = 0,
+    excludeIds = [],
+    unwatchedBy,
+  }: { minScore?: number; excludeIds?: string[]; unwatchedBy?: string } = {}
+) {
+  return db.$queryRaw<CardRow[]>`
+    WITH this AS (
+      SELECT genres AS g, tags AS t, "cast" AS c, director AS d, creator AS cr, type AS ty
+      FROM media WHERE id = ${id}
+    )
+    SELECT * FROM (
+      SELECT ${CARD_COLUMNS}, "viewCount",
         3 * cardinality(ARRAY(SELECT unnest(genres) INTERSECT SELECT unnest(this.g)))
         + 2 * cardinality(ARRAY(SELECT unnest(tags) INTERSECT SELECT unnest(this.t)))
         + 2 * cardinality(ARRAY(SELECT unnest("cast") INTERSECT SELECT unnest(this.c)))
         + CASE WHEN director = this.d THEN 3 ELSE 0 END
         + CASE WHEN creator = this.cr THEN 3 ELSE 0 END
-        + CASE WHEN type = this.ty THEN 1 ELSE 0 END DESC,
-        "viewCount" DESC, "publishedAt" DESC NULLS LAST, id
-      LIMIT ${ROW_SIZE}`
-  ).map(toMedia);
+        + CASE WHEN type = this.ty THEN 1 ELSE 0 END AS score
+      FROM media, this
+      WHERE status = 'published' AND "trashedAt" IS NULL AND id <> ${id}
+        AND NOT (id = ANY(${excludeIds}::text[]))
+        ${
+          unwatchedBy === undefined
+            ? Prisma.empty
+            : Prisma.sql`AND id NOT IN (
+                -- History holds movie and episode ids; an episode stands for its series.
+                SELECT COALESCE(e."mediaId", h."mediaId") FROM watch_history h
+                LEFT JOIN episode e ON e.id = h."mediaId"
+                WHERE h."userId" = ${unwatchedBy}
+              )`
+        }
+    ) related
+    WHERE score >= ${minScore}
+    ORDER BY score DESC, "viewCount" DESC, "publishedAt" DESC NULLS LAST, id
+    LIMIT ${ROW_SIZE}`;
+}
+
+/**
+ * "You Might Also Like" on a title's page: the other published titles
+ * most like it (relatedRows). Titles that share nothing fill out the row.
+ */
+export async function listRecommendations(id: string): Promise<Media[]> {
+  await connection();
+  return (await relatedRows(id)).map(toMedia);
+}
+
+/** A Because You Watched row: titles like `seed`, which the member played. */
+export type BecauseYouWatched = { seed: { id: string; title: string }; media: Media[] };
+
+/** Home shows this many Because You Watched rows at most. */
+const BECAUSE_ROWS = 2;
+/** A row needs this many titles; fewer, and it's left out. */
+const BECAUSE_MIN_TITLES = 4;
+/** Only titles sharing at least a genre or a person (relatedRows' score). */
+const BECAUSE_MIN_SCORE = 3;
+/** How many of the latest titles played are tried for a row. */
+const BECAUSE_SEEDS = 5;
+
+/**
+ * Because You Watched on the home page: for the titles the signed-in
+ * user played last, latest first, a row of the published titles most
+ * like each one (relatedRows), leaving out what they've already played
+ * and what an earlier row shows. A title with too few alike gets no row.
+ * Empty for guests, whose history stays in their browser.
+ */
+export async function listBecauseYouWatched(): Promise<BecauseYouWatched[]> {
+  await connection();
+  const session = await getSession();
+  if (!session) return [];
+  const userId = session.user.id;
+  const seeds = await db.$queryRaw<{ id: string; title: string }[]>`
+    SELECT id, title FROM (
+      SELECT COALESCE(e."mediaId", h."mediaId") AS id, max(h."watchedAt") AS "watchedAt"
+      FROM watch_history h
+      LEFT JOIN episode e ON e.id = h."mediaId"
+      WHERE h."userId" = ${userId}
+      GROUP BY 1
+    ) played
+    JOIN media USING (id)
+    WHERE status = 'published' AND "trashedAt" IS NULL
+    ORDER BY "watchedAt" DESC, id
+    LIMIT ${BECAUSE_SEEDS}`;
+
+  const rows: BecauseYouWatched[] = [];
+  const shown: string[] = [];
+  for (const seed of seeds) {
+    const related = await relatedRows(seed.id, {
+      minScore: BECAUSE_MIN_SCORE,
+      excludeIds: shown,
+      unwatchedBy: userId,
+    });
+    if (related.length < BECAUSE_MIN_TITLES) continue;
+    rows.push({ seed, media: related.map(toMedia) });
+    shown.push(...related.map((row) => row.id));
+    if (rows.length === BECAUSE_ROWS) break;
+  }
+  return rows;
 }
 
 /** Every published title, for the sitemap. */
