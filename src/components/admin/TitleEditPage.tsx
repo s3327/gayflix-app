@@ -8,6 +8,7 @@ import DropQueryParams from "@/components/admin/DropQueryParams";
 import ImportEpisodesModal from "@/components/admin/ImportEpisodesModal";
 import SeasonTableEditor from "@/components/admin/SeasonTableEditor";
 import TitleForm from "@/components/admin/TitleForm";
+import Subtitles from "@/components/admin/Subtitles";
 import VideoSources from "@/components/admin/VideoSources";
 import TmdbRefreshModal from "@/components/admin/TmdbRefreshModal";
 import TitleRevisionsModal from "@/components/admin/TitleRevisionsModal";
@@ -176,6 +177,7 @@ export default async function TitleEditPage({
             </div>
           )}
           <VideoSources owner="movie" ownerId={row.id} sources={row.videoSources} />
+          <Subtitles owner="movie" ownerId={row.id} subtitles={row.subtitles} />
         </>
       )}
 

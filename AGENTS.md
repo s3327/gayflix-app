@@ -44,7 +44,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   change only through `src/lib/admin-video-actions.ts`, with links on
   `VIDEO_HOSTS` only (`src/lib/video-hosts.ts`, which also feeds the
   Content-Security-Policy in `src/lib/csp.ts`); the watch pages read them
-  with `getVideoSources()`.
+  with `getVideoSources()`. Subtitles (`subtitle`, one WebVTT file per
+  language for a movie or an episode) change only through
+  `src/lib/admin-subtitle-actions.ts`, whose file checks are in
+  `src/lib/subtitles.ts`; they're served from this site at
+  `/subtitles/<id>`, only while the title is published.
 - **Crash reports** go to Sentry when `NEXT_PUBLIC_SENTRY_DSN` is set,
   from `src/instrumentation.ts` (server), `src/instrumentation-client.ts`
   (browser) and the error pages. What they may carry is decided in

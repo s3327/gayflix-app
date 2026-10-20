@@ -26,6 +26,7 @@ import { getSession, requireAdmin } from "@/lib/session";
 import { getSiteSettings } from "@/lib/site-settings";
 import { videoHosts, videoUrlAllowed } from "@/lib/video-hosts";
 import type { VideoSourceEntry } from "@/lib/video-source";
+import { languageName, SUBTITLE_ID, type SubtitleTrack } from "@/lib/subtitles";
 import { trendingSince } from "@/lib/views";
 import { isFinished } from "@/lib/watch-progress";
 
@@ -775,6 +776,47 @@ export async function getVideoSources(
   return rows.filter((row) => videoUrlAllowed(row.url, hosts));
 }
 
+/**
+ * A movie's or an episode's subtitles, for the player's <track>s: one per
+ * language, named for its menu, A to Z. Only a published title's.
+ */
+export async function getSubtitles(
+  target: { mediaId: string } | { episodeId: string }
+): Promise<SubtitleTrack[]> {
+  await connection();
+  const id = "mediaId" in target ? target.mediaId : target.episodeId;
+  if (!isMediaId(id)) return [];
+  const published = { ...PUBLISHED, trashedAt: null };
+  const rows = await db.subtitle.findMany({
+    where:
+      "mediaId" in target
+        ? { mediaId: id, media: { ...published, type: "movie" } }
+        : { episodeId: id, episode: { media: published } },
+    select: { id: true, language: true },
+  });
+  return rows
+    .map((row) => ({ ...row, label: languageName(row.language) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** A subtitle file as WebVTT (src/app/subtitles/[id]), if its title is published. */
+export async function getSubtitleFile(id: string): Promise<string | null> {
+  await connection();
+  if (!SUBTITLE_ID.test(id)) return null;
+  const published = { ...PUBLISHED, trashedAt: null };
+  const row = await db.subtitle.findFirst({
+    where: {
+      id,
+      OR: [
+        { media: { ...published, type: "movie" } },
+        { episode: { media: published } },
+      ],
+    },
+    select: { content: true },
+  });
+  return row?.content ?? null;
+}
+
 // --- Admin library -------------------------------------------------------------
 
 export type LibraryRow = {
@@ -952,14 +994,23 @@ export async function listLibrary({
 // Everything here includes drafts and trashed titles, so each one checks
 // for an admin itself.
 
-/** A title with its episodes and a movie's video sources, for its edit page. */
+/** What the admin panel lists of a movie's or an episode's subtitles (not the files). */
+const SUBTITLE_SUMMARY = {
+  select: { id: true, language: true, fileName: true, createdAt: true },
+} satisfies Prisma.Media$subtitlesArgs;
+
+/** A title with its episodes and a movie's video sources and subtitles, for its edit page. */
 export async function getTitleForEdit(id: string) {
   await requireAdmin();
   await connection();
   if (!isMediaId(id)) return null;
   return db.media.findUnique({
     where: { id },
-    include: { episodes: { orderBy: EPISODE_ORDER }, videoSources: { orderBy: VIDEO_ORDER } },
+    include: {
+      episodes: { orderBy: EPISODE_ORDER },
+      videoSources: { orderBy: VIDEO_ORDER },
+      subtitles: SUBTITLE_SUMMARY,
+    },
   });
 }
 
@@ -1035,7 +1086,7 @@ export async function listEpisodes({
   return { items, page, totalPages, total };
 }
 
-/** An episode with its series and video sources, for its edit page. */
+/** An episode with its series, video sources and subtitles, for its edit page. */
 export async function getEpisodeForEdit(id: string) {
   await requireAdmin();
   await connection();
@@ -1045,6 +1096,7 @@ export async function getEpisodeForEdit(id: string) {
     include: {
       media: { select: { id: true, title: true, trashedAt: true } },
       videoSources: { orderBy: VIDEO_ORDER },
+      subtitles: SUBTITLE_SUMMARY,
     },
   });
 }

@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { isMediaId } from "@/lib/library-types";
 import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
+import { canChange, GONE, ownerOf, type Owner } from "@/lib/catalog-owner";
 import { formValues, type FormState } from "@/lib/title-form";
 import { videoHosts } from "@/lib/video-hosts";
 import { MAX_VIDEO_SOURCES, parseVideoSource, VIDEO_SOURCE_FIELDS } from "@/lib/video-source";
@@ -15,39 +15,12 @@ import { MAX_VIDEO_SOURCES, parseVideoSource, VIDEO_SOURCE_FIELDS } from "@/lib/
  * argument, the ones bound in the page included.
  */
 
-type Owner = { mediaId: string } | { episodeId: string };
-
 /** Prisma's cuid(). */
 const SOURCE_ID = /^[a-z0-9]{20,40}$/;
-
-const GONE = "This movie or episode is in the trash or was deleted.";
-
-function ownerOf(kindArg: unknown, idArg: unknown): Owner {
-  if (!isMediaId(idArg)) throw new Error("Invalid id");
-  if (kindArg === "movie") return { mediaId: idArg };
-  if (kindArg === "episode") return { episodeId: idArg };
-  throw new Error("Invalid owner");
-}
 
 function sourceId(value: unknown): string {
   if (typeof value !== "string" || !SOURCE_ID.test(value)) throw new Error("Invalid source");
   return value;
-}
-
-/** Whether a movie, or an episode's series, exists and isn't in the trash. */
-async function canChange(owner: Owner): Promise<boolean> {
-  if ("mediaId" in owner) {
-    const movie = await db.media.findUnique({
-      where: { id: owner.mediaId },
-      select: { type: true, trashedAt: true },
-    });
-    return movie?.type === "movie" && !movie.trashedAt;
-  }
-  const episode = await db.episode.findUnique({
-    where: { id: owner.episodeId },
-    select: { media: { select: { trashedAt: true } } },
-  });
-  return episode !== null && !episode.media.trashedAt;
 }
 
 /** A source and what it belongs to, when that can be changed. */
