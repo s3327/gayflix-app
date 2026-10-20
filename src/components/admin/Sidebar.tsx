@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -8,6 +8,9 @@ import { ChevronDown, ExternalLink, LogOut, Menu, PanelLeftClose, PanelLeftOpen,
 import { adminNav, type NavEntry } from "@/components/admin/nav-config";
 import { authClient } from "@/lib/auth-client";
 import { useDropdown } from "@/lib/use-dropdown";
+
+/** For useSyncExternalStore: nothing changes after the page starts. */
+const noSubscription = () => () => {};
 
 export type AdminUserSummary = {
   name?: string | null;
@@ -346,12 +349,22 @@ function AdminAccountSection({
     router.refresh();
   }
 
-  const expiryTime = adminUser?.sessionExpiresAt
-    ? new Date(adminUser.sessionExpiresAt).toLocaleTimeString([], {
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    : null;
+  // In the admin's own time zone and locale, which only the browser
+  // knows: the server leaves it out, so the page it renders matches the
+  // browser's first render (no hydration mismatch), and it appears once
+  // the page is running.
+  const inBrowser = useSyncExternalStore(
+    noSubscription,
+    () => true,
+    () => false
+  );
+  const expiryTime =
+    inBrowser && adminUser?.sessionExpiresAt
+      ? new Date(adminUser.sessionExpiresAt).toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : null;
 
   if (collapsed) {
     return (
