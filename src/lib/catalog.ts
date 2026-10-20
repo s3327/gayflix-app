@@ -47,7 +47,7 @@ const PUBLISHED = { status: "published" } as const;
 
 /** Home rows and "You Might Also Like" (listRecommendations). */
 const ROW_SIZE = 12;
-/** Top 10 This Week on the home page. */
+/** Top 10 This Week on the home page and New & Popular. */
 const TOP_TEN_SIZE = 10;
 const CONTINUE_WATCHING_SIZE = 6;
 /** /trending ranks the 100 most viewed titles. */
@@ -199,10 +199,16 @@ export async function getLiveHero(): Promise<{ id: string; title: string; type: 
   return db.media.findFirst({ where: PUBLISHED, orderBy: ORDER.added, select: heroSelect });
 }
 
+/** How many titles the home page hero turns through. */
+const HERO_SIZE = 5;
+
 /**
- * The home page: the hero (the most recently published featured title, or
- * else the newest one) and the Top 10 This Week (Trending's first ten),
- * Recently Added, Movies and Series rows.
+ * The home page: the hero's titles and the Top 10 This Week (Trending's
+ * first ten), Recently Added, Movies and Series rows.
+ *
+ * The hero leads with the most recently published featured title (or
+ * else the newest), then turns through up to four more that have a
+ * backdrop: this week's most watched first, then the newest.
  */
 export async function getHome() {
   await connection();
@@ -222,17 +228,47 @@ export async function getHome() {
     featured ??
     (await db.media.findFirst({ where: PUBLISHED, orderBy: ORDER.added, select: heroSelect }));
 
+  // The rest of the hero, in order: this week's most watched, then the
+  // newest, each once, and only those with a backdrop to show.
+  const candidates = [...new Set([...topTen, ...newReleases].map((row) => row.id))].filter(
+    (id) => id !== hero?.id
+  );
+  const withBackdrops = candidates.length
+    ? await db.media.findMany({
+        where: { ...PUBLISHED, id: { in: candidates }, backdropUrl: { not: null } },
+        select: heroSelect,
+      })
+    : [];
+  const rest = withBackdrops
+    .sort((a, b) => candidates.indexOf(a.id) - candidates.indexOf(b.id))
+    .slice(0, HERO_SIZE - 1);
+  const toFeatured = (row: NonNullable<typeof hero>): Featured => ({
+    ...toMedia(row),
+    synopsis: row.synopsis,
+    backdropUrl: row.backdropUrl ?? undefined,
+  });
+
   return {
-    featured: hero && ({
-      ...toMedia(hero),
-      synopsis: hero.synopsis,
-      backdropUrl: hero.backdropUrl ?? undefined,
-    } satisfies Featured),
+    heroes: hero ? [hero, ...rest].map(toFeatured) : [],
     topTen: topTen.map(toMedia),
     newReleases,
     movies,
     series,
   };
+}
+
+/**
+ * New & Popular: this week's ten most watched, the newest titles, and the
+ * most watched of all time.
+ */
+export async function getNewAndPopular() {
+  await connection();
+  const [topTen, recentlyAdded, mostWatched] = await Promise.all([
+    trendingRows(TOP_TEN_SIZE),
+    cards(PUBLISHED, ORDER.added, ROW_SIZE),
+    cards(PUBLISHED, ORDER.popular, ROW_SIZE),
+  ]);
+  return { topTen: topTen.map(toMedia), recentlyAdded, mostWatched };
 }
 
 /**

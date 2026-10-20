@@ -11,6 +11,7 @@ const STATIC_PATHS = [
   "/home",
   "/movie",
   "/series",
+  "/new-popular",
   "/trending",
   "/new-releases",
   "/browse",

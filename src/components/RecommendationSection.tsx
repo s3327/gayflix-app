@@ -9,8 +9,8 @@ const MAX_VISIBLE = 12;
 const CONTAINER = "mx-auto max-w-[1040px]";
 
 /**
- * Recommendation row for detail pages. Unlike TitleGridSection (a static
- * grid, different layout per breakpoint), this is one swipeable row at
+ * Recommendation row for detail pages. Like the home page's rows
+ * (ContentRow), but narrower, this is one swipeable row at
  * every breakpoint — mobile/tablet/desktop only differ in how many cards
  * are visible at once (3 / 4 / 6, via basis-*), not in the underlying
  * mechanism. All 12 are always in the DOM; SwipeableRow's chevrons +
