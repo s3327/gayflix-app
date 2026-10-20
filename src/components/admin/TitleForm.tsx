@@ -334,8 +334,8 @@ export default function TitleForm({
         />
         <SelectField
           name="maturityRating"
-          label="Maturity rating"
-          hint="The youngest age it's suitable for."
+          label="Suitable for"
+          hint="Its maturity rating: the youngest age it's for."
           defaultValue={values.maturityRating}
           error={errors.maturityRating}
         >

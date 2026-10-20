@@ -67,7 +67,7 @@ export function parseMaturity(value: string): MaturityRating | null | undefined 
 export const CONTENT_NOTES = [
   ["sex", "Sex"],
   ["nudity", "Nudity"],
-  ["language", "Language"],
+  ["language", "Swearing"],
   ["violence", "Violence"],
   ["drugs", "Drug use"],
   ["self-harm", "Self-harm"],
