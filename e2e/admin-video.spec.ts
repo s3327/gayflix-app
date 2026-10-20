@@ -49,7 +49,7 @@ test.describe("video sources", () => {
       const response = await page.goto(`/admin/library/movies/${id}`);
       // The player may frame, play and stream from the video hosts.
       expect(response?.headers()["content-security-policy"]).toContain(
-        "frame-src https://player.e2e.example https://*.cdn.e2e.example;"
+        "frame-src https://www.youtube-nocookie.com https://player.e2e.example https://*.cdn.e2e.example;"
       );
       await expect(video.getByText("No video yet, so this movie has nothing to play.")).toBeVisible();
       expect(await seriousViolations(page)).toEqual([]);

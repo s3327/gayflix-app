@@ -24,9 +24,9 @@ describe("buildContentSecurityPolicy", () => {
     ).toContain("connect-src 'self' https://o1.ingest.sentry.io;");
   });
 
-  it("frames nothing until there are video hosts", () => {
+  it("frames only trailers until there are video hosts", () => {
     const csp = buildContentSecurityPolicy("abc123");
-    expect(csp).toContain("frame-src 'none'");
+    expect(csp).toContain("frame-src https://www.youtube-nocookie.com;");
     expect(csp).toContain("media-src 'self' blob:;");
   });
 
@@ -35,7 +35,9 @@ describe("buildContentSecurityPolicy", () => {
       reportOrigin: "https://o1.ingest.sentry.io",
       videoSources: ["https://player.example.com", "https://*.b-cdn.net"],
     });
-    expect(csp).toContain("frame-src https://player.example.com https://*.b-cdn.net;");
+    expect(csp).toContain(
+      "frame-src https://www.youtube-nocookie.com https://player.example.com https://*.b-cdn.net;"
+    );
     expect(csp).toContain("media-src 'self' blob: https://player.example.com https://*.b-cdn.net;");
     expect(csp).toContain(
       "connect-src 'self' https://o1.ingest.sentry.io https://player.example.com https://*.b-cdn.net;"

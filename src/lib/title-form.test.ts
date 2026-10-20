@@ -467,3 +467,54 @@ function parseRow() {
     featured: false,
   };
 }
+
+describe("parseTitle: trailer, maturity rating and content notes", () => {
+  it("keeps a YouTube trailer as its watch link", () => {
+    const result = parse(movie({ trailerUrl: "https://youtu.be/dQw4w9WgXcQ?si=x" }));
+    expect(result.ok && result.data.trailerUrl).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+  });
+
+  it("refuses a trailer that isn't on YouTube", () => {
+    const result = parse(movie({ trailerUrl: "https://vimeo.com/1" }));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(Object.keys(result.errors)).toEqual(["trailerUrl"]);
+  });
+
+  it("keeps a rating and the notes, in the list's order", () => {
+    const result = parse(movie({ maturityRating: "16", contentNotes: "language,sex" }));
+    expect(result.ok && result.data.maturityRating).toBe("16");
+    expect(result.ok && result.data.contentNotes).toEqual(["sex", "language"]);
+  });
+
+  it("leaves them empty when they're left empty", () => {
+    const result = parse(movie());
+    expect(result.ok && [result.data.trailerUrl, result.data.maturityRating, result.data.contentNotes]).toEqual([
+      null,
+      null,
+      [],
+    ]);
+  });
+
+  it("refuses a rating or a note it doesn't offer", () => {
+    const result = parse(movie({ maturityRating: "21", contentNotes: "gore" }));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(Object.keys(result.errors).sort()).toEqual(["contentNotes", "maturityRating"]);
+  });
+
+  it("fills the form from a title's", () => {
+    const values = titleValues({
+      ...parseRow(),
+      trailerUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      maturityRating: "18",
+      contentNotes: ["sex", "nudity"],
+    });
+    expect(values).toMatchObject({
+      trailerUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      maturityRating: "18",
+      contentNotes: "sex,nudity",
+    });
+    expect(parse(values).ok).toBe(true);
+  });
+});

@@ -1,6 +1,14 @@
 import { imageHosts } from "@/lib/image-hosts.mjs";
 import { isMediaId } from "@/lib/library-types";
 import type { MediaStatus, MediaType } from "@/lib/media";
+import {
+  parseContentNotes,
+  parseMaturity,
+  trailerWatchUrl,
+  youtubeId,
+  type ContentNote,
+  type MaturityRating,
+} from "@/lib/title-extras";
 
 /*
  * The admin title editor's forms: what each field accepts, and what's
@@ -29,8 +37,14 @@ type Parsed<T> = { ok: true; data: T } | { ok: false; errors: Record<string, str
 export function formValues<F extends string>(form: FormData, fields: readonly F[]) {
   const values = {} as Record<F, string>;
   for (const field of fields) {
-    const value = form.get(field);
-    values[field] = typeof value === "string" ? value.trim() : "";
+    // A field sent more than once (checkboxes sharing a name) is joined
+    // with commas: "sex,language".
+    values[field] = form
+      .getAll(field)
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .join(",");
   }
   return values;
 }
@@ -53,6 +67,9 @@ export const TITLE_FIELDS = [
   "synopsis",
   "posterUrl",
   "backdropUrl",
+  "trailerUrl",
+  "maturityRating",
+  "contentNotes",
   "status",
   "publishAt",
   "featured",
@@ -79,6 +96,10 @@ export type TitleInput = {
   synopsis: string;
   posterUrl: string;
   backdropUrl: string | null;
+  /** A YouTube watch link. */
+  trailerUrl: string | null;
+  maturityRating: MaturityRating | null;
+  contentNotes: ContentNote[];
   status: MediaStatus;
   /** A draft's scheduled publishing time (UTC); null when not scheduled or published. */
   publishAt: Date | null;
@@ -157,6 +178,15 @@ export function parseTitle(
   if (posterUrl !== NO_POSTER) check("posterUrl", imageUrlProblem(posterUrl, hosts));
   if (values.backdropUrl) check("backdropUrl", imageUrlProblem(values.backdropUrl, hosts));
 
+  const trailerId = values.trailerUrl ? youtubeId(values.trailerUrl) : null;
+  if (values.trailerUrl && !trailerId) {
+    errors.trailerUrl = "Paste a YouTube link, like https://www.youtube.com/watch?v=…";
+  }
+  const maturityRating = parseMaturity(values.maturityRating);
+  if (maturityRating === undefined) errors.maturityRating = "Choose a rating from the list.";
+  const contentNotes = parseContentNotes(values.contentNotes);
+  if (!contentNotes) errors.contentNotes = "Choose notes from the list.";
+
   const status: MediaStatus = values.status === "published" ? "published" : "draft";
   let publishAt: Date | null = null;
   if (values.publishAt && status === "draft") {
@@ -185,6 +215,9 @@ export function parseTitle(
       synopsis: values.synopsis,
       posterUrl,
       backdropUrl: values.backdropUrl || null,
+      trailerUrl: trailerId ? trailerWatchUrl(trailerId) : null,
+      maturityRating: maturityRating ?? null,
+      contentNotes: contentNotes!,
       status,
       publishAt,
       featured: values.featured === "on",
@@ -319,6 +352,9 @@ export function titleValues(row: {
   synopsis: string;
   posterUrl: string;
   backdropUrl: string | null;
+  trailerUrl?: string | null;
+  maturityRating?: string | null;
+  contentNotes?: string[] | null;
   featured: boolean;
   publishAt?: Date | null;
 }): TitleValues {
@@ -340,6 +376,9 @@ export function titleValues(row: {
     synopsis: row.synopsis,
     posterUrl: row.posterUrl === NO_POSTER ? "" : row.posterUrl,
     backdropUrl: row.backdropUrl ?? "",
+    trailerUrl: row.trailerUrl ?? "",
+    maturityRating: row.maturityRating ?? "",
+    contentNotes: (row.contentNotes ?? []).join(","),
     status: row.status,
     publishAt: row.publishAt ? row.publishAt.toISOString().slice(0, 16) : "",
     featured: row.featured ? "on" : "",

@@ -12,15 +12,18 @@ const FOCUSABLE =
  * Closes on Escape or backdrop click. While open it keeps keyboard
  * focus inside the panel (Tab/Shift+Tab wrap around), locks page
  * scroll, and hands focus back to whatever opened it on close.
+ * `size="video"` makes it wide, for a 16:9 player (the trailer).
  */
 export default function Modal({
   title,
   onClose,
   children,
+  size = "sm",
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  size?: "sm" | "video";
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   // Kept in a ref so a parent re-rendering with a new onClose closure
@@ -97,7 +100,9 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-sm rounded-card border border-border-subtle bg-bg-surface p-6 focus-visible:outline-hidden"
+        className={`w-full rounded-card border border-border-subtle bg-bg-surface focus-visible:outline-hidden ${
+          size === "video" ? "max-w-4xl p-4 sm:p-6" : "max-w-sm p-6"
+        }`}
       >
         <div className="flex items-center justify-between gap-4">
           <h2 className="font-display text-lg font-bold">{title}</h2>

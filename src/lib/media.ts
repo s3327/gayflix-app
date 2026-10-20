@@ -1,4 +1,5 @@
 import type { WatchProgress } from "@/lib/watch-progress";
+import type { MaturityRating } from "@/lib/title-extras";
 
 export type MediaType = "movie" | "series";
 export type MediaStatus = "draft" | "published";
@@ -91,8 +92,14 @@ export type MediaDetail = Media & {
   releaseDate?: string;
   /** Movies. */
   runtimeMinutes?: number;
-  /** 16:9, for the home page hero. */
+  /** 16:9, for the home page hero and the title page's header. */
   backdropUrl?: string;
+  /** A YouTube watch link. */
+  trailerUrl?: string;
+  /** MATURITY_RATINGS in src/lib/title-extras.ts. */
+  maturityRating?: MaturityRating;
+  /** CONTENT_NOTES codes, in that list's order. */
+  contentNotes: string[];
   /** Series only, in season and episode order. */
   episodes: Episode[];
 };

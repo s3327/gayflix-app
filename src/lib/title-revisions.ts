@@ -25,6 +25,9 @@ export type TitleSnapshot = {
   posterUrl: string;
   backdropUrl?: string | null;
   backdropFocus?: string | null;
+  trailerUrl?: string | null;
+  maturityRating?: string | null;
+  contentNotes?: string[];
 };
 
 /**
@@ -65,6 +68,9 @@ export async function createTitleRevision({
       posterUrl: existing.posterUrl,
       backdropUrl: existing.backdropUrl,
       backdropFocus: existing.backdropFocus,
+      trailerUrl: existing.trailerUrl,
+      maturityRating: existing.maturityRating,
+      contentNotes: existing.contentNotes ?? [],
     };
 
     await db.titleRevision.create({
@@ -171,6 +177,9 @@ export async function rollbackTitleRevision(revisionId: unknown): Promise<{ ok: 
       posterUrl: media.posterUrl,
       backdropUrl: media.backdropUrl,
       backdropFocus: media.backdropFocus,
+      trailerUrl: media.trailerUrl,
+      maturityRating: media.maturityRating,
+      contentNotes: media.contentNotes ?? [],
     },
     revision.snapshot
   );

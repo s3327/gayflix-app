@@ -27,6 +27,7 @@ import { getSiteSettings } from "@/lib/site-settings";
 import { videoHosts, videoUrlAllowed } from "@/lib/video-hosts";
 import type { VideoSourceEntry } from "@/lib/video-source";
 import { languageName, SUBTITLE_ID, type SubtitleTrack } from "@/lib/subtitles";
+import { parseMaturity } from "@/lib/title-extras";
 import { trendingSince } from "@/lib/views";
 import { isFinished } from "@/lib/watch-progress";
 
@@ -145,6 +146,9 @@ function toDetail(row: DetailRow): MediaDetail {
     releaseDate: row.releaseDate ? longDate.format(row.releaseDate) : undefined,
     runtimeMinutes: row.runtimeMinutes ?? undefined,
     backdropUrl: row.backdropUrl ?? undefined,
+    trailerUrl: row.trailerUrl ?? undefined,
+    maturityRating: parseMaturity(row.maturityRating ?? "") ?? undefined,
+    contentNotes: row.contentNotes ?? [],
     episodes: (row.episodes ?? []).map(toEpisode),
   };
 }

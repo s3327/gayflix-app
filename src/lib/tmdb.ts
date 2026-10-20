@@ -71,11 +71,16 @@ export async function findOnTmdb(imdbId: string) {
 }
 
 /**
- * A movie's or series' details with its credits, keywords and IMDb id,
- * in one request. Null when TMDB doesn't have it.
+ * A movie's or series' details with its credits, keywords, IMDb id,
+ * videos (for a trailer) and certifications (release_dates for a movie,
+ * content_ratings for a series), in one request. Null when TMDB doesn't
+ * have it.
  */
 export async function getTmdbDetails(kind: TmdbKind, id: number): Promise<unknown> {
-  return tmdbGet(`/${kind}/${id}`, { append_to_response: "credits,keywords,external_ids" });
+  const ratings = kind === "movie" ? "release_dates" : "content_ratings";
+  return tmdbGet(`/${kind}/${id}`, {
+    append_to_response: `credits,keywords,external_ids,videos,${ratings}`,
+  });
 }
 
 export type TmdbEpisode = {

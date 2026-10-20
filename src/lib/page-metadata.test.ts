@@ -17,6 +17,7 @@ const BASE: MediaDetail = {
   synopsis: "Three friends turned family.",
   cast: [],
   tags: [],
+  contentNotes: [],
   episodes: [],
 };
 

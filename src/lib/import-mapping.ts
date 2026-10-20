@@ -1,4 +1,5 @@
 import type { MediaType } from "@/lib/media";
+import { maturityFromTmdb, trailerFromTmdb } from "@/lib/title-extras";
 import {
   emptyTitleValues,
   slugify,
@@ -286,6 +287,8 @@ export function tmdbValues(kind: TmdbKind, details: unknown, type: MediaType): T
   values.synopsis = shorten(text(field(details, "overview")), 5000);
   values.posterUrl = tmdbImage(field(details, "poster_path"), "w780");
   values.backdropUrl = tmdbImage(field(details, "backdrop_path"), "w1280");
+  values.trailerUrl = trailerFromTmdb(details);
+  values.maturityRating = maturityFromTmdb(kind, details);
   return values;
 }
 
