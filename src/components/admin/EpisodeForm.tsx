@@ -5,6 +5,7 @@ import {
   BUTTON_PRIMARY,
   FormMessage,
   SelectField,
+  TextAreaField,
   TextField,
 } from "@/components/admin/FormFields";
 import type { EpisodeValues, FormState } from "@/lib/title-form";
@@ -111,6 +112,17 @@ export default function EpisodeForm({
           optional
           defaultValue={values.airDate}
           error={errors.airDate}
+        />
+        <TextAreaField
+          name="synopsis"
+          label="Synopsis"
+          hint="One or two sentences, shown in the series page's episode list."
+          optional
+          rows={3}
+          maxLength={1000}
+          defaultValue={values.synopsis}
+          error={errors.synopsis}
+          className="sm:col-span-2"
         />
       </div>
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   checkMatch,
+  tmdbEpisodeSynopsis,
   fillGaps,
   findImdbId,
   formatTmdbRef,
@@ -345,5 +346,22 @@ describe("the IMDb check", () => {
     expect(imdbFacts({ ...OMDB_MOVIE, Type: "episode" })?.type).toBeNull();
     expect(imdbFacts({ Response: "False", Error: "Movie not found!" })).toBeNull();
     expect(imdbFacts({ ...OMDB_MOVIE, imdbID: "nm0000206" })).toBeNull();
+  });
+});
+
+describe("tmdbEpisodeSynopsis", () => {
+  it("keeps an episode's overview, tidied", () => {
+    expect(tmdbEpisodeSynopsis("  Rent  goes up.\n\nEveryone panics. ")).toBe("Rent goes up. Everyone panics.");
+  });
+
+  it("is empty without one", () => {
+    expect(tmdbEpisodeSynopsis(undefined)).toBe("");
+    expect(tmdbEpisodeSynopsis(42)).toBe("");
+  });
+
+  it("is cut at a word to fit the episode form's 1000 characters", () => {
+    const synopsis = tmdbEpisodeSynopsis("word ".repeat(400));
+    expect(synopsis.length).toBeLessThanOrEqual(1000);
+    expect(synopsis.endsWith("word…")).toBe(true);
   });
 });

@@ -348,7 +348,7 @@ export function titleValues(row: {
 
 // --- Episodes -----------------------------------------------------------------
 
-export const EPISODE_FIELDS = ["series", "season", "episode", "title", "minutes", "airDate"] as const;
+export const EPISODE_FIELDS = ["series", "season", "episode", "title", "minutes", "airDate", "synopsis"] as const;
 
 export type EpisodeField = (typeof EPISODE_FIELDS)[number];
 export type EpisodeValues = Record<EpisodeField, string>;
@@ -360,6 +360,8 @@ export type EpisodeInput = {
   title: string;
   minutes: number;
   airDate: Date | null;
+  /** One or two sentences for the series page's episode list; may be empty. */
+  synopsis: string;
 };
 
 export function parseEpisode(values: EpisodeValues): Parsed<EpisodeInput> {
@@ -384,6 +386,9 @@ export function parseEpisode(values: EpisodeValues): Parsed<EpisodeInput> {
   const airDate = values.airDate ? calendarDate(values.airDate) : null;
   if (values.airDate && !airDate) errors.airDate = "Enter a date, or leave it empty.";
 
+  const synopsisProblem = optionalText(values.synopsis, 1000);
+  if (synopsisProblem) errors.synopsis = synopsisProblem;
+
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {
     ok: true,
@@ -394,6 +399,7 @@ export function parseEpisode(values: EpisodeValues): Parsed<EpisodeInput> {
       title: values.title,
       minutes: minutes!,
       airDate,
+      synopsis: values.synopsis,
     },
   };
 }
@@ -405,6 +411,7 @@ export function episodeValues(row: {
   title: string;
   duration: string;
   airDate: Date | null;
+  synopsis: string;
 }): EpisodeValues {
   const minutes = episodeDurationMinutes(row.duration);
   return {
@@ -414,6 +421,7 @@ export function episodeValues(row: {
     title: row.title,
     minutes: minutes === null ? "" : String(minutes),
     airDate: row.airDate ? row.airDate.toISOString().slice(0, 10) : "",
+    synopsis: row.synopsis,
   };
 }
 

@@ -11,12 +11,20 @@ import { useSeriesProgress } from "@/lib/use-series-progress";
  * (Season 1)(Season 2)... with the active season's episodes below.
  * Each row routes to /episode/[id] — there's no inline player here,
  * clicking an episode is a real navigation, same as clicking a poster
- * card routes to a title's own detail page. Episodes the viewer has
+ * card routes to a title's own detail page. Each row shows the
+ * episode's still (or `fallbackImageUrl`, the series' backdrop or
+ * poster), and its synopsis cut to two lines. Episodes the viewer has
  * played are ticked, and the tabs open on the season of the one played
  * last. They're tabs to a screen reader too, and the arrow keys, Home
  * and End move between them.
  */
-export default function SeasonTabs({ episodes }: { episodes: Episode[] }) {
+export default function SeasonTabs({
+  episodes,
+  fallbackImageUrl,
+}: {
+  episodes: Episode[];
+  fallbackImageUrl?: string;
+}) {
   const seasonNumbers = Array.from(
     new Set(episodes.map((ep) => ep.seasonNumber))
   ).sort((a, b) => a - b);
@@ -86,28 +94,46 @@ export default function SeasonTabs({ episodes }: { episodes: Episode[] }) {
             <li key={ep.id}>
               <Link
                 href={`/episode/${ep.id}`}
-                className="flex items-center gap-4 px-4 py-4 transition-colors hover:bg-bg-elevated sm:px-6"
+                className="group flex items-start gap-4 px-4 py-4 transition-colors hover:bg-bg-elevated sm:items-center sm:px-6"
               >
-                {watched.has(ep.id) ? (
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-pink/15 text-ink-brand">
-                    <Check className="h-4 w-4" aria-hidden />
-                    <span className="sr-only">Watched:</span>
+                <span className="relative aspect-video w-28 shrink-0 overflow-hidden rounded-md bg-bg-elevated sm:w-40">
+                  {(ep.stillUrl || fallbackImageUrl) && (
+                    // A plain <img>, as for the episode page's Previous and Next.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={ep.stillUrl || fallbackImageUrl}
+                      alt=""
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  )}
+                  <span className="absolute inset-0 flex items-center justify-center bg-bg-base/20 opacity-0 transition-opacity group-hover:opacity-100">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-pink text-ink-onBrand">
+                      <Play className="ml-0.5 h-4 w-4 fill-current" aria-hidden />
+                    </span>
                   </span>
-                ) : (
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-bg-elevated text-xs font-bold text-ink-secondary">
-                    <Play className="h-3.5 w-3.5" />
-                  </span>
-                )}
+                  {watched.has(ep.id) && (
+                    <span className="absolute left-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-brand-pink text-ink-onBrand shadow">
+                      <Check className="h-3.5 w-3.5" aria-hidden />
+                      <span className="sr-only">Watched:</span>
+                    </span>
+                  )}
+                </span>
 
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink-primary">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-ink-primary">
                     {ep.episodeNumber}. {ep.title}
-                  </p>
-                  <p className="mt-0.5 truncate text-xs text-ink-secondary">
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-ink-secondary">
                     {ep.duration}
                     {ep.airDate ? ` · ${ep.airDate}` : ""}
-                  </p>
-                </div>
+                  </span>
+                  {ep.synopsis && (
+                    <span className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-ink-muted sm:text-sm">
+                      {ep.synopsis}
+                    </span>
+                  )}
+                </span>
               </Link>
             </li>
           ))}

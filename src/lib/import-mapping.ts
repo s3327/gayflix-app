@@ -177,6 +177,11 @@ export function tmdbStill(path: unknown): string | null {
     : null;
 }
 
+/** A TMDB episode's overview as its synopsis: tidied, and short enough for the episode form. */
+export function tmdbEpisodeSynopsis(overview: unknown): string {
+  return shorten(text(overview), 1000);
+}
+
 function yearOf(date: string): number | null {
   return /^\d{4}-/.test(date) ? Number(date.slice(0, 4)) : null;
 }

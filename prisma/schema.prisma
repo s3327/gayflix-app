@@ -207,6 +207,8 @@ model Episode {
   duration      String
   airDate       DateTime?     @db.Date
   stillUrl      String?
+  /// One or two sentences for the series page's episode list.
+  synopsis      String        @default("")
   media         Media         @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   videoSources  VideoSource[]
   subtitles     Subtitle[]

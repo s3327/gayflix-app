@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { findImported } from "@/lib/catalog";
 import { db } from "@/lib/db";
-import { isImdbId, isTmdbId, parseTmdbRef, tmdbStill } from "@/lib/import-mapping";
+import { isImdbId, isTmdbId, parseTmdbRef, tmdbEpisodeSynopsis, tmdbStill } from "@/lib/import-mapping";
 import { isMediaId } from "@/lib/library-types";
 import type { MediaStatus, MediaType } from "@/lib/media";
 import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
@@ -711,7 +711,7 @@ export async function createEpisode(_state: FormState, form: FormData): Promise<
   }
   const parsed = parseEpisode(values);
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
-  const { seriesId, seasonNumber, episodeNumber, title, minutes, airDate } = parsed.data;
+  const { seriesId, seasonNumber, episodeNumber, title, minutes, airDate, synopsis } = parsed.data;
 
   const series = await db.media.findUnique({
     where: { id: seriesId },
@@ -740,6 +740,7 @@ export async function createEpisode(_state: FormState, form: FormData): Promise<
           title,
           duration: episodeDuration(minutes),
           airDate,
+          synopsis,
         },
       });
       await refreshSeasons(tx, seriesId);
@@ -778,12 +779,12 @@ export async function updateEpisode(
 
   const parsed = parseEpisode(values);
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
-  const { seasonNumber, episodeNumber, title, minutes, airDate } = parsed.data;
+  const { seasonNumber, episodeNumber, title, minutes, airDate, synopsis } = parsed.data;
   try {
     await db.$transaction(async (tx) => {
       await tx.episode.update({
         where: { id },
-        data: { seasonNumber, episodeNumber, title, duration: episodeDuration(minutes), airDate },
+        data: { seasonNumber, episodeNumber, title, duration: episodeDuration(minutes), airDate, synopsis },
       });
       await refreshSeasons(tx, existing.mediaId);
     });
@@ -947,6 +948,7 @@ export async function importSeriesSeasonsAction(
             duration: `${runtime} min`,
             airDate: ep.air_date ? new Date(`${ep.air_date}T00:00:00.000Z`) : null,
             stillUrl: tmdbStill(ep.still_path),
+            synopsis: tmdbEpisodeSynopsis(ep.overview),
           },
         });
         importedCount++;
