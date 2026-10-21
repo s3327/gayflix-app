@@ -2,15 +2,23 @@
 
 import { useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Heart, Plus } from "lucide-react";
+import { Bookmark, Heart, Plus } from "lucide-react";
 import { useFavorites } from "@/lib/favorites-context";
 import { useLists } from "@/lib/lists-context";
+import { useWatchlist } from "@/lib/watchlist-context";
 import FavoriteCard from "@/components/FavoriteCard";
+import WatchlistCard from "@/components/WatchlistCard";
 import ListCard from "@/components/ListCard";
 import NameListModal from "@/components/NameListModal";
 import { FilterChipButton } from "@/components/FilterChip";
 
-type Tab = "favorites" | "lists";
+type Tab = "favorites" | "watchlist" | "lists";
+
+const TABS: { tab: Tab; label: string; subtitle: string }[] = [
+  { tab: "favorites", label: "Favorites", subtitle: "Titles you've saved" },
+  { tab: "watchlist", label: "Watchlist", subtitle: "Titles you mean to watch" },
+  { tab: "lists", label: "My Lists", subtitle: "Titles grouped into lists" },
+];
 
 /**
  * Reads from FavoritesProvider and ListsProvider, both set up in
@@ -23,17 +31,22 @@ type Tab = "favorites" | "lists";
  * Favorites does not remove it from any list it's already in (a list
  * holds its own snapshot — see lists-context.tsx).
  *
- * The tab is in the address (?tab=lists), so the account menu's My
- * Lists link and the Back button land on the right one.
+ * The Watchlist ("Watch later", WatchlistProvider) is a tab of its own,
+ * apart from Favorites (titles they loved) in the same way.
+ *
+ * The tab is in the address (?tab=watchlist, ?tab=lists), so the account
+ * menu's links and the Back button land on the right one.
  */
 export default function AccountFavoritePage() {
   const { favorites } = useFavorites();
+  const { watchlist } = useWatchlist();
   const { lists, createList } = useLists();
   const router = useRouter();
   const pathname = usePathname();
-  const activeTab: Tab = useSearchParams().get("tab") === "lists" ? "lists" : "favorites";
+  const requested = useSearchParams().get("tab");
+  const activeTab: Tab = requested === "lists" || requested === "watchlist" ? requested : "favorites";
   const setActiveTab = (tab: Tab) =>
-    router.replace(tab === "lists" ? `${pathname}?tab=lists` : pathname, { scroll: false });
+    router.replace(tab === "favorites" ? pathname : `${pathname}?tab=${tab}`, { scroll: false });
   const [isCreatingList, setIsCreatingList] = useState(false);
 
   return (
@@ -42,27 +55,35 @@ export default function AccountFavoritePage() {
         <div>
           <h1 className="font-display text-2xl font-bold">Favorite</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            {activeTab === "favorites" ? "Titles you've saved" : "Titles grouped into lists"}
+            {TABS.find(({ tab }) => tab === activeTab)!.subtitle}
           </p>
         </div>
 
-        <div className="flex gap-2">
-          <FilterChipButton
-            onClick={() => setActiveTab("favorites")}
-            isActive={activeTab === "favorites"}
-          >
-            Favorites
-          </FilterChipButton>
-          <FilterChipButton
-            onClick={() => setActiveTab("lists")}
-            isActive={activeTab === "lists"}
-          >
-            My Lists
-          </FilterChipButton>
+        <div className="flex flex-wrap gap-2">
+          {TABS.map(({ tab, label }) => (
+            <FilterChipButton key={tab} onClick={() => setActiveTab(tab)} isActive={activeTab === tab}>
+              {label}
+            </FilterChipButton>
+          ))}
         </div>
       </div>
 
-      {activeTab === "favorites" ? (
+      {activeTab === "watchlist" ? (
+        watchlist.length > 0 ? (
+          <div className="mt-8 grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-6">
+            {watchlist.map((entry) => (
+              <WatchlistCard key={entry.id} entry={entry} />
+            ))}
+          </div>
+        ) : (
+          <div className="mt-10 flex flex-col items-center gap-3 py-10 text-center">
+            <Bookmark className="h-8 w-8 text-ink-muted" strokeWidth={1.5} aria-hidden />
+            <p className="text-sm text-ink-secondary">
+              Nothing to watch later yet. Press Watch Later on a title to keep it here.
+            </p>
+          </div>
+        )
+      ) : activeTab === "favorites" ? (
         favorites.length > 0 ? (
           <div className="mt-8 grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-6">
             {favorites.map((entry) => (

@@ -31,6 +31,7 @@ model User {
   sessions         Session[]
   accounts         Account[]
   favorites        Favorite[]
+  watchlist        WatchlistItem[]
   watchHistory     WatchHistory[]
   lists            MediaList[]
   reports          Report[]
@@ -331,6 +332,19 @@ model Favorite {
 
   @@id([userId, mediaId])
   @@map("favorite")
+}
+
+/// "Watch later": titles a member means to watch, kept apart from
+/// Favorites (titles they loved). Same shape as Favorite.
+model WatchlistItem {
+  userId  String
+  mediaId String
+  entry   Json
+  addedAt DateTime @default(now())
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, mediaId])
+  @@map("watchlist_item")
 }
 
 model WatchHistory {

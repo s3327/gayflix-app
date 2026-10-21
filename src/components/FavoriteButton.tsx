@@ -52,6 +52,7 @@ export default function FavoriteButton({
         type="button"
         onClick={handleClick}
         aria-pressed={active}
+        aria-label={showLabel ? undefined : label}
         title={label}
         className={`flex h-12 shrink-0 items-center justify-center gap-2 rounded-card border transition-colors ${
           showLabel ? "px-5" : "w-12"
@@ -61,7 +62,7 @@ export default function FavoriteButton({
             : "border-brand-pink/40 text-ink-brand hover:border-brand-pink hover:bg-brand-pink/10"
         }`}
       >
-        <Heart className={`h-5 w-5 ${active ? "fill-current" : ""}`} strokeWidth={2} />
+        <Heart className={`h-5 w-5 ${active ? "fill-current" : ""}`} strokeWidth={2} aria-hidden />
         {showLabel && <span className="text-sm font-semibold">{label}</span>}
       </button>
 

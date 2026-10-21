@@ -6,6 +6,7 @@ import {
   cleanListName,
   isMediaId,
   MAX_FAVORITES,
+  MAX_WATCHLIST,
   MAX_LIST_ITEMS,
   MAX_LISTS,
   parseEntry,
@@ -15,7 +16,8 @@ import { getSession } from "@/lib/session";
 import { parseProgress } from "@/lib/watch-progress";
 
 /*
- * Server functions behind the Favorites, History and Lists providers.
+ * Server functions behind the Favorites, Watchlist, History and Lists
+ * providers.
  * Each one is reachable by a direct POST, so each checks the session and
  * validates its input itself; list functions also check that the list
  * belongs to the caller. They throw on bad input or no session; the
@@ -64,6 +66,25 @@ export async function setFavorite(value: unknown, on: boolean): Promise<void> {
     });
   } else {
     await db.favorite.deleteMany({ where: { userId, mediaId: entry.id } });
+  }
+}
+
+// --- Watchlist ---------------------------------------------------------
+
+export async function setWatchlist(value: unknown, on: boolean): Promise<void> {
+  const userId = await requireUserId();
+  const entry = requireEntry(value);
+  if (on) {
+    if ((await db.watchlistItem.count({ where: { userId } })) >= MAX_WATCHLIST) {
+      throw new Error("Watchlist full");
+    }
+    await db.watchlistItem.upsert({
+      where: { userId_mediaId: { userId, mediaId: entry.id } },
+      create: { userId, mediaId: entry.id, entry },
+      update: { entry },
+    });
+  } else {
+    await db.watchlistItem.deleteMany({ where: { userId, mediaId: entry.id } });
   }
 }
 

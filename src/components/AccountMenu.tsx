@@ -23,6 +23,7 @@ import { useCurrentPath } from "@/lib/use-current-path";
 const MENU_ITEMS = [
   { label: "My Account", href: "/account" },
   { label: "Favorites", href: "/account/favorite" },
+  { label: "Watchlist", href: "/account/favorite?tab=watchlist" },
   { label: "My Lists", href: "/account/favorite?tab=lists" },
   { label: "History", href: "/account/history" },
   { label: "Settings", href: "/account/setting" },

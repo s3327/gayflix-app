@@ -9,24 +9,29 @@ import SeasonTabs from "@/components/SeasonTabs";
 import SeriesPlayButton from "@/components/SeriesPlayButton";
 import TagList from "@/components/TagList";
 import ShareButton from "@/components/ShareButton";
-import TitleActions from "@/components/TitleActions";
+import AddToListButton from "@/components/AddToListButton";
+import FavoriteButton from "@/components/FavoriteButton";
+import WatchlistButton from "@/components/WatchlistButton";
 import TrailerButton from "@/components/TrailerButton";
 import { countryHref, genreHref, languageHref, searchHref } from "@/lib/browse-href";
 import { contentNotesLabel, maturityLabel } from "@/lib/title-extras";
 
 const PLAY_BUTTON =
   "flex h-12 items-center justify-center gap-2 rounded-card bg-brand-pink px-6 text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark";
-/** Trailer and Share, the same height as Favorite and Add to List beside them. */
-const ACTION_BUTTON =
-  "flex h-12 shrink-0 items-center justify-center gap-2 rounded-card border border-border-strong bg-bg-base/40 px-5 text-ink-primary backdrop-blur-sm transition-colors hover:border-brand-pink hover:bg-bg-elevated";
+/** Trailer and Share, the same height as Watch Later and Add to List beside them. */
+const ACTION_BASE =
+  "flex h-12 shrink-0 items-center justify-center gap-2 rounded-card border border-border-strong bg-bg-base/40 text-ink-primary backdrop-blur-sm transition-colors hover:border-brand-pink hover:bg-bg-elevated";
+const ACTION_BUTTON = `${ACTION_BASE} px-5`;
+/** Share: a square, like Favorite beside it. */
+const ICON_ACTION_BUTTON = `${ACTION_BASE} w-12`;
 
 /**
  * A title's own page, /movie/[id] or /series/[id].
  *
  * The header comes first at every size: the backdrop, with the title, its
  * facts (year, maturity rating, length, genres, rating), the tagline and
- * the actions (Play, Trailer, Favorite, Add to List, Share) over its
- * lower edge, so Play is on the first screen of a phone. Wider screens
+ * the actions (Play, Trailer, Watch Later, Add to List, Favorite, Share)
+ * over its lower edge, so Play is on the first screen of a phone. Wider screens
  * also show the poster beside them. A title with no backdrop gets its
  * poster, blurred, behind the header instead (and a phone shows the
  * poster itself in it).
@@ -151,14 +156,16 @@ export default function TitleDetail({
                   Episodes coming soon
                 </p>
               )}
-              {/* Short labels first, so a phone pairs Trailer and Share,
-                  then Favorite and Add to List; one row on wider screens. */}
+              {/* A phone pairs Trailer and Watch Later, then Add to List
+                  with Favorite and Share (icons, still named); one row on
+                  wider screens. */}
               {title.trailerUrl && (
                 <TrailerButton trailerUrl={title.trailerUrl} title={title.title} className={ACTION_BUTTON} />
               )}
-              <ShareButton title={title.title} className={ACTION_BUTTON} />
-              {/* Its buttons join this row, rather than wrapping as one block. */}
-              <TitleActions media={entry} bare />
+              <WatchlistButton media={entry} />
+              <AddToListButton media={entry} />
+              <FavoriteButton media={entry} />
+              <ShareButton title={title.title} className={ICON_ACTION_BUTTON} iconOnly />
             </div>
           </div>
         </div>

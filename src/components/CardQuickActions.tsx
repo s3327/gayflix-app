@@ -2,19 +2,20 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Heart, ListChecks, ListPlus, Play } from "lucide-react";
+import { Bookmark, BookmarkCheck, Heart, ListChecks, ListPlus, Play } from "lucide-react";
 import AddToListModal from "@/components/AddToListModal";
 import LoginPrompt from "@/components/LoginPrompt";
 import { useAuth } from "@/lib/auth-context";
 import { useFavorites, type FavoriteEntry } from "@/lib/favorites-context";
 import { useLists } from "@/lib/lists-context";
+import { useWatchlist } from "@/lib/watchlist-context";
 import type { Media } from "@/lib/media";
 
 const ICON_BUTTON =
   "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-base/80 backdrop-blur-sm transition-colors hover:bg-bg-base";
 
 /**
- * Play, Favorite and Add to List over a poster card (MediaCard,
+ * Play, Favorite, Watch Later and Add to List over a poster card (MediaCard,
  * PosterCard), for browsing without opening each title. They're a
  * shortcut for the mouse: they show on hover, and only where there's a
  * mouse or a trackpad. A tap on a touchscreen, the keyboard and screen
@@ -29,8 +30,11 @@ const ICON_BUTTON =
 export default function CardQuickActions({ media }: { media: Media }) {
   const { isLoggedIn } = useAuth();
   const { isFavorite, toggleFavorite } = useFavorites();
+  const { isOnWatchlist, toggleWatchlist } = useWatchlist();
   const { lists, isInList } = useLists();
-  const [open, setOpen] = useState<"lists" | "login-favorites" | "login-lists" | null>(null);
+  const [open, setOpen] = useState<
+    "lists" | "login-favorites" | "login-watchlist" | "login-lists" | null
+  >(null);
 
   const entry: FavoriteEntry = {
     id: media.id,
@@ -43,6 +47,8 @@ export default function CardQuickActions({ media }: { media: Media }) {
     gradient: media.gradient,
   };
   const favorite = isFavorite(media.id);
+  const onWatchlist = isOnWatchlist(media.id);
+  const WatchlistIcon = onWatchlist ? BookmarkCheck : Bookmark;
   const inAList = lists.some((list) => isInList(list.id, media.id));
   const ListIcon = inAList ? ListChecks : ListPlus;
 
@@ -76,6 +82,17 @@ export default function CardQuickActions({ media }: { media: Media }) {
           <button
             type="button"
             tabIndex={-1}
+            onClick={() => (isLoggedIn ? toggleWatchlist(entry) : setOpen("login-watchlist"))}
+            aria-label={`Watch ${media.title} later`}
+            aria-pressed={onWatchlist}
+            title={onWatchlist ? "On Watchlist" : "Watch Later"}
+            className={`${ICON_BUTTON} ${onWatchlist ? "text-ink-brand" : "text-ink-primary"}`}
+          >
+            <WatchlistIcon className="h-4 w-4" aria-hidden />
+          </button>
+          <button
+            type="button"
+            tabIndex={-1}
             onClick={() => setOpen(isLoggedIn ? "lists" : "login-lists")}
             aria-label={`Add ${media.title} to a list`}
             aria-haspopup="dialog"
@@ -92,6 +109,13 @@ export default function CardQuickActions({ media }: { media: Media }) {
         <LoginPrompt
           title="Log in to save favorites"
           description={`Favorites are kept in your account, on every device. Log in or sign up, and you'll come right back here.`}
+          onClose={() => setOpen(null)}
+        />
+      )}
+      {open === "login-watchlist" && (
+        <LoginPrompt
+          title="Log in to keep a watchlist"
+          description={`Your watchlist is kept in your account, on every device. Log in or sign up, and you'll come right back here.`}
           onClose={() => setOpen(null)}
         />
       )}

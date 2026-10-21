@@ -12,8 +12,9 @@ export const HISTORY_LIMIT = 200;
  * providers hold it. Server code only.
  */
 export async function loadLibrary(userId: string): Promise<Library> {
-  const [favorites, history, lists] = await Promise.all([
+  const [favorites, watchlist, history, lists] = await Promise.all([
     db.favorite.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+    db.watchlistItem.findMany({ where: { userId }, orderBy: { addedAt: "asc" } }),
     db.watchHistory.findMany({
       where: { userId },
       orderBy: { watchedAt: "desc" },
@@ -30,6 +31,7 @@ export async function loadLibrary(userId: string): Promise<Library> {
   // of sight until they're back.
   const published = await findPublishedIds([
     ...favorites.map((row) => row.mediaId),
+    ...watchlist.map((row) => row.mediaId),
     ...history.map((row) => row.mediaId),
     ...lists.flatMap((list) => list.items.map((item) => item.mediaId)),
   ]);
@@ -39,6 +41,9 @@ export async function loadLibrary(userId: string): Promise<Library> {
   return {
     favorites: Object.fromEntries(
       shown(favorites).map((row) => [row.mediaId, row.entry as FavoriteEntry])
+    ),
+    watchlist: Object.fromEntries(
+      shown(watchlist).map((row) => [row.mediaId, row.entry as FavoriteEntry])
     ),
     history: Object.fromEntries(
       shown(history).map((row) => [
