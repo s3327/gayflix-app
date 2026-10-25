@@ -1,4 +1,5 @@
 import type { MediaType } from "@/lib/media";
+import type { Rating } from "@/lib/ratings";
 
 /**
  * Enough to render a title card (favorites, history, list items) without
@@ -46,6 +47,8 @@ export type Library = {
   watchlist: Record<string, FavoriteEntry>;
   history: Record<string, HistoryEntry>;
   lists: Record<string, MediaList>;
+  /** Their ratings, by movie or series id. */
+  ratings: Record<string, Rating>;
 };
 
 export const MAX_LIST_NAME_LENGTH = 80;

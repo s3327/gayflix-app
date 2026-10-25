@@ -27,6 +27,7 @@ import { getSiteSettings } from "@/lib/site-settings";
 import { videoHosts, videoUrlAllowed } from "@/lib/video-hosts";
 import type { VideoSourceEntry } from "@/lib/video-source";
 import { languageName, SUBTITLE_ID, type SubtitleTrack } from "@/lib/subtitles";
+import { isMostLiked, RATINGS, type Rating } from "@/lib/ratings";
 import { parseMaturity } from "@/lib/title-extras";
 import { trendingSince } from "@/lib/views";
 import { isFinished } from "@/lib/watch-progress";
@@ -484,8 +485,8 @@ export async function listTrending(): Promise<TrendingMedia[]> {
  * shared genre scores 3, each shared tag or cast member 2, the same
  * director or creator 3, and the same type 1. Ties go to the most
  * viewed, then the newest. Titles scoring under `minScore`, those in
- * `excludeIds` and, with `unwatchedBy`, those that user has played are
- * left out.
+ * `excludeIds` and, with `unwatchedBy`, those that user has played or
+ * rated are left out.
  */
 async function relatedRows(
   id: string,
@@ -519,6 +520,7 @@ async function relatedRows(
                 SELECT COALESCE(e."mediaId", h."mediaId") FROM watch_history h
                 LEFT JOIN episode e ON e.id = h."mediaId"
                 WHERE h."userId" = ${unwatchedBy}
+                UNION SELECT "mediaId" FROM media_rating WHERE "userId" = ${unwatchedBy}
               )`
         }
     ) related
@@ -536,8 +538,15 @@ export async function listRecommendations(id: string): Promise<Media[]> {
   return (await relatedRows(id)).map(toMedia);
 }
 
-/** A Because You Watched row: titles like `seed`, which the member played. */
-export type BecauseYouWatched = { seed: { id: string; title: string }; media: Media[] };
+/**
+ * A Because You Watched row: titles like `seed`, which the member played
+ * ("watched") or rated Like or Love it ("like", "love"; the heading then
+ * says so).
+ */
+export type BecauseYouWatched = {
+  seed: { id: string; title: string; reason: "watched" | "like" | "love" };
+  media: Media[];
+};
 
 /** Home shows this many Because You Watched rows at most. */
 const BECAUSE_ROWS = 2;
@@ -550,27 +559,37 @@ const BECAUSE_SEEDS = 5;
 
 /**
  * Because You Watched on the home page: for the titles the signed-in
- * user played last, latest first, a row of the published titles most
- * like each one (relatedRows), leaving out what they've already played
- * and what an earlier row shows. A title with too few alike gets no row.
- * Empty for guests, whose history stays in their browser.
+ * user played or rated Like or Love it last, latest first, a row of the
+ * published titles most like each one (relatedRows), leaving out what
+ * they've already played or rated and what an earlier row shows. A title
+ * they rated Not for me never gets a row, and one with too few alike
+ * gets none either. Empty for guests, whose history stays in their
+ * browser.
  */
 export async function listBecauseYouWatched(): Promise<BecauseYouWatched[]> {
   await connection();
   const session = await getSession();
   if (!session) return [];
   const userId = session.user.id;
-  const seeds = await db.$queryRaw<{ id: string; title: string }[]>`
-    SELECT id, title FROM (
-      SELECT COALESCE(e."mediaId", h."mediaId") AS id, max(h."watchedAt") AS "watchedAt"
-      FROM watch_history h
-      LEFT JOIN episode e ON e.id = h."mediaId"
-      WHERE h."userId" = ${userId}
-      GROUP BY 1
-    ) played
-    JOIN media USING (id)
-    WHERE status = 'published' AND "trashedAt" IS NULL
-    ORDER BY "watchedAt" DESC, id
+  const seeds = await db.$queryRaw<BecauseYouWatched["seed"][]>`
+    SELECT media.id, media.title, COALESCE(r.value::text, 'watched') AS reason FROM (
+      SELECT id, max(at) AS at FROM (
+        -- History holds movie and episode ids; an episode stands for its series.
+        SELECT COALESCE(e."mediaId", h."mediaId") AS id, h."watchedAt" AS at
+        FROM watch_history h
+        LEFT JOIN episode e ON e.id = h."mediaId"
+        WHERE h."userId" = ${userId}
+        UNION ALL
+        SELECT "mediaId", "ratedAt" FROM media_rating
+        WHERE "userId" = ${userId} AND value IN ('like', 'love')
+      ) activity
+      GROUP BY id
+    ) seeds
+    JOIN media ON media.id = seeds.id
+    LEFT JOIN media_rating r ON r."mediaId" = seeds.id AND r."userId" = ${userId}
+    WHERE media.status = 'published' AND media."trashedAt" IS NULL
+      AND r.value IS DISTINCT FROM 'not_for_me'
+    ORDER BY seeds.at DESC, media.id
     LIMIT ${BECAUSE_SEEDS}`;
 
   const rows: BecauseYouWatched[] = [];
@@ -748,15 +767,24 @@ export async function suggestTitles(
  * for the page itself; cache() makes that one query per request.
  */
 
-/** A published title with its episodes, or null. */
+/** A published title with its episodes, and whether it's "Most liked", or null. */
 export const getTitle = cache(async (id: string): Promise<MediaDetail | null> => {
   await connection();
   if (!isMediaId(id)) return null;
-  const row = await db.media.findUnique({
-    where: { id, ...PUBLISHED },
-    include: { episodes: { orderBy: EPISODE_ORDER } },
-  });
-  return row && toDetail(row);
+  const [row, ratings] = await Promise.all([
+    db.media.findUnique({
+      where: { id, ...PUBLISHED },
+      include: { episodes: { orderBy: EPISODE_ORDER } },
+    }),
+    db.mediaRating.groupBy({ by: ["value"], where: { mediaId: id }, _count: true }),
+  ]);
+  if (!row) return null;
+  const count = (values: Rating[]) =>
+    ratings.reduce((sum, group) => sum + (values.includes(group.value) ? group._count : 0), 0);
+  return {
+    ...toDetail(row),
+    mostLiked: isMostLiked({ liked: count(["like", "love"]), total: count([...RATINGS]) }),
+  };
 });
 
 /** An episode of a published series, with the series, or null. */
@@ -821,6 +849,18 @@ export async function findPublishedIds(ids: string[]): Promise<Set<string>> {
     }),
   ]);
   return new Set([...titles, ...episodes].map((row) => row.id));
+}
+
+// --- Ratings -----------------------------------------------------------------
+
+/**
+ * Whether `id` is a title members can rate (src/lib/rating-actions.ts):
+ * a published movie or series. Episodes are rated through their series.
+ */
+export async function isRatableTitle(id: string): Promise<boolean> {
+  await connection();
+  if (!isMediaId(id)) return false;
+  return (await db.media.count({ where: { id, ...PUBLISHED } })) > 0;
 }
 
 // --- Views -------------------------------------------------------------------

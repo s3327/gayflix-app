@@ -128,7 +128,7 @@ export default async function AccountSettingPage() {
           Delete account
         </h2>
         <p className="mt-1 text-sm text-ink-muted">
-          Deletes your profile, favorites, lists and watch history, and signs out every
+          Deletes your profile, favorites, Watchlist, lists, ratings and watch history, and signs out every
           device. This can&apos;t be undone.
         </p>
         <div className="mt-4">

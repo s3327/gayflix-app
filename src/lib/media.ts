@@ -104,4 +104,6 @@ export type MediaDetail = Media & {
   contentNotes: string[];
   /** Series only, in season and episode order. */
   episodes: Episode[];
+  /** Members' ratings make it "Most liked" (isMostLiked in src/lib/ratings.ts). Title pages only. */
+  mostLiked?: boolean;
 };

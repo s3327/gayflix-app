@@ -3,8 +3,20 @@ import ContentRow from "@/components/ContentRow";
 import ContinueWatchingSection from "@/components/ContinueWatchingSection";
 import HeroCarousel from "@/components/HeroCarousel";
 import TopTenSection from "@/components/TopTenSection";
-import { getHome, listBecauseYouWatched, listContinueWatching } from "@/lib/catalog";
+import {
+  getHome,
+  listBecauseYouWatched,
+  listContinueWatching,
+  type BecauseYouWatched,
+} from "@/lib/catalog";
 import { listingMetadata } from "@/lib/page-metadata";
+
+/** A Because You Watched row says why it's there. */
+const BECAUSE_HEADINGS: Record<BecauseYouWatched["seed"]["reason"], string> = {
+  watched: "Because You Watched",
+  like: "Because You Liked",
+  love: "Because You Loved",
+};
 
 export const metadata: Metadata = listingMetadata(
   "Home",
@@ -36,7 +48,7 @@ export default async function HomePage() {
             key={seed.id}
             heading={
               <>
-                Because You Watched <span className="text-ink-brand">{seed.title}</span>
+                {BECAUSE_HEADINGS[seed.reason]} <span className="text-ink-brand">{seed.title}</span>
               </>
             }
             media={media}

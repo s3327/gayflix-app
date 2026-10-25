@@ -40,6 +40,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   `src/lib/admin-image-actions.ts`, which checks the file's bytes.
   Views (`media_view` and `viewCount`, which rank Trending) are counted
   only by `src/lib/view-actions.ts`, and never store a raw IP address.
+  Member ratings (`media_rating`: Not for me, Like, Love it, one per
+  member per movie or series) change only through
+  `src/lib/rating-actions.ts`; the rules for "Most liked" are in
+  `src/lib/ratings.ts`.
   Video sources (`video_source`, a movie's or an episode's server tabs)
   change only through `src/lib/admin-video-actions.ts`, with links on
   `VIDEO_HOSTS` only (`src/lib/video-hosts.ts`, which also feeds the
