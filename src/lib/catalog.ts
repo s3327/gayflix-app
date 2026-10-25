@@ -47,7 +47,7 @@ const PUBLISHED = { status: "published" } as const;
 
 /** Home rows and "You Might Also Like" (listRecommendations). */
 const ROW_SIZE = 12;
-/** Top 10 This Week on the home page. */
+/** Top 10 This Week on the home page and New & Popular. */
 const TOP_TEN_SIZE = 10;
 const CONTINUE_WATCHING_SIZE = 6;
 /** /trending ranks the 100 most viewed titles. */
@@ -199,10 +199,16 @@ export async function getLiveHero(): Promise<{ id: string; title: string; type: 
   return db.media.findFirst({ where: PUBLISHED, orderBy: ORDER.added, select: heroSelect });
 }
 
+/** How many titles the home page hero turns through. */
+const HERO_SIZE = 5;
+
 /**
- * The home page: the hero (the most recently published featured title, or
- * else the newest one) and the Top 10 This Week (Trending's first ten),
- * Recently Added, Movies and Series rows.
+ * The home page: the hero's titles and the Top 10 This Week (Trending's
+ * first ten), Recently Added, Movies and Series rows.
+ *
+ * The hero leads with the most recently published featured title (or
+ * else the newest), then turns through up to four more that have a
+ * backdrop: this week's most watched first, then the newest.
  */
 export async function getHome() {
   await connection();
@@ -222,17 +228,47 @@ export async function getHome() {
     featured ??
     (await db.media.findFirst({ where: PUBLISHED, orderBy: ORDER.added, select: heroSelect }));
 
+  // The rest of the hero, in order: this week's most watched, then the
+  // newest, each once, and only those with a backdrop to show.
+  const candidates = [...new Set([...topTen, ...newReleases].map((row) => row.id))].filter(
+    (id) => id !== hero?.id
+  );
+  const withBackdrops = candidates.length
+    ? await db.media.findMany({
+        where: { ...PUBLISHED, id: { in: candidates }, backdropUrl: { not: null } },
+        select: heroSelect,
+      })
+    : [];
+  const rest = withBackdrops
+    .sort((a, b) => candidates.indexOf(a.id) - candidates.indexOf(b.id))
+    .slice(0, HERO_SIZE - 1);
+  const toFeatured = (row: NonNullable<typeof hero>): Featured => ({
+    ...toMedia(row),
+    synopsis: row.synopsis,
+    backdropUrl: row.backdropUrl ?? undefined,
+  });
+
   return {
-    featured: hero && ({
-      ...toMedia(hero),
-      synopsis: hero.synopsis,
-      backdropUrl: hero.backdropUrl ?? undefined,
-    } satisfies Featured),
+    heroes: hero ? [hero, ...rest].map(toFeatured) : [],
     topTen: topTen.map(toMedia),
     newReleases,
     movies,
     series,
   };
+}
+
+/**
+ * New & Popular: this week's ten most watched, the newest titles, and the
+ * most watched of all time.
+ */
+export async function getNewAndPopular() {
+  await connection();
+  const [topTen, recentlyAdded, mostWatched] = await Promise.all([
+    trendingRows(TOP_TEN_SIZE),
+    cards(PUBLISHED, ORDER.added, ROW_SIZE),
+    cards(PUBLISHED, ORDER.popular, ROW_SIZE),
+  ]);
+  return { topTen: topTen.map(toMedia), recentlyAdded, mostWatched };
 }
 
 /**
@@ -551,6 +587,62 @@ export async function listBecauseYouWatched(): Promise<BecauseYouWatched[]> {
     if (rows.length === BECAUSE_ROWS) break;
   }
   return rows;
+}
+
+/** A person's page (src/app/(main)/people/[name]): their titles by role. */
+export type PersonTitles = {
+  /** As the catalog writes it (the first title's spelling, if cases differ). */
+  name: string;
+  directed: Media[];
+  created: Media[];
+  appearsIn: Media[];
+};
+
+/**
+ * Everything published that `name` directed, created or is in the cast
+ * of, newest first (by release year), matched without regard to case.
+ * Null when there's nothing: no page for a name the catalog doesn't have.
+ */
+export async function getPerson(name: string): Promise<PersonTitles | null> {
+  await connection();
+  const rows = await db.$queryRaw<
+    (CardRow & { director: string | null; creator: string | null; cast: string[] | null })[]
+  >`
+    SELECT ${CARD_COLUMNS}, director, creator, "cast" FROM media
+    WHERE status = 'published' AND "trashedAt" IS NULL
+      AND (
+        lower(director) = lower(${name})
+        OR lower(creator) = lower(${name})
+        OR EXISTS (SELECT 1 FROM unnest("cast") AS person WHERE lower(person) = lower(${name}))
+      )
+    ORDER BY year DESC, "publishedAt" DESC NULLS LAST, id
+    LIMIT 300`;
+  if (rows.length === 0) return null;
+
+  const same = (value: string | null | undefined) =>
+    value != null && value.toLowerCase() === name.toLowerCase();
+  const first = rows[0];
+  const spelled = [first.director, first.creator, ...(first.cast ?? [])].find(same) ?? name;
+  return {
+    name: spelled,
+    directed: rows.filter((row) => same(row.director)).map(toMedia),
+    created: rows.filter((row) => same(row.creator)).map(toMedia),
+    appearsIn: rows.filter((row) => (row.cast ?? []).some(same)).map(toMedia),
+  };
+}
+
+/** Everyone named on a published title, for the sitemap. */
+export async function listPublishedPeople(): Promise<string[]> {
+  await connection();
+  const rows = await db.$queryRaw<{ name: string }[]>`
+    SELECT DISTINCT name FROM (
+      SELECT unnest("cast") AS name FROM media WHERE status = 'published' AND "trashedAt" IS NULL
+      UNION SELECT director FROM media WHERE status = 'published' AND "trashedAt" IS NULL
+      UNION SELECT creator FROM media WHERE status = 'published' AND "trashedAt" IS NULL
+    ) people
+    WHERE name IS NOT NULL AND trim(name) <> ''
+    ORDER BY name`;
+  return rows.map((row) => row.name);
 }
 
 /** Every published title, for the sitemap. */

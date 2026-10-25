@@ -155,10 +155,11 @@ test("a title's details and tags lead to the titles that share them", async ({
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Drama");
   await expect(page.getByLabel("Genre")).toHaveValue("Drama");
 
-  // Search matches cast, so a cast member finds their other titles.
+  // A cast member's page lists their other titles.
   await page.goto("/movie/chosen-family");
   await details.getByRole("link", { name: "Jordan Lee" }).click();
-  await expect(page).toHaveURL(/\/search\?q=Jordan\+Lee$/);
+  await expect(page).toHaveURL(/\/people\/Jordan%20Lee$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Jordan Lee");
   await expect(page.getByRole("link", { name: /The Brownstone/ })).toBeVisible();
 
   // And tags.

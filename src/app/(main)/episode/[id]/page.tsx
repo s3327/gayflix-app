@@ -11,7 +11,7 @@ import EpisodeSelectorDrawer from "@/components/watch/EpisodeSelectorDrawer";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import TagList from "@/components/TagList";
 import TitleActions from "@/components/TitleActions";
-import { countryHref, genreHref, languageHref, searchHref } from "@/lib/browse-href";
+import { countryHref, genreHref, languageHref, personHref } from "@/lib/browse-href";
 import { episodeMetadata } from "@/lib/page-metadata";
 import type { SearchParams } from "@/lib/search-params";
 
@@ -267,7 +267,7 @@ export default async function EpisodePage({
           <>
             <dt className="text-ink-muted">Creator</dt>
             <dd className="text-ink-primary">
-              <MetaLink href={searchHref(series.creator)}>{series.creator}</MetaLink>
+              <MetaLink href={personHref(series.creator)}>{series.creator}</MetaLink>
             </dd>
           </>
         )}
@@ -276,7 +276,7 @@ export default async function EpisodePage({
           <>
             <dt className="text-ink-muted">Cast</dt>
             <dd className="text-ink-primary">
-              <MetaLinkList items={series.cast} href={searchHref} />
+              <MetaLinkList items={series.cast} href={personHref} />
             </dd>
           </>
         )}
