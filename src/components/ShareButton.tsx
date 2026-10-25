@@ -6,9 +6,17 @@ import { useToast } from "@/lib/toast-context";
 /**
  * Shares a title's page: the phone's share sheet where there is one,
  * otherwise copies the link and says so. Cancelling the share sheet
- * does nothing.
+ * does nothing. `iconOnly` shows just the icon, still named "Share".
  */
-export default function ShareButton({ title, className }: { title: string; className: string }) {
+export default function ShareButton({
+  title,
+  className,
+  iconOnly = false,
+}: {
+  title: string;
+  className: string;
+  iconOnly?: boolean;
+}) {
   const { showToast } = useToast();
 
   async function share() {
@@ -31,9 +39,15 @@ export default function ShareButton({ title, className }: { title: string; class
   }
 
   return (
-    <button type="button" onClick={share} className={className}>
+    <button
+      type="button"
+      onClick={share}
+      aria-label={iconOnly ? "Share" : undefined}
+      title={iconOnly ? "Share" : undefined}
+      className={className}
+    >
       <Share2 className="h-5 w-5" aria-hidden />
-      <span className="text-sm font-semibold">Share</span>
+      {!iconOnly && <span className="text-sm font-semibold">Share</span>}
     </button>
   );
 }

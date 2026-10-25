@@ -42,6 +42,8 @@ export type MediaList = {
 /** A signed-in user's saved titles, as the (main) layout hands them to the client. */
 export type Library = {
   favorites: Record<string, FavoriteEntry>;
+  /** "Watch later", oldest first like favorites. */
+  watchlist: Record<string, FavoriteEntry>;
   history: Record<string, HistoryEntry>;
   lists: Record<string, MediaList>;
 };
@@ -50,6 +52,7 @@ export const MAX_LIST_NAME_LENGTH = 80;
 
 /** Generous caps, so one account can't fill the database. */
 export const MAX_FAVORITES = 1000;
+export const MAX_WATCHLIST = 1000;
 export const MAX_LISTS = 100;
 export const MAX_LIST_ITEMS = 500;
 

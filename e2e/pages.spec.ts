@@ -68,6 +68,7 @@ test.describe("signed in", () => {
     for (const [name, href] of [
       ["My Account", "/account"],
       ["Favorites", "/account/favorite"],
+      ["Watchlist", "/account/favorite?tab=watchlist"],
       ["My Lists", "/account/favorite?tab=lists"],
       ["History", "/account/history"],
       ["Settings", "/account/setting"],

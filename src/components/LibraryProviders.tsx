@@ -5,9 +5,10 @@ import { FavoritesProvider } from "@/lib/favorites-context";
 import { HistoryProvider } from "@/lib/history-context";
 import type { Library } from "@/lib/library-types";
 import { ListsProvider } from "@/lib/lists-context";
+import { WatchlistProvider } from "@/lib/watchlist-context";
 
 /**
- * Favorites, Lists and History for whoever is signed in. `library` is
+ * Favorites, Watchlist, Lists and History for whoever is signed in. `library` is
  * what the server loaded for `userId` while rendering the (main) layout.
  *
  * The layout stays mounted across client-side navigation, so when the
@@ -30,11 +31,13 @@ export default function LibraryProviders({
 
   return (
     <FavoritesProvider key={`favorites-${key}`} userId={activeUserId} initial={initial?.favorites}>
-      <ListsProvider key={`lists-${key}`} userId={activeUserId} initial={initial?.lists}>
-        <HistoryProvider key={`history-${key}`} userId={activeUserId} initial={initial?.history}>
-          {children}
-        </HistoryProvider>
-      </ListsProvider>
+      <WatchlistProvider key={`watchlist-${key}`} userId={activeUserId} initial={initial?.watchlist}>
+        <ListsProvider key={`lists-${key}`} userId={activeUserId} initial={initial?.lists}>
+          <HistoryProvider key={`history-${key}`} userId={activeUserId} initial={initial?.history}>
+            {children}
+          </HistoryProvider>
+        </ListsProvider>
+      </WatchlistProvider>
     </FavoritesProvider>
   );
 }
