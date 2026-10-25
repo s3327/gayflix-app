@@ -123,8 +123,12 @@ test("watch pages lead back to the title's own page", async ({ page }) => {
 });
 
 test("Recently Added is named for what it lists", async ({ page }) => {
-  await page.goto("/home");
-  await page.getByRole("navigation").getByRole("link", { name: "Recently Added" }).first().click();
+  await page.goto("/new-popular");
+  await page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Recently Added" }) })
+    .getByRole("link", { name: "See More" })
+    .click();
   await expect(page).toHaveURL(/\/new-releases$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Recently Added");
   await expect(page).toHaveTitle("Recently Added · Gayflix");
@@ -178,9 +182,9 @@ test("scripts carry the per-request CSP nonce", async ({ page }) => {
 test("client-side navigation works under the CSP", async ({ page, consoleProblems }) => {
   void consoleProblems;
   await page.goto("/home", { waitUntil: "networkidle" });
-  await page.getByRole("navigation").getByRole("link", { name: "Trending" }).first().click();
-  await expect(page).toHaveURL(/\/trending$/);
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Trending");
+  await page.getByRole("navigation").getByRole("link", { name: "New & Popular" }).first().click();
+  await expect(page).toHaveURL(/\/new-popular$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("New & Popular");
 });
 
 test("sitemap lists public pages and published titles only", async ({ request }) => {
