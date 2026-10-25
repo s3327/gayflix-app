@@ -23,9 +23,9 @@ test("the header links to Home, Movies, Series, New & Popular, Browse and My Lis
   ]);
   await expect(nav.getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
 
-  // My List is the account's; a guest logs in and comes back to it.
+  // My List is the account's Watchlist; a guest logs in and comes back to it.
   await nav.getByRole("link", { name: "My List" }).click();
-  await expect(page).toHaveURL(/\/login\?next=%2Faccount%2Ffavorite$/);
+  await expect(page).toHaveURL(/\/login\?next=%2Faccount%2Ffavorite%3Ftab%3Dwatchlist$/);
 });
 
 test("New & Popular leads to Trending, Recently Added and the most watched", async ({ page }) => {
