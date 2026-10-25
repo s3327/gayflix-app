@@ -11,7 +11,7 @@ import TagList from "@/components/TagList";
 import ShareButton from "@/components/ShareButton";
 import TitleActions from "@/components/TitleActions";
 import TrailerButton from "@/components/TrailerButton";
-import { countryHref, genreHref, languageHref, searchHref } from "@/lib/browse-href";
+import { countryHref, genreHref, languageHref, personHref } from "@/lib/browse-href";
 import { contentNotesLabel, maturityLabel } from "@/lib/title-extras";
 
 const PLAY_BUTTON =
@@ -188,7 +188,7 @@ export default function TitleDetail({
               <>
                 <dt className="text-ink-muted">{isSeries ? "Creator" : "Director"}</dt>
                 <dd className="text-ink-primary">
-                  <MetaLink href={searchHref(credit)}>{credit}</MetaLink>
+                  <MetaLink href={personHref(credit)}>{credit}</MetaLink>
                 </dd>
               </>
             )}
@@ -197,7 +197,7 @@ export default function TitleDetail({
               <>
                 <dt className="text-ink-muted">Cast</dt>
                 <dd className="text-ink-primary">
-                  <MetaLinkList items={title.cast} href={searchHref} />
+                  <MetaLinkList items={title.cast} href={personHref} />
                 </dd>
               </>
             )}

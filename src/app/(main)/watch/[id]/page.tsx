@@ -10,7 +10,7 @@ import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import TagList from "@/components/TagList";
 import TitleActions from "@/components/TitleActions";
 import type { FavoriteEntry } from "@/lib/favorites-context";
-import { countryHref, genreHref, languageHref, searchHref } from "@/lib/browse-href";
+import { countryHref, genreHref, languageHref, personHref } from "@/lib/browse-href";
 import { watchMetadata } from "@/lib/page-metadata";
 
 export async function generateMetadata({
@@ -128,7 +128,7 @@ export default async function WatchPage({
           <>
             <dt className="text-ink-muted">Director</dt>
             <dd className="text-ink-primary">
-              <MetaLink href={searchHref(movie.director)}>{movie.director}</MetaLink>
+              <MetaLink href={personHref(movie.director)}>{movie.director}</MetaLink>
             </dd>
           </>
         )}
@@ -137,7 +137,7 @@ export default async function WatchPage({
           <>
             <dt className="text-ink-muted">Cast</dt>
             <dd className="text-ink-primary">
-              <MetaLinkList items={movie.cast} href={searchHref} />
+              <MetaLinkList items={movie.cast} href={personHref} />
             </dd>
           </>
         )}

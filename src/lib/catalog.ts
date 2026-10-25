@@ -589,6 +589,62 @@ export async function listBecauseYouWatched(): Promise<BecauseYouWatched[]> {
   return rows;
 }
 
+/** A person's page (src/app/(main)/people/[name]): their titles by role. */
+export type PersonTitles = {
+  /** As the catalog writes it (the first title's spelling, if cases differ). */
+  name: string;
+  directed: Media[];
+  created: Media[];
+  appearsIn: Media[];
+};
+
+/**
+ * Everything published that `name` directed, created or is in the cast
+ * of, newest first (by release year), matched without regard to case.
+ * Null when there's nothing: no page for a name the catalog doesn't have.
+ */
+export async function getPerson(name: string): Promise<PersonTitles | null> {
+  await connection();
+  const rows = await db.$queryRaw<
+    (CardRow & { director: string | null; creator: string | null; cast: string[] | null })[]
+  >`
+    SELECT ${CARD_COLUMNS}, director, creator, "cast" FROM media
+    WHERE status = 'published' AND "trashedAt" IS NULL
+      AND (
+        lower(director) = lower(${name})
+        OR lower(creator) = lower(${name})
+        OR EXISTS (SELECT 1 FROM unnest("cast") AS person WHERE lower(person) = lower(${name}))
+      )
+    ORDER BY year DESC, "publishedAt" DESC NULLS LAST, id
+    LIMIT 300`;
+  if (rows.length === 0) return null;
+
+  const same = (value: string | null | undefined) =>
+    value != null && value.toLowerCase() === name.toLowerCase();
+  const first = rows[0];
+  const spelled = [first.director, first.creator, ...(first.cast ?? [])].find(same) ?? name;
+  return {
+    name: spelled,
+    directed: rows.filter((row) => same(row.director)).map(toMedia),
+    created: rows.filter((row) => same(row.creator)).map(toMedia),
+    appearsIn: rows.filter((row) => (row.cast ?? []).some(same)).map(toMedia),
+  };
+}
+
+/** Everyone named on a published title, for the sitemap. */
+export async function listPublishedPeople(): Promise<string[]> {
+  await connection();
+  const rows = await db.$queryRaw<{ name: string }[]>`
+    SELECT DISTINCT name FROM (
+      SELECT unnest("cast") AS name FROM media WHERE status = 'published' AND "trashedAt" IS NULL
+      UNION SELECT director FROM media WHERE status = 'published' AND "trashedAt" IS NULL
+      UNION SELECT creator FROM media WHERE status = 'published' AND "trashedAt" IS NULL
+    ) people
+    WHERE name IS NOT NULL AND trim(name) <> ''
+    ORDER BY name`;
+  return rows.map((row) => row.name);
+}
+
 /** Every published title, for the sitemap. */
 export async function listPublishedTitles() {
   await connection();
