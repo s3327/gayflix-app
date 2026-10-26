@@ -994,6 +994,41 @@ export async function searchTitlesForCollection(query: string) {
   });
 }
 
+// --- New episodes --------------------------------------------------------------
+
+/** A published series' episodes added in a window, for the new-episode emails. */
+export type NewEpisodes = {
+  seriesId: string;
+  seriesTitle: string;
+  episodes: { seasonNumber: number; episodeNumber: number; title: string }[];
+};
+
+/**
+ * Episodes added after `since` and up to `until`, of series that are
+ * published, grouped by series, in season and episode order
+ * (src/lib/new-episode-emails.ts).
+ */
+export async function listNewEpisodes(since: Date, until: Date): Promise<NewEpisodes[]> {
+  await connection();
+  const rows = await db.episode.findMany({
+    where: { createdAt: { gt: since, lte: until }, media: { ...PUBLISHED, trashedAt: null } },
+    orderBy: [{ mediaId: "asc" }, ...EPISODE_ORDER],
+    select: {
+      seasonNumber: true,
+      episodeNumber: true,
+      title: true,
+      media: { select: { id: true, title: true } },
+    },
+  });
+  const bySeries = new Map<string, NewEpisodes>();
+  for (const { media, ...episode } of rows) {
+    const entry = bySeries.get(media.id) ?? { seriesId: media.id, seriesTitle: media.title, episodes: [] };
+    entry.episodes.push(episode);
+    bySeries.set(media.id, entry);
+  }
+  return [...bySeries.values()];
+}
+
 // --- Reports -----------------------------------------------------------------
 
 /**

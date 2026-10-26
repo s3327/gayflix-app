@@ -40,7 +40,8 @@ export default function PrivacyPage() {
         <ul className="list-disc pl-5">
           <li>
             <strong className="font-semibold text-ink-primary">Your name and email</strong>, to sign
-            you in and to send codes and account notices.
+            you in and to send codes and account notices, and, unless you turn them off in Setting or
+            from the email, to tell you when series in your Favorites get new episodes.
           </li>
           <li>
             <strong className="font-semibold text-ink-primary">Your password</strong>, stored only

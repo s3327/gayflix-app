@@ -3,6 +3,7 @@ import { isAuthorizedCron } from "@/lib/cron-auth";
 import {
   runTrashPurgeJob,
   runPublishDueJob,
+  runNewEpisodeEmailsJob,
   runOrphanImageCleanupJob,
 } from "@/lib/scheduled-jobs";
 
@@ -25,6 +26,14 @@ export async function GET(
 
     if (job === "publish-due" || job === "publish_due") {
       const result = await runPublishDueJob("cron");
+      // Then the emails, which include the episodes of what it just
+      // published. In the same call: Vercel limits a project's cron jobs.
+      const emails = await runNewEpisodeEmailsJob("cron");
+      return NextResponse.json({ ok: true, job, result, emails });
+    }
+
+    if (job === "new-episode-emails" || job === "new_episode_emails") {
+      const result = await runNewEpisodeEmailsJob("cron");
       return NextResponse.json({ ok: true, job, result });
     }
 
