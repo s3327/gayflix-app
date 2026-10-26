@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { connection } from "next/server";
 import { AuthProvider } from "@/lib/auth-context";
 import { OPEN_GRAPH, SITE_DESCRIPTION, SITE_TITLE, TWITTER } from "@/lib/page-metadata";
@@ -12,6 +12,14 @@ export const metadata: Metadata = {
   description: SITE_DESCRIPTION,
   openGraph: OPEN_GRAPH,
   twitter: TWITTER,
+  // Added to an iPhone's home screen, it opens full screen as "Gayflix"
+  // (the manifest, src/app/manifest.ts, does this for everything else).
+  appleWebApp: { capable: true, title: "Gayflix", statusBarStyle: "black-translucent" },
+};
+
+/** The browser's own bars match the page when installed or on a phone. */
+export const viewport: Viewport = {
+  themeColor: "#0b0b0f",
 };
 
 export default async function RootLayout({
