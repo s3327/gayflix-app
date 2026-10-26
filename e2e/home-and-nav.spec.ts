@@ -92,3 +92,23 @@ test.describe("on a phone", () => {
     expect(box!.y + box!.height).toBeLessThan(844 - 40);
   });
 });
+
+test("a card in a sideways row opens its title when clicked, and a drag doesn't", async ({ page }) => {
+  await page.goto("/home");
+  const row = page.locator("section").filter({ has: page.getByRole("heading", { name: "Recently Added" }) });
+  const card = row.getByRole("link").filter({ hasText: /\S/ }).nth(1);
+  const href = await card.getAttribute("href");
+  expect(href).toMatch(/^\/(movie|series)\//);
+
+  // Dragging across the posters scrolls the row, without opening one.
+  const box = (await card.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 3);
+  await page.mouse.down();
+  await page.mouse.move(box.x - 40, box.y + box.height / 3, { steps: 8 });
+  await page.mouse.up();
+  await expect(page).toHaveURL(/\/home$/);
+
+  // A plain click opens it.
+  await card.click();
+  await expect(page).toHaveURL(new RegExp(`${href}$`));
+});

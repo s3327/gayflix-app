@@ -77,13 +77,15 @@ export default function SwipeableRow({
   };
 
   // Mouse-only drag-to-scroll. Touch keeps native scrolling untouched.
+  // The row only captures the pointer once it has moved: captured from
+  // the start, the mouse-up would land on the row instead of the card,
+  // and a plain click would never open it.
   const handlePointerDown = (e: React.PointerEvent<HTMLElement>) => {
-    if (e.pointerType !== "mouse") return;
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
     const el = scrollRef.current;
     if (!el) return;
     drag.current = { startX: e.clientX, startScrollLeft: el.scrollLeft, moved: false };
     setIsDragging(true);
-    el.setPointerCapture(e.pointerId);
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLElement>) => {
@@ -91,14 +93,19 @@ export default function SwipeableRow({
     const el = scrollRef.current;
     if (!el) return;
     const dx = e.clientX - drag.current.startX;
-    if (Math.abs(dx) > 3) drag.current.moved = true;
+    if (!drag.current.moved) {
+      if (Math.abs(dx) <= 3) return;
+      drag.current.moved = true;
+      el.setPointerCapture(e.pointerId);
+    }
     el.scrollLeft = drag.current.startScrollLeft - dx;
   };
 
   const endDrag = (e: React.PointerEvent<HTMLElement>) => {
     if (!isDragging) return;
     setIsDragging(false);
-    scrollRef.current?.releasePointerCapture(e.pointerId);
+    const el = scrollRef.current;
+    if (el?.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
   };
 
   // The browser scrolls a focused card into view, but snapping can pull
