@@ -7,6 +7,7 @@ import {
   getHome,
   listBecauseYouWatched,
   listContinueWatching,
+  listHomeCollections,
   type BecauseYouWatched,
 } from "@/lib/catalog";
 import { listingMetadata } from "@/lib/page-metadata";
@@ -25,8 +26,17 @@ export const metadata: Metadata = listingMetadata(
 );
 
 export default async function HomePage() {
-  const [{ heroes, topTen, newReleases, movies, series }, continueWatching, becauseYouWatched] =
-    await Promise.all([getHome(), listContinueWatching(), listBecauseYouWatched()]);
+  const [
+    { heroes, topTen, newReleases, movies, series },
+    continueWatching,
+    becauseYouWatched,
+    collections,
+  ] = await Promise.all([
+    getHome(),
+    listContinueWatching(),
+    listBecauseYouWatched(),
+    listHomeCollections(),
+  ]);
 
   return (
     <main>
@@ -52,6 +62,14 @@ export default async function HomePage() {
               </>
             }
             media={media}
+          />
+        ))}
+        {collections.map((collection) => (
+          <ContentRow
+            key={collection.id}
+            heading={collection.title}
+            media={collection.media}
+            seeMoreHref={`/collections/${collection.id}`}
           />
         ))}
         {newReleases.length > 0 && (

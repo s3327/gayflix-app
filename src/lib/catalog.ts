@@ -801,6 +801,125 @@ export const getEpisode = cache(
   }
 );
 
+// --- Collections ---------------------------------------------------------------
+
+/** A collection as /collections and the home page show it: published titles only. */
+export type CollectionCard = {
+  id: string;
+  title: string;
+  description: string;
+  /** Its published titles, in the collection's order. */
+  media: Media[];
+};
+
+/** Home shows this many collection rows at most. */
+const HOME_COLLECTIONS = 3;
+
+/** Collections showing today: published, and within their dates if they have any. */
+function showingCollections(): Prisma.CollectionWhereInput {
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return {
+    published: true,
+    AND: [
+      { OR: [{ startsAt: null }, { startsAt: { lte: today } }] },
+      { OR: [{ endsAt: null }, { endsAt: { gte: today } }] },
+    ],
+  };
+}
+
+async function collectionCards(
+  where: Prisma.CollectionWhereInput,
+  { take, titles }: { take?: number; titles?: number } = {}
+): Promise<CollectionCard[]> {
+  const rows = await db.collection.findMany({
+    where: { ...where, items: { some: { media: PUBLISHED } } },
+    orderBy: [{ position: "asc" }, { title: "asc" }],
+    take,
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      items: {
+        where: { media: PUBLISHED },
+        orderBy: [{ position: "asc" }, { addedAt: "asc" }],
+        take: titles,
+        select: { media: { select: CARD } },
+      },
+    },
+  });
+  return rows.map(({ items, ...row }) => ({ ...row, media: items.map((item) => toMedia(item.media)) }));
+}
+
+/** /collections: every collection showing today with a published title, in the admins' order. */
+export async function listCollections(): Promise<CollectionCard[]> {
+  await connection();
+  return collectionCards(showingCollections(), { titles: 4 });
+}
+
+/** The home page's collection rows: those marked for it, showing today. */
+export async function listHomeCollections(): Promise<CollectionCard[]> {
+  await connection();
+  return collectionCards({ ...showingCollections(), onHome: true }, { take: HOME_COLLECTIONS, titles: ROW_SIZE });
+}
+
+/** /collections/[id]: a collection showing today, with its published titles, or null. */
+export async function getCollection(id: string): Promise<CollectionCard | null> {
+  await connection();
+  if (!isMediaId(id)) return null;
+  const [collection] = await collectionCards({ ...showingCollections(), id });
+  return collection ?? null;
+}
+
+/** Every showing collection's address, for the sitemap. */
+export async function listCollectionIds(): Promise<string[]> {
+  await connection();
+  return (await listCollections()).map((collection) => collection.id);
+}
+
+/** Admin: every collection, with how many titles it holds. */
+export async function listCollectionsForAdmin() {
+  await connection();
+  await requireAdmin();
+  return db.collection.findMany({
+    orderBy: [{ position: "asc" }, { title: "asc" }],
+    include: { _count: { select: { items: true } } },
+  });
+}
+
+/** Admin: one collection with all its titles (drafts and trashed ones too), in order. */
+export async function getCollectionForEdit(id: string) {
+  await connection();
+  await requireAdmin();
+  if (!isMediaId(id)) return null;
+  return db.collection.findUnique({
+    where: { id },
+    include: {
+      items: {
+        orderBy: [{ position: "asc" }, { addedAt: "asc" }],
+        select: {
+          mediaId: true,
+          media: { select: { id: true, title: true, year: true, type: true, status: true, trashedAt: true } },
+        },
+      },
+    },
+  });
+}
+
+/** Admin: titles (not in the trash) whose name has `query`, to add to a collection. */
+export async function searchTitlesForCollection(query: string) {
+  await connection();
+  await requireAdmin();
+  const text = query.trim().slice(0, 100);
+  if (!text) return [];
+  return db.media.findMany({
+    where: { trashedAt: null, title: { contains: text, mode: "insensitive" } },
+    orderBy: [{ title: "asc" }, { year: "desc" }],
+    take: 20,
+    select: { id: true, title: true, year: true, type: true, status: true },
+  });
+}
+
 // --- Reports -----------------------------------------------------------------
 
 /**

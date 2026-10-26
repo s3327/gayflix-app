@@ -10,6 +10,7 @@ import {
   Activity,
   Clock,
   MessageSquare,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
@@ -34,6 +35,7 @@ export type NavEntry = NavLink | NavGroup;
 export const adminNav: NavEntry[] = [
   { type: "link", label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { type: "link", label: "Import", href: "/admin/import", icon: Import },
+  { type: "link", label: "Collections", href: "/admin/collections", icon: Sparkles },
   {
     type: "group",
     label: "Library",
