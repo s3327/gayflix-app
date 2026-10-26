@@ -122,7 +122,9 @@ export default function PrivacyPage() {
           nickname, reviews, favorites, Watchlist, lists, ratings and history straight away.
         </p>
         <p>
-          You can also ask us for a copy of what we hold about you, or to correct or delete it, at{" "}
+          Download everything we keep about your account as one file with &ldquo;Download My
+          Data&rdquo; in Account, then Setting. You can also ask us for a copy, or to correct or
+          delete anything, at{" "}
           <ContactEmail />. We answer within 30 days.
         </p>
       </LegalSection>
