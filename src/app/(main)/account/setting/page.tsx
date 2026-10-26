@@ -26,8 +26,9 @@ const SECONDARY_BUTTON =
 /**
  * Where the account is signed in, with a way to sign out of the other
  * devices, optional two-factor sign-in, which emails to get, the public
- * nickname, and deleting the account. Device names come from each
- * session's browser (src/lib/device-name.ts); addresses aren't shown.
+ * nickname, downloading the account's data, and deleting the account.
+ * Device names come from each session's browser (src/lib/device-name.ts);
+ * addresses aren't shown.
  * "Last active" moves at most once a day, when the session is renewed.
  */
 export default async function AccountSettingPage() {
@@ -164,6 +165,22 @@ export default async function AccountSettingPage() {
           Shown on your reviews and Community lists instead of your name, which stays private.
         </p>
         <NicknameSetting initial={nickname} />
+      </section>
+
+      <section aria-labelledby="data-heading" className="mt-10 border-t border-border-subtle pt-8">
+        <h2
+          id="data-heading"
+          className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
+        >
+          Your data
+        </h2>
+        <p className="mt-1 text-sm text-ink-muted">
+          Everything we keep about your account, as one file: your profile, nickname, favorites,
+          Watchlist, lists, history, ratings, reviews and signed-in devices.
+        </p>
+        <a href="/api/account/export" download className={`mt-4 inline-block ${SECONDARY_BUTTON}`}>
+          Download My Data
+        </a>
       </section>
 
       <section aria-labelledby="delete-heading" className="mt-10 border-t border-border-subtle pt-8">
