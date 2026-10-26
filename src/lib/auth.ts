@@ -7,7 +7,7 @@ import { adminAc, userAc } from "better-auth/plugins/admin/access";
 import { after } from "next/server";
 import { accountDeletionProblem } from "@/lib/account-deletion";
 import { adminAccess } from "@/lib/admin-access";
-import { canManageUsers, roleChangeProblem, staffTargetProblem } from "@/lib/admin-roles";
+import { canManageUsers, isStaffRole, roleChangeProblem, staffTargetProblem } from "@/lib/admin-roles";
 import { db } from "@/lib/db";
 import { sendEmail, type Email } from "@/lib/email";
 import { codeEmail, emailChangedEmail, existingAccountEmail, resetPasswordEmail } from "@/lib/email-templates";
@@ -176,6 +176,15 @@ export const auth = betterAuth({
         }
         if (!(await ctx.context.password.verify({ hash: credential.password, password }))) {
           throw new APIError("BAD_REQUEST", { message: "That password isn't right." });
+        }
+        return;
+      }
+      // Two-factor is optional for members, but the admin panel needs it,
+      // so staff accounts can't turn it off.
+      if (ctx.path === "/two-factor/disable") {
+        const session = await getSessionFromCtx(ctx);
+        if (session && isStaffRole(session.user.role)) {
+          throw new APIError("FORBIDDEN", { message: "Staff accounts keep two-factor on." });
         }
         return;
       }
