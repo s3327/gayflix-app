@@ -24,7 +24,9 @@ const ICON_BUTTON =
  * episode (/watch/[id] sends it on).
  *
  * The parent card is `relative group`, with its poster at the top; this
- * sits over the poster and grows with it on hover. It needs the library
+ * sits over the poster and grows with it on hover. On a narrow card (a
+ * small window) only Play and Favorite fit, and on a very narrow one
+ * none do: they're hidden by the card's width, never spilling past it. It needs the library
  * providers, so pages outside the (main) layout leave it out.
  */
 export default function CardQuickActions({ media }: { media: Media }) {
@@ -56,9 +58,9 @@ export default function CardQuickActions({ media }: { media: Media }) {
     <>
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 z-20 hidden aspect-2/3 opacity-0 transition duration-200 ease-out group-hover:scale-105 group-hover:opacity-100 [@media(hover:hover)]:block"
+        className="@container pointer-events-none absolute inset-x-0 top-0 z-20 hidden aspect-2/3 overflow-hidden opacity-0 transition duration-200 ease-out group-hover:scale-105 group-hover:opacity-100 [@media(hover:hover)]:block"
       >
-        <div className="pointer-events-auto absolute inset-x-2 bottom-2 flex items-center gap-1.5">
+        <div className="pointer-events-auto absolute inset-x-2 bottom-2 flex items-center gap-1.5 @max-[7rem]:hidden">
           <Link
             href={`/watch/${media.id}`}
             tabIndex={-1}
@@ -86,7 +88,7 @@ export default function CardQuickActions({ media }: { media: Media }) {
             aria-label={`Watch ${media.title} later`}
             aria-pressed={onWatchlist}
             title={onWatchlist ? "On Watchlist" : "Watch Later"}
-            className={`${ICON_BUTTON} ${onWatchlist ? "text-ink-brand" : "text-ink-primary"}`}
+            className={`${ICON_BUTTON} ${onWatchlist ? "text-ink-brand" : "text-ink-primary"} @max-[10rem]:hidden`}
           >
             <WatchlistIcon className="h-4 w-4" aria-hidden />
           </button>
@@ -97,7 +99,7 @@ export default function CardQuickActions({ media }: { media: Media }) {
             aria-label={`Add ${media.title} to a list`}
             aria-haspopup="dialog"
             title={inAList ? "In a list" : "Add to List"}
-            className={`${ICON_BUTTON} text-ink-primary`}
+            className={`${ICON_BUTTON} text-ink-primary @max-[10rem]:hidden`}
           >
             <ListIcon className="h-4 w-4" aria-hidden />
           </button>
