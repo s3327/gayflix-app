@@ -32,6 +32,7 @@ model User {
   accounts         Account[]
   favorites        Favorite[]
   watchlist        WatchlistItem[]
+  ratings          MediaRating[]
   watchHistory     WatchHistory[]
   lists            MediaList[]
   reports          Report[]
@@ -190,6 +191,7 @@ model Media {
   episodes       Episode[]
   episodeRedirects EpisodeRedirect[]
   views          MediaView[]
+  memberRatings  MediaRating[]
   /// Movies only: a series' video is on its episodes.
   videoSources   VideoSource[]
   subtitles      Subtitle[]
@@ -345,6 +347,32 @@ model WatchlistItem {
 
   @@id([userId, mediaId])
   @@map("watchlist_item")
+}
+
+enum RatingValue {
+  not_for_me
+  like
+  love
+
+  @@map("rating_value")
+}
+
+/// A member's rating of a movie or a series (a series is rated as a
+/// whole, also from its episodes' pages): Not for me, Like or Love it.
+/// Unlike the snapshots above, it points at the title, so the title page
+/// can count them for its "Most liked" badge; it goes with the title.
+/// Because You Watched also reads them (src/lib/catalog.ts).
+model MediaRating {
+  userId  String
+  mediaId String
+  value   RatingValue
+  ratedAt DateTime    @default(now())
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media   Media       @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@id([userId, mediaId])
+  @@index([mediaId, value])
+  @@map("media_rating")
 }
 
 model WatchHistory {

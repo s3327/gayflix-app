@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Play, Star } from "lucide-react";
+import { Play, Star, ThumbsUp } from "lucide-react";
 import type { Media, MediaDetail } from "@/lib/media";
 import ReadMoreText from "@/components/ReadMoreText";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
@@ -11,6 +11,7 @@ import TagList from "@/components/TagList";
 import ShareButton from "@/components/ShareButton";
 import AddToListButton from "@/components/AddToListButton";
 import FavoriteButton from "@/components/FavoriteButton";
+import RatingButtons from "@/components/RatingButtons";
 import WatchlistButton from "@/components/WatchlistButton";
 import TrailerButton from "@/components/TrailerButton";
 import { countryHref, genreHref, languageHref, personHref } from "@/lib/browse-href";
@@ -29,9 +30,10 @@ const ICON_ACTION_BUTTON = `${ACTION_BASE} w-12`;
  * A title's own page, /movie/[id] or /series/[id].
  *
  * The header comes first at every size: the backdrop, with the title, its
- * facts (year, maturity rating, length, genres, rating), the tagline and
- * the actions (Play, Trailer, Watch Later, Add to List, Favorite, Share)
- * over its lower edge, so Play is on the first screen of a phone. Wider screens
+ * facts (year, maturity rating, length, genres, rating, "Most liked"), the
+ * tagline, the actions (Play, Trailer, Watch Later, Add to List, Favorite,
+ * Share) and the member's rating (Not for me, Like, Love it) over its
+ * lower edge, so Play is on the first screen of a phone. Wider screens
  * also show the poster beside them. A title with no backdrop gets its
  * poster, blurred, behind the header instead (and a phone shows the
  * poster itself in it).
@@ -137,6 +139,12 @@ export default function TitleDetail({
                   <span className="font-normal text-ink-muted">/5</span>
                 </span>
               )}
+              {title.mostLiked && (
+                <span className="flex items-center gap-1 rounded-full bg-brand-pink/15 px-2 py-0.5 text-xs font-semibold text-ink-brand">
+                  <ThumbsUp className="h-3.5 w-3.5" aria-hidden />
+                  Most liked
+                </span>
+              )}
             </p>
 
             {title.tagline && (
@@ -167,6 +175,7 @@ export default function TitleDetail({
               <FavoriteButton media={entry} />
               <ShareButton title={title.title} className={ICON_ACTION_BUTTON} iconOnly />
             </div>
+            <RatingButtons mediaId={title.id} title={title.title} className="mt-4" />
           </div>
         </div>
       </section>

@@ -7,7 +7,8 @@ export const metadata: Metadata = { title: `Privacy Policy · ${SITE_NAME}` };
 
 /**
  * What the site keeps, written from the code: accounts (src/lib/auth.ts),
- * favorites, lists and history (src/lib/library-actions.ts), views
+ * favorites, Watchlist, lists and history (src/lib/library-actions.ts),
+ * ratings (src/lib/rating-actions.ts), views
  * (src/lib/view-actions.ts), reports (src/lib/report-actions.ts) and
  * crash reports (src/lib/error-reporting.ts). Change this page when any
  * of those change. Names and contact come from src/lib/legal.ts.
@@ -51,8 +52,11 @@ export default function PrivacyPage() {
             devices apart in Setting, but never your IP address.
           </li>
           <li>
-            <strong className="font-semibold text-ink-primary">Favorites, lists and history</strong>{" "}
-            (your last 200 titles), so they follow you to every device.
+            <strong className="font-semibold text-ink-primary">
+              Favorites, Watchlist, lists, ratings and history
+            </strong>{" "}
+            (your last 200 titles), so they follow you to every device. Ratings also shape what we
+            suggest to you.
           </li>
           <li>
             <strong className="font-semibold text-ink-primary">Two-step sign-in</strong>, if you turn
@@ -64,7 +68,9 @@ export default function PrivacyPage() {
       <LegalSection title="Who can see it">
         <p>
           Only you, except a list you choose to share: anyone with its link sees its name and
-          titles, never your name or email. Lists are private until you share them.
+          titles, never your name or email. Lists are private until you share them. Your ratings
+          are counted with everyone else&apos;s to mark a title &quot;Most liked&quot;; nobody sees
+          who rated what.
         </p>
         <p>
           The people who run Gayflix can see accounts to keep the site safe, for example to stop
@@ -102,7 +108,7 @@ export default function PrivacyPage() {
         <p>
           You can change your name, email and password in Account, sign other devices out and
           delete your account in Account, then Setting. Deleting your account erases it with your
-          favorites, lists and history straight away.
+          favorites, Watchlist, lists, ratings and history straight away.
         </p>
         <p>
           You can also ask us for a copy of what we hold about you, or to correct or delete it, at{" "}

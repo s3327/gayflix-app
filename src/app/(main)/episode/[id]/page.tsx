@@ -220,7 +220,7 @@ export default async function EpisodePage({
 
           <TagList tags={series.tags} className="mt-3" />
 
-          {/* Favorites and lists hold the series, not one episode. */}
+          {/* Favorites, lists and ratings hold the series, not one episode. */}
           <TitleActions
             className="mt-4"
             media={{

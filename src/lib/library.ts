@@ -12,7 +12,7 @@ export const HISTORY_LIMIT = 200;
  * providers hold it. Server code only.
  */
 export async function loadLibrary(userId: string): Promise<Library> {
-  const [favorites, watchlist, history, lists] = await Promise.all([
+  const [favorites, watchlist, history, lists, ratings] = await Promise.all([
     db.favorite.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
     db.watchlistItem.findMany({ where: { userId }, orderBy: { addedAt: "asc" } }),
     db.watchHistory.findMany({
@@ -25,6 +25,7 @@ export async function loadLibrary(userId: string): Promise<Library> {
       orderBy: { createdAt: "asc" },
       include: { items: { orderBy: { addedAt: "asc" } } },
     }),
+    db.mediaRating.findMany({ where: { userId }, select: { mediaId: true, value: true } }),
   ]);
 
   // Titles taken off the site since they were saved stay saved, but out
@@ -34,6 +35,7 @@ export async function loadLibrary(userId: string): Promise<Library> {
     ...watchlist.map((row) => row.mediaId),
     ...history.map((row) => row.mediaId),
     ...lists.flatMap((list) => list.items.map((item) => item.mediaId)),
+    ...ratings.map((row) => row.mediaId),
   ]);
   const shown = <T extends { mediaId: string }>(rows: T[]) =>
     rows.filter((row) => published.has(row.mediaId));
@@ -54,6 +56,7 @@ export async function loadLibrary(userId: string): Promise<Library> {
     lists: Object.fromEntries(
       lists.map((list) => [list.id, toMediaList({ ...list, items: shown(list.items) })])
     ),
+    ratings: Object.fromEntries(shown(ratings).map((row) => [row.mediaId, row.value])),
   };
 }
 
