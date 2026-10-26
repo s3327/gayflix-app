@@ -39,6 +39,7 @@ model User {
   profile          MemberProfile?
   reviews          Review[]
   contentReports   ContentReport[]
+  signInDevices    SignInDevice[]
   twoFactorEnabled Boolean?       @default(false)
   twoFactors       TwoFactor[]
 
@@ -561,6 +562,20 @@ model Report {
   @@index([ipHash, createdAt])
   @@index([resolvedAt, createdAt])
   @@map("report")
+}
+
+/// A device an account has signed in from, by name only ("Chrome on
+/// Windows", src/lib/device-name.ts; never an address). A sign-in from a
+/// name the account hasn't used before emails it (src/lib/sign-in-alerts.ts).
+model SignInDevice {
+  userId      String
+  device      String
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, device])
+  @@map("sign_in_device")
 }
 
 model TwoFactor {
