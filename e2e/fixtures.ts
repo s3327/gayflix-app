@@ -61,12 +61,18 @@ export async function signedInPage(browser: Browser, account: Account) {
   return page;
 }
 
-/** axe's serious and critical WCAG 2.1 AA violations on the page, one line each. */
+/** axe's serious and critical WCAG 2.1 AA violations on the page, one line each, naming up to three elements. */
 export async function seriousViolations(page: Page) {
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();
   return results.violations
     .filter((v) => v.impact === "serious" || v.impact === "critical")
-    .map((v) => `${v.id} (${v.impact}): ${v.nodes.length} node(s) — ${v.help}`);
+    .map(
+      (v) =>
+        `${v.id} (${v.impact}): ${v.nodes.length} node(s) — ${v.help} — ${v.nodes
+          .slice(0, 3)
+          .map((node) => node.target.join(" "))
+          .join(", ")}`
+    );
 }

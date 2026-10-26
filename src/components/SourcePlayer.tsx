@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type Hls from "hls.js";
+import { Cast } from "lucide-react";
 import { subtitleUrl, type SubtitleTrack } from "@/lib/subtitles";
 import type { VideoSourceEntry } from "@/lib/video-source";
 
@@ -31,6 +32,12 @@ const HLS_TYPE = "application/vnd.apple.mpegurl";
  * the video player's captions menu, and the language last chosen there
  * (or Off) is chosen again next time, in any title. An embed does none
  * of these.
+ *
+ * A file or a stream can also play on a TV (A17): Cast, over the video,
+ * shows when the browser finds somewhere to send it (Chromecast in
+ * Chrome, AirPlay in Safari), through the browser's own casting. Safari
+ * plays streams itself, not through hls.js, since AirPlay can't send
+ * what hls.js plays. An embed's casting is up to its provider's player.
  */
 export default function SourcePlayer({
   source,
@@ -109,6 +116,74 @@ function saveSubtitleChoice(choice: string) {
   }
 }
 
+/** Safari's AirPlay, which Remote Playback doesn't cover in older versions. */
+type AirPlayVideo = HTMLVideoElement & { webkitShowPlaybackTargetPicker?: () => void };
+
+/** Whether this is Safari with AirPlay, which plays streams itself. */
+function hasAirPlay(): boolean {
+  return typeof window !== "undefined" && "WebKitPlaybackTargetAvailabilityEvent" in window;
+}
+
+/**
+ * Cast, over the video: shown only while the browser knows a TV to send
+ * it to (Remote Playback; AirPlay's own picker in older Safari).
+ */
+function CastButton({ videoRef, sourceUrl }: { videoRef: React.RefObject<HTMLVideoElement | null>; sourceUrl: string }) {
+  const [available, setAvailable] = useState(false);
+
+  useEffect(() => {
+    const video = videoRef.current as AirPlayVideo | null;
+    if (!video) return;
+    if (video.remote && !video.disableRemotePlayback) {
+      let watchId: number | undefined;
+      let cancelled = false;
+      video.remote
+        .watchAvailability((isAvailable) => setAvailable(isAvailable))
+        .then((id) => {
+          if (cancelled) video.remote.cancelWatchAvailability(id).catch(() => {});
+          else watchId = id;
+        })
+        // Some browsers can't watch for devices; the button stays hidden there.
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+        if (watchId !== undefined) video.remote.cancelWatchAvailability(watchId).catch(() => {});
+      };
+    }
+    if (hasAirPlay() && video.webkitShowPlaybackTargetPicker) {
+      const onChange = (event: Event) =>
+        setAvailable((event as Event & { availability?: string }).availability === "available");
+      video.addEventListener("webkitplaybacktargetavailabilitychanged", onChange);
+      return () => video.removeEventListener("webkitplaybacktargetavailabilitychanged", onChange);
+    }
+  }, [videoRef, sourceUrl]);
+
+  if (!available) return null;
+
+  function cast() {
+    const video = videoRef.current as AirPlayVideo | null;
+    if (!video) return;
+    if (video.remote && !video.disableRemotePlayback) {
+      // Closing the device list without picking one rejects; that's fine.
+      video.remote.prompt().catch(() => {});
+    } else {
+      video.webkitShowPlaybackTargetPicker?.();
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={cast}
+      aria-label="Cast to a TV"
+      title="Cast to a TV (Chromecast or AirPlay)"
+      className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-bg-base/70 text-ink-primary backdrop-blur-sm transition-colors hover:bg-brand-pink hover:text-ink-onBrand"
+    >
+      <Cast className="h-5 w-5" aria-hidden />
+    </button>
+  );
+}
+
 /** How often a playing video reports how far it got, in seconds of video. */
 const PROGRESS_EVERY_SECONDS = 15;
 
@@ -185,6 +260,11 @@ function VideoPlayer({
   useEffect(() => {
     const video = videoRef.current;
     if (source.kind !== "hls" || !video) return;
+    // Safari with AirPlay plays the stream itself, so AirPlay can send it.
+    if (hasAirPlay() && video.canPlayType(HLS_TYPE)) {
+      video.src = source.url;
+      return;
+    }
     let cancelled = false;
     import("hls.js").then(
       ({ default: Hls }) => {
@@ -224,53 +304,57 @@ function VideoPlayer({
   }, [source.kind, source.url]);
 
   return (
-    <video
-      ref={videoRef}
-      src={source.kind === "file" ? source.url : undefined}
-      aria-label={title}
-      controls
-      autoPlay
-      playsInline
-      onLoadedMetadata={(event) => {
-        // Once: hls.js can load the stream again to get past an error.
-        const video = event.currentTarget;
-        if (resumedRef.current) return;
-        resumedRef.current = true;
-        if (startAt > 0 && startAt < video.duration) video.currentTime = startAt;
-      }}
-      onPlaying={() => {
-        // Nothing is saved before it plays, so a server that fails saves nothing.
-        const video = videoRef.current;
-        if (video) latestRef.current = { position: video.currentTime, duration: video.duration };
-        reportedAtRef.current = video?.currentTime ?? 0;
-        onStart();
-      }}
-      onTimeUpdate={(event) => {
-        if (!latestRef.current) return;
-        const video = event.currentTarget;
-        latestRef.current = { position: video.currentTime, duration: video.duration };
-        // Either way, so a jump back or ahead is saved too.
-        if (Math.abs(video.currentTime - reportedAtRef.current) >= PROGRESS_EVERY_SECONDS) report();
-      }}
-      onPause={report}
-      onEnded={() => {
-        report();
-        onEnded?.();
-      }}
-      onError={() => {
-        if (!hlsRef.current) onFail();
-      }}
-      className="absolute inset-0 h-full w-full bg-black focus-visible:-outline-offset-4"
-    >
-      {subtitles.map((track) => (
-        <track
-          key={track.id}
-          kind="subtitles"
-          src={subtitleUrl(track.id)}
-          srcLang={track.language}
-          label={track.label}
-        />
-      ))}
-    </video>
+    <>
+      <video
+        ref={videoRef}
+        src={source.kind === "file" ? source.url : undefined}
+        aria-label={title}
+        x-webkit-airplay="allow"
+        controls
+        autoPlay
+        playsInline
+        onLoadedMetadata={(event) => {
+          // Once: hls.js can load the stream again to get past an error.
+          const video = event.currentTarget;
+          if (resumedRef.current) return;
+          resumedRef.current = true;
+          if (startAt > 0 && startAt < video.duration) video.currentTime = startAt;
+        }}
+        onPlaying={() => {
+          // Nothing is saved before it plays, so a server that fails saves nothing.
+          const video = videoRef.current;
+          if (video) latestRef.current = { position: video.currentTime, duration: video.duration };
+          reportedAtRef.current = video?.currentTime ?? 0;
+          onStart();
+        }}
+        onTimeUpdate={(event) => {
+          if (!latestRef.current) return;
+          const video = event.currentTarget;
+          latestRef.current = { position: video.currentTime, duration: video.duration };
+          // Either way, so a jump back or ahead is saved too.
+          if (Math.abs(video.currentTime - reportedAtRef.current) >= PROGRESS_EVERY_SECONDS) report();
+        }}
+        onPause={report}
+        onEnded={() => {
+          report();
+          onEnded?.();
+        }}
+        onError={() => {
+          if (!hlsRef.current) onFail();
+        }}
+        className="absolute inset-0 h-full w-full bg-black focus-visible:-outline-offset-4"
+      >
+        {subtitles.map((track) => (
+          <track
+            key={track.id}
+            kind="subtitles"
+            src={subtitleUrl(track.id)}
+            srcLang={track.language}
+            label={track.label}
+          />
+        ))}
+      </video>
+      <CastButton videoRef={videoRef} sourceUrl={source.url} />
+    </>
   );
 }
