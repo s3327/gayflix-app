@@ -1,5 +1,5 @@
 import { ADMIN_STATE, sql } from "./accounts";
-import { ADMIN_CREDENTIALS, expect, seriousViolations, test } from "./fixtures";
+import { ADMIN_CREDENTIALS, expect, guestPage, seriousViolations, test } from "./fixtures";
 
 /*
  * Episode details: an admin writes an episode's synopsis on its edit
@@ -52,7 +52,8 @@ test.describe("episode details", () => {
       ).toBe("Moving day goes wrong.");
 
       // The series page: each row has a still and, when there's one, a synopsis.
-      const guest = await browser.newPage();
+      // A browser of its own, which the accessibility check needs.
+      const guest = await guestPage(browser);
       await guest.goto(`/series/${series.id}`);
       const rows = guest.getByRole("tabpanel").getByRole("link");
       await expect(rows).toHaveCount(2);
