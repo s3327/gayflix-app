@@ -7,7 +7,7 @@ export type LogActivityParams = {
   actorEmail: string;
   actorRole?: string | null;
   action: string;
-  entityType: "media" | "episode" | "user" | "report" | "setting" | "job" | "review" | "list";
+  entityType: "media" | "episode" | "user" | "report" | "setting" | "job" | "review" | "list" | "collection";
   entityId?: string | null;
   summary: string;
   details?: Record<string, unknown> | null;

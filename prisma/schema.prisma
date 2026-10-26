@@ -196,6 +196,7 @@ model Media {
   views          MediaView[]
   memberRatings  MediaRating[]
   reviews        Review[]
+  collectionItems CollectionItem[]
   /// Movies only: a series' video is on its episodes.
   videoSources   VideoSource[]
   subtitles      Subtitle[]
@@ -228,6 +229,45 @@ model Episode {
 
   @@unique([mediaId, seasonNumber, episodeNumber])
   @@map("episode")
+}
+
+/// A curated collection (A11), such as Pride Month, queer classics or
+/// staff picks, at /collections/[id]. Changed only through
+/// src/lib/admin-collection-actions.ts; read through src/lib/catalog.ts.
+model Collection {
+  /// The slug in /collections/[id].
+  id          String           @id
+  title       String
+  description String           @default("")
+  /// Shown on the public site (between `startsAt` and `endsAt`, if set).
+  published   Boolean          @default(false)
+  /// Also a row on the home page, in `position` order.
+  onHome      Boolean          @default(false)
+  position    Int              @default(0)
+  /// The first and last day it's shown (UTC), for seasonal collections.
+  startsAt    DateTime?        @db.Date
+  endsAt      DateTime?        @db.Date
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  items       CollectionItem[]
+
+  @@index([published, position])
+  @@map("collection")
+}
+
+/// A title in a collection, in `position` order. Only published titles show.
+model CollectionItem {
+  collectionId String
+  mediaId      String
+  position     Int
+  addedAt      DateTime   @default(now())
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  media        Media      @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, mediaId])
+  @@index([collectionId, position])
+  @@index([mediaId])
+  @@map("collection_item")
 }
 
 model EpisodeRedirect {

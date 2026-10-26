@@ -44,6 +44,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   member per movie or series) change only through
   `src/lib/rating-actions.ts`; the rules for "Most liked" are in
   `src/lib/ratings.ts`.
+  Curated collections (`collection`, `collection_item`: Pride Month,
+  staff picks) change only through `src/lib/admin-collection-actions.ts`
+  (/admin/collections), whose field checks are in
+  `src/lib/collection-form.ts`; the public site reads only published
+  ones within their dates, and only their published titles.
   Video sources (`video_source`, a movie's or an episode's server tabs)
   change only through `src/lib/admin-video-actions.ts`, with links on
   `VIDEO_HOSTS` only (`src/lib/video-hosts.ts`, which also feeds the

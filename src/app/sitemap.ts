@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { countryHref, genreHref, languageHref, personHref } from "@/lib/browse-href";
 import {
+  listCollectionIds,
   listFilterValues,
   listPublishedEpisodes,
   listPublishedPeople,
@@ -19,6 +20,7 @@ const STATIC_PATHS = [
   "/new-popular",
   "/trending",
   "/new-releases",
+  "/collections",
   "/lists",
   "/browse",
   "/about",
@@ -31,24 +33,27 @@ const STATIC_PATHS = [
 /**
  * Lists every public page, every published title and its episodes
  * (drafts never appear), Browse for each genre, country and language a
- * published title has, and a page for everyone named on one. Built per request from the catalog,
+ * published title has, a page for everyone named on one, and every
+ * collection showing now. Built per request from the catalog,
  * so it's never stale.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
-  const [titles, episodes, genres, countries, languages, people] = await Promise.all([
+  const [titles, episodes, genres, countries, languages, people, collections] = await Promise.all([
     listPublishedTitles(),
     listPublishedEpisodes(),
     listFilterValues("genre"),
     listFilterValues("country"),
     listFilterValues("language"),
     listPublishedPeople(),
+    listCollectionIds(),
   ]);
   const facetPaths = [
     ...genres.map(genreHref),
     ...countries.map(countryHref),
     ...languages.map(languageHref),
     ...people.map(personHref),
+    ...collections.map((id) => `/collections/${id}`),
   ];
 
   return [
