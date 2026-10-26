@@ -22,7 +22,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   `migrate`; run `npx prisma generate` after schema changes.
 - **Accounts:** Better Auth (`src/lib/auth.ts`). Server code reads the
   session with `getSession()` / `requireUser()`; never trust client state
-  for access decisions.
+  for access decisions. Two-factor sign-in is optional for members (Account
+  → Setting) and required for staff, who can't turn it off.
 - **Server functions** (`"use server"` files such as
   `src/lib/library-actions.ts` and `src/lib/report-actions.ts`) check the
   session and validate every argument themselves; list functions also

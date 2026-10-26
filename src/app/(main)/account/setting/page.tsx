@@ -2,8 +2,10 @@ import { headers } from "next/headers";
 import { Monitor, Smartphone } from "lucide-react";
 import DeleteAccount from "@/components/DeleteAccount";
 import NicknameSetting from "@/components/NicknameSetting";
+import TwoFactorSetting from "@/components/TwoFactorSetting";
 import { signOutDevice, signOutOtherDevices } from "@/lib/account-actions";
 import { accountDeletionProblem } from "@/lib/account-deletion";
+import { isStaffRole } from "@/lib/admin-roles";
 import { auth } from "@/lib/auth";
 import { getMyNickname } from "@/lib/community";
 import { deviceName, isMobileDevice } from "@/lib/device-name";
@@ -21,7 +23,8 @@ const SECONDARY_BUTTON =
 
 /**
  * Where the account is signed in, with a way to sign out of the other
- * devices, the public nickname, and deleting the account. Device names come from each
+ * devices, optional two-factor sign-in, the public nickname, and deleting
+ * the account. Device names come from each
  * session's browser (src/lib/device-name.ts); addresses aren't shown.
  * "Last active" moves at most once a day, when the session is renewed.
  */
@@ -121,6 +124,20 @@ export default async function AccountSettingPage() {
             </button>
           </form>
         )}
+      </section>
+
+      <section aria-labelledby="two-factor-heading" className="mt-10 border-t border-border-subtle pt-8">
+        <h2
+          id="two-factor-heading"
+          className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
+        >
+          Two-factor sign-in
+        </h2>
+        <TwoFactorSetting
+          enabled={Boolean(session.user.twoFactorEnabled)}
+          hasPassword={hasPassword}
+          isStaff={isStaffRole(session.user.role)}
+        />
       </section>
 
       <section aria-labelledby="nickname-heading" className="mt-10 border-t border-border-subtle pt-8">
