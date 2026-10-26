@@ -22,7 +22,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   `migrate`; run `npx prisma generate` after schema changes.
 - **Accounts:** Better Auth (`src/lib/auth.ts`). Server code reads the
   session with `getSession()` / `requireUser()`; never trust client state
-  for access decisions. Two-factor sign-in is optional for members (Account
+  for access decisions.
+  Emails beyond the account's own (codes, resets, notices) are optional:
+  new-episode emails (`src/lib/new-episode-emails.ts`) skip members who
+  turned them off (`notification_setting`, changed only through
+  `src/lib/notification-actions.ts`), and carry a signed unsubscribe
+  link (`src/lib/unsubscribe.ts`). Two-factor sign-in is optional for members (Account
   → Setting) and required for staff, who can't turn it off.
 - **Server functions** (`"use server"` files such as
   `src/lib/library-actions.ts` and `src/lib/report-actions.ts`) check the

@@ -3,8 +3,9 @@ import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import { canManageJobs } from "@/lib/admin-roles";
 import { logActivity } from "@/lib/activity-logger";
+import { sendNewEpisodeEmails } from "@/lib/new-episode-emails";
 
-export type JobName = "purge_trash" | "publish_due" | "clean_orphans";
+export type JobName = "purge_trash" | "publish_due" | "new_episode_emails" | "clean_orphans";
 
 export const AVAILABLE_JOBS: {
   name: JobName;
@@ -23,6 +24,13 @@ export const AVAILABLE_JOBS: {
     label: "Publish Due Scheduled Drafts",
     description: "Publishes draft titles whose Publish at time has come.",
     schedule: "Daily at 03:15 UTC",
+  },
+  {
+    name: "new_episode_emails",
+    label: "New Episode Emails",
+    description:
+      "Emails members whose Favorites include a series that got episodes since the last run (one email each). The first run only starts the count.",
+    schedule: "Daily at 03:15 UTC, after publishing",
   },
   {
     name: "clean_orphans",
@@ -177,6 +185,46 @@ export async function runPublishDueJob(triggeredBy = "scheduler") {
   }
 }
 
+/**
+ * New-episode emails (src/lib/new-episode-emails.ts) for the episodes
+ * added since the last successful run. With no run before, it only marks
+ * where to start, so nobody gets a backlog of old episodes.
+ */
+export async function runNewEpisodeEmailsJob(triggeredBy = "scheduler") {
+  const startTime = Date.now();
+  const startedAt = new Date();
+  const record = (status: string, itemsCount: number, details: string) =>
+    db.scheduledJobRun.create({
+      data: {
+        jobName: "new_episode_emails",
+        status,
+        itemsCount,
+        details,
+        durationMs: Date.now() - startTime,
+        triggeredBy,
+        startedAt,
+        finishedAt: new Date(),
+      },
+    });
+  try {
+    const last = await db.scheduledJobRun.findFirst({
+      where: { jobName: "new_episode_emails", status: "success" },
+      orderBy: { startedAt: "desc" },
+      select: { startedAt: true },
+    });
+    if (!last) return await record("success", 0, "First run: new episodes from now on will be emailed.");
+    const { emails, episodes } = await sendNewEpisodeEmails(last.startedAt, startedAt);
+    return await record(
+      "success",
+      emails,
+      episodes === 0 ? "No new episodes." : `Emailed ${emails} members about ${episodes} new episodes.`
+    );
+  } catch (err: unknown) {
+    await record("error", 0, `Failed: ${err instanceof Error ? err.message : String(err)}`);
+    throw err;
+  }
+}
+
 /** Scans unreferenced uploads (preview/skipped). */
 export async function runOrphanImageCleanupJob(triggeredBy = "scheduler") {
   const startTime = Date.now();
@@ -206,6 +254,8 @@ export async function triggerJob(jobName: string): Promise<{ ok: boolean; messag
     result = await runTrashPurgeJob(session.user.email);
   } else if (jobName === "publish_due") {
     result = await runPublishDueJob(session.user.email);
+  } else if (jobName === "new_episode_emails") {
+    result = await runNewEpisodeEmailsJob(session.user.email);
   } else if (jobName === "clean_orphans") {
     result = await runOrphanImageCleanupJob(session.user.email);
   } else {

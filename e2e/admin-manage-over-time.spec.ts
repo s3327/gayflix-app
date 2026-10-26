@@ -220,7 +220,7 @@ test.describe("Phase 4: Manage Over Time", () => {
       await expect(page.getByRole("heading", { name: movie.title })).toBeVisible();
 
       // 3. Save an edit to create a snapshot
-      await page.getByLabel("Title").fill(`E2E Modified Title ${uid}`);
+      await page.getByLabel("Title", { exact: true }).fill(`E2E Modified Title ${uid}`);
       await page.getByRole("button", { name: "Save" }).click();
       await expect(page.getByRole("status")).toHaveText("Saved.");
 

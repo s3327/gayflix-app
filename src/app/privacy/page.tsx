@@ -40,7 +40,8 @@ export default function PrivacyPage() {
         <ul className="list-disc pl-5">
           <li>
             <strong className="font-semibold text-ink-primary">Your name and email</strong>, to sign
-            you in and to send codes and account notices.
+            you in and to send codes and account notices, and, unless you turn them off in Setting or
+            from the email, to tell you when series in your Favorites get new episodes.
           </li>
           <li>
             <strong className="font-semibold text-ink-primary">Your password</strong>, stored only
@@ -50,7 +51,9 @@ export default function PrivacyPage() {
           <li>
             <strong className="font-semibold text-ink-primary">Sign-in sessions</strong>: one per
             device, kept for up to 30 days. Each keeps the browser&apos;s name so you can tell your
-            devices apart in Setting, but never your IP address.
+            devices apart in Setting, but never your IP address. We also remember the names of the
+            devices you&apos;ve signed in from (like &ldquo;Chrome on Windows&rdquo;), so we can email
+            you when a new one signs in.
           </li>
           <li>
             <strong className="font-semibold text-ink-primary">
@@ -122,7 +125,9 @@ export default function PrivacyPage() {
           nickname, reviews, favorites, Watchlist, lists, ratings and history straight away.
         </p>
         <p>
-          You can also ask us for a copy of what we hold about you, or to correct or delete it, at{" "}
+          Download everything we keep about your account as one file with &ldquo;Download My
+          Data&rdquo; in Account, then Setting. You can also ask us for a copy, or to correct or
+          delete anything, at{" "}
           <ContactEmail />. We answer within 30 days.
         </p>
       </LegalSection>

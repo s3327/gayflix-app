@@ -1,7 +1,10 @@
 import { appendFile } from "node:fs/promises";
 
-/** `html` is the branded version (src/lib/email-templates.ts); `text` is always sent too. */
-export type Email = { to: string; subject: string; text: string; html?: string };
+/**
+ * `html` is the branded version (src/lib/email-templates.ts); `text` is
+ * always sent too. `headers`: extra ones, such as List-Unsubscribe.
+ */
+export type Email = { to: string; subject: string; text: string; html?: string; headers?: Record<string, string> };
 
 /**
  * Sends a transactional email (verification codes, password resets).
@@ -30,6 +33,7 @@ export async function sendEmail(
         subject: email.subject,
         text: email.text,
         ...(email.html && { html: email.html }),
+        ...(email.headers && { headers: email.headers }),
       }),
     });
     if (!response.ok) {

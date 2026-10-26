@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { Monitor, Smartphone } from "lucide-react";
 import DeleteAccount from "@/components/DeleteAccount";
+import EmailSettings from "@/components/EmailSettings";
 import NicknameSetting from "@/components/NicknameSetting";
 import TwoFactorSetting from "@/components/TwoFactorSetting";
 import { signOutDevice, signOutOtherDevices } from "@/lib/account-actions";
@@ -8,6 +9,7 @@ import { accountDeletionProblem } from "@/lib/account-deletion";
 import { isStaffRole } from "@/lib/admin-roles";
 import { auth } from "@/lib/auth";
 import { getMyNickname } from "@/lib/community";
+import { db } from "@/lib/db";
 import { deviceName, isMobileDevice } from "@/lib/device-name";
 import { requireUser } from "@/lib/session";
 
@@ -23,18 +25,20 @@ const SECONDARY_BUTTON =
 
 /**
  * Where the account is signed in, with a way to sign out of the other
- * devices, optional two-factor sign-in, the public nickname, and deleting
- * the account. Device names come from each
- * session's browser (src/lib/device-name.ts); addresses aren't shown.
+ * devices, optional two-factor sign-in, which emails to get, the public
+ * nickname, downloading the account's data, and deleting the account.
+ * Device names come from each session's browser (src/lib/device-name.ts);
+ * addresses aren't shown.
  * "Last active" moves at most once a day, when the session is renewed.
  */
 export default async function AccountSettingPage() {
   const session = await requireUser("/account/setting");
   const requestHeaders = await headers();
-  const [sessions, accounts, nickname] = await Promise.all([
+  const [sessions, accounts, nickname, notifications] = await Promise.all([
     auth.api.listSessions({ headers: requestHeaders }),
     auth.api.listUserAccounts({ headers: requestHeaders }),
     getMyNickname(),
+    db.notificationSetting.findUnique({ where: { userId: session.user.id }, select: { newEpisodes: true } }),
   ]);
 
   const devices = sessions
@@ -140,6 +144,16 @@ export default async function AccountSettingPage() {
         />
       </section>
 
+      <section aria-labelledby="emails-heading" className="mt-10 border-t border-border-subtle pt-8">
+        <h2
+          id="emails-heading"
+          className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
+        >
+          Emails
+        </h2>
+        <EmailSettings newEpisodes={notifications?.newEpisodes ?? true} />
+      </section>
+
       <section aria-labelledby="nickname-heading" className="mt-10 border-t border-border-subtle pt-8">
         <h2
           id="nickname-heading"
@@ -151,6 +165,22 @@ export default async function AccountSettingPage() {
           Shown on your reviews and Community lists instead of your name, which stays private.
         </p>
         <NicknameSetting initial={nickname} />
+      </section>
+
+      <section aria-labelledby="data-heading" className="mt-10 border-t border-border-subtle pt-8">
+        <h2
+          id="data-heading"
+          className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
+        >
+          Your data
+        </h2>
+        <p className="mt-1 text-sm text-ink-muted">
+          Everything we keep about your account, as one file: your profile, nickname, favorites,
+          Watchlist, lists, history, ratings, reviews and signed-in devices.
+        </p>
+        <a href="/api/account/export" download className={`mt-4 inline-block ${SECONDARY_BUTTON}`}>
+          Download My Data
+        </a>
       </section>
 
       <section aria-labelledby="delete-heading" className="mt-10 border-t border-border-subtle pt-8">

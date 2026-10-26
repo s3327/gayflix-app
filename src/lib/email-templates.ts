@@ -207,3 +207,79 @@ export function emailChangedEmail(newEmail: string, origin: string): EmailConten
     }),
   };
 }
+
+/** A series in a new-episodes email, with the episodes it got. */
+export type NewEpisodesSeries = { title: string; url: string; episodes: string[] };
+
+/** Most episodes named per series; the rest are counted. */
+const EPISODES_LISTED = 10;
+
+/**
+ * New episodes of series in a member's Favorites (src/lib/new-episode-emails.ts),
+ * all in one email, with a one-click way to stop them.
+ */
+export function newEpisodesEmail(series: NewEpisodesSeries[], unsubscribeUrl: string, origin: string): EmailContent {
+  const names = series.map((each) => each.title);
+  const subject =
+    series.length === 1
+      ? `New on Gayflix: ${names[0]}`
+      : `New episodes of ${names.length} series you favorited`;
+  const lines = series.map(({ title, episodes }) => {
+    const listed = episodes.slice(0, EPISODES_LISTED).join(", ");
+    const more = episodes.length > EPISODES_LISTED ? `, and ${episodes.length - EPISODES_LISTED} more` : "";
+    return `${title}: ${listed}${more}`;
+  });
+  const intro =
+    series.length === 1 ? "A series in your Favorites has new episodes." : "Series in your Favorites have new episodes.";
+  const footnote = "You get these because these series are in your Favorites.";
+  return {
+    subject,
+    text: `${intro}\n\n${series.map((each, i) => `${lines[i]}\n${each.url}`).join("\n\n")}\n\n${footnote} Stop them: ${unsubscribeUrl}`,
+    html: layout({
+      origin,
+      preheader: lines[0],
+      heading: "New episodes",
+      blocks: [
+        { kind: "paragraph", text: intro },
+        ...series.flatMap((each, i) => [
+          { kind: "paragraph" as const, text: lines[i] },
+          { kind: "button" as const, label: `Watch ${each.title}`, url: each.url },
+        ]),
+        { kind: "paragraph", text: `Don't want these? Stop them here: ${unsubscribeUrl}` },
+      ],
+      footnote,
+    }),
+  };
+}
+
+const signInTime = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "long",
+  timeStyle: "short",
+  timeZone: "UTC",
+});
+
+/** Sent when an account signs in from a device it hasn't used before (src/lib/sign-in-alerts.ts). */
+export function newSignInEmail(device: string, at: Date, origin: string): EmailContent {
+  const when = `${signInTime.format(at)} UTC`;
+  const line = `Your Gayflix account was just signed in to on ${device}, on ${when}.`;
+  const done = "If this was you, there's nothing more to do.";
+  const action =
+    "If it wasn't, change your password and sign that device out in Setting. Turning on two-factor sign-in there stops a stolen password from being enough.";
+  const setting = `${origin}/account/setting`;
+  return {
+    subject: "New sign-in to your Gayflix account",
+    text: `${line}\n\n${done}\n\n${action}\n${setting}`,
+    html: layout({
+      origin,
+      preheader: `A new sign-in on ${device}.`,
+      heading: "New sign-in",
+      blocks: [
+        { kind: "paragraph", text: line },
+        { kind: "paragraph", text: done },
+        { kind: "paragraph", text: action },
+        { kind: "button", label: "Review your devices", url: setting },
+      ],
+      footnote: "We send this the first time an account signs in on a device. We never keep your IP address.",
+    }),
+  };
+}

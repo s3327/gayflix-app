@@ -4,6 +4,8 @@ import {
   emailChangedEmail,
   escapeHtml,
   existingAccountEmail,
+  newEpisodesEmail,
+  newSignInEmail,
   resetPasswordEmail,
 } from "@/lib/email-templates";
 
@@ -67,5 +69,50 @@ describe("emailChangedEmail", () => {
 describe("escapeHtml", () => {
   it("escapes markup and quotes", () => {
     expect(escapeHtml(`<a href="x">'&'</a>`)).toBe("&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;");
+  });
+});
+
+describe("newEpisodesEmail", () => {
+  const unsubscribe = `${ORIGIN}/unsubscribe?u=u1&t=sig`;
+
+  it("names one series in the subject, and lists its episodes", () => {
+    const email = newEpisodesEmail(
+      [{ title: "The Brownstone", url: `${ORIGIN}/series/the-brownstone`, episodes: ["S2 E1 Homecoming", "S2 E2 Rent"] }],
+      unsubscribe,
+      ORIGIN
+    );
+    expect(email.subject).toBe("New on Gayflix: The Brownstone");
+    expect(email.text).toContain("The Brownstone: S2 E1 Homecoming, S2 E2 Rent");
+    expect(email.text).toContain(unsubscribe);
+    expect(email.html).toContain(`href="${ORIGIN}/series/the-brownstone"`);
+  });
+
+  it("counts series, and episodes past ten", () => {
+    const episodes = Array.from({ length: 12 }, (_, i) => `S1 E${i + 1}`);
+    const email = newEpisodesEmail(
+      [
+        { title: "A", url: `${ORIGIN}/series/a`, episodes },
+        { title: "<B>", url: `${ORIGIN}/series/b`, episodes: ["S1 E1"] },
+      ],
+      unsubscribe,
+      ORIGIN
+    );
+    expect(email.subject).toBe("New episodes of 2 series you favorited");
+    expect(email.text).toContain("S1 E10, and 2 more");
+    expect(email.html).not.toContain("<B>");
+  });
+});
+
+describe("newSignInEmail", () => {
+  it("names the device and the time, and links to Setting", () => {
+    const email = newSignInEmail("Firefox on Linux", new Date("2026-10-26T14:05:00Z"), ORIGIN);
+    expect(email.subject).toBe("New sign-in to your Gayflix account");
+    expect(email.text).toContain("on Firefox on Linux, on October 26, 2026 at 2:05 PM UTC.");
+    expect(email.text).toContain(`${ORIGIN}/account/setting`);
+    expect(email.html).toContain(`href="${ORIGIN}/account/setting"`);
+  });
+
+  it("escapes the device name in the HTML", () => {
+    expect(newSignInEmail("<script>", new Date(), ORIGIN).html).not.toContain("<script>");
   });
 });

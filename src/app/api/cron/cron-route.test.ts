@@ -4,18 +4,21 @@ import { GET } from "./[job]/route";
 vi.mock("@/lib/scheduled-jobs", () => ({
   runTrashPurgeJob: vi.fn(),
   runPublishDueJob: vi.fn(),
+  runNewEpisodeEmailsJob: vi.fn(),
   runOrphanImageCleanupJob: vi.fn(),
 }));
 
 import {
   runTrashPurgeJob,
   runPublishDueJob,
+  runNewEpisodeEmailsJob,
   runOrphanImageCleanupJob,
 } from "@/lib/scheduled-jobs";
 
 const mockPurge = vi.mocked(runTrashPurgeJob);
 const mockPublish = vi.mocked(runPublishDueJob);
 const mockOrphan = vi.mocked(runOrphanImageCleanupJob);
+const mockEmails = vi.mocked(runNewEpisodeEmailsJob);
 
 describe("GET /api/cron/[job]", () => {
   const originalSecret = process.env.CRON_SECRET;
@@ -101,6 +104,8 @@ describe("GET /api/cron/[job]", () => {
     expect(body.ok).toBe(true);
     expect(body.job).toBe("publish-due");
     expect(mockPublish).toHaveBeenCalledWith("cron");
+    // The new-episode emails run right after publishing.
+    expect(mockEmails).toHaveBeenCalledWith("cron");
   });
 
   it("executes clean-orphans successfully with valid secret", async () => {

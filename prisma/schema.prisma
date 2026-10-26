@@ -39,6 +39,8 @@ model User {
   profile          MemberProfile?
   reviews          Review[]
   contentReports   ContentReport[]
+  notificationSetting NotificationSetting?
+  signInDevices    SignInDevice[]
   twoFactorEnabled Boolean?       @default(false)
   twoFactors       TwoFactor[]
 
@@ -223,11 +225,15 @@ model Episode {
   stillUrl      String?
   /// One or two sentences for the series page's episode list.
   synopsis      String        @default("")
+  /// When it was added. The new-episode emails send what was added since
+  /// they last ran (episodes from before this column got its first day).
+  createdAt     DateTime      @default(now())
   media         Media         @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   videoSources  VideoSource[]
   subtitles     Subtitle[]
 
   @@unique([mediaId, seasonNumber, episodeNumber])
+  @@index([createdAt])
   @@map("episode")
 }
 
@@ -561,6 +567,33 @@ model Report {
   @@index([ipHash, createdAt])
   @@index([resolvedAt, createdAt])
   @@map("report")
+}
+
+/// Which emails a member wants beyond the account's own (codes, resets
+/// and sign-in alerts always go). No row means the defaults. Changed only
+/// through src/lib/notification-actions.ts.
+model NotificationSetting {
+  userId      String   @id
+  /// New episodes of series in their Favorites (src/lib/new-episode-emails.ts).
+  newEpisodes Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_setting")
+}
+
+/// A device an account has signed in from, by name only ("Chrome on
+/// Windows", src/lib/device-name.ts; never an address). A sign-in from a
+/// name the account hasn't used before emails it (src/lib/sign-in-alerts.ts).
+model SignInDevice {
+  userId      String
+  device      String
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, device])
+  @@map("sign_in_device")
 }
 
 model TwoFactor {
