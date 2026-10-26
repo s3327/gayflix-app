@@ -5,6 +5,7 @@ import {
   escapeHtml,
   existingAccountEmail,
   newEpisodesEmail,
+  newSignInEmail,
   resetPasswordEmail,
 } from "@/lib/email-templates";
 
@@ -99,5 +100,19 @@ describe("newEpisodesEmail", () => {
     expect(email.subject).toBe("New episodes of 2 series you favorited");
     expect(email.text).toContain("S1 E10, and 2 more");
     expect(email.html).not.toContain("<B>");
+  });
+});
+
+describe("newSignInEmail", () => {
+  it("names the device and the time, and links to Setting", () => {
+    const email = newSignInEmail("Firefox on Linux", new Date("2026-10-26T14:05:00Z"), ORIGIN);
+    expect(email.subject).toBe("New sign-in to your Gayflix account");
+    expect(email.text).toContain("on Firefox on Linux, on October 26, 2026 at 2:05 PM UTC.");
+    expect(email.text).toContain(`${ORIGIN}/account/setting`);
+    expect(email.html).toContain(`href="${ORIGIN}/account/setting"`);
+  });
+
+  it("escapes the device name in the HTML", () => {
+    expect(newSignInEmail("<script>", new Date(), ORIGIN).html).not.toContain("<script>");
   });
 });
