@@ -36,6 +36,9 @@ model User {
   watchHistory     WatchHistory[]
   lists            MediaList[]
   reports          Report[]
+  profile          MemberProfile?
+  reviews          Review[]
+  contentReports   ContentReport[]
   twoFactorEnabled Boolean?       @default(false)
   twoFactors       TwoFactor[]
 
@@ -192,6 +195,7 @@ model Media {
   episodeRedirects EpisodeRedirect[]
   views          MediaView[]
   memberRatings  MediaRating[]
+  reviews        Review[]
   /// Movies only: a series' video is on its episodes.
   videoSources   VideoSource[]
   subtitles      Subtitle[]
@@ -400,12 +404,19 @@ model MediaList {
   name      String
   /// Only the owner can see a list until they share it.
   isPublic  Boolean    @default(false)
+  /// Shown on /lists (Community Lists), with the owner's nickname. Only a
+  /// shared list can be; unsharing it takes it off.
+  inCommunity      Boolean @default(false)
+  /// A moderator took it off Community Lists; its owner can't put it back.
+  communityBlocked Boolean @default(false)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   items     ListItem[]
+  reports   ContentReport[]
 
   @@index([userId])
+  @@index([inCommunity, updatedAt])
   @@map("media_list")
 }
 
@@ -423,6 +434,72 @@ model ListItem {
 /// "Report an issue" from the watch page. Guests are counted by a hash
 /// of their IP address (never the address itself), signed-in users by
 /// account.
+// --- Community (nicknames, reviews, reports on them) ---------------------
+// Changed only through src/lib/community-actions.ts (members) and
+// src/lib/admin-community-actions.ts (moderators).
+
+/// A member's public name, shown on their reviews and Community lists
+/// instead of their account name (which may be their real name).
+model MemberProfile {
+  userId      String   @id
+  nickname    String
+  /// The nickname lowercased: no two members share one, whatever the case.
+  nicknameKey String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("member_profile")
+}
+
+/// A member's short review of a movie or a series: one each. Shown at
+/// once, under their nickname; a moderator can hide it.
+model Review {
+  id        String          @id @default(cuid())
+  userId    String
+  mediaId   String
+  body      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  /// Set when a moderator hides it in /admin/community.
+  hiddenAt  DateTime?
+  /// Email of that moderator, as it was at the time.
+  hiddenBy  String?
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media     Media           @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  reports   ContentReport[]
+
+  @@unique([userId, mediaId])
+  @@index([mediaId, hiddenAt, createdAt])
+  @@index([createdAt])
+  @@map("review")
+}
+
+/// A member's report of a review or a Community list (exactly one of
+/// the two), for moderators in /admin/community. One per member each.
+model ContentReport {
+  id         String     @id @default(cuid())
+  reviewId   String?
+  listId     String?
+  userId     String
+  /// REPORT_REASONS in src/lib/community-rules.ts.
+  reason     String
+  createdAt  DateTime   @default(now())
+  /// Set when a moderator acts on it or dismisses it.
+  resolvedAt DateTime?
+  /// Email of that moderator, as it was at the time.
+  resolvedBy String?
+  review     Review?    @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  list       MediaList? @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewId, userId])
+  @@unique([listId, userId])
+  @@index([resolvedAt, createdAt])
+  @@index([userId, createdAt])
+  @@map("content_report")
+}
+
 model Report {
   id         String    @id @default(cuid())
   userId     String?

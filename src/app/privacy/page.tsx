@@ -8,7 +8,8 @@ export const metadata: Metadata = { title: `Privacy Policy · ${SITE_NAME}` };
 /**
  * What the site keeps, written from the code: accounts (src/lib/auth.ts),
  * favorites, Watchlist, lists and history (src/lib/library-actions.ts),
- * ratings (src/lib/rating-actions.ts), views
+ * ratings (src/lib/rating-actions.ts), nicknames, reviews and reports on
+ * them (src/lib/community-actions.ts), views
  * (src/lib/view-actions.ts), reports (src/lib/report-actions.ts) and
  * crash reports (src/lib/error-reporting.ts). Change this page when any
  * of those change. Names and contact come from src/lib/legal.ts.
@@ -59,6 +60,10 @@ export default function PrivacyPage() {
             suggest to you.
           </li>
           <li>
+            <strong className="font-semibold text-ink-primary">A nickname and your reviews</strong>, if
+            you write any, and reports you send about other members&apos; reviews or lists.
+          </li>
+          <li>
             <strong className="font-semibold text-ink-primary">Two-step sign-in</strong>, if you turn
             it on: its secret and backup codes.
           </li>
@@ -73,8 +78,13 @@ export default function PrivacyPage() {
           who rated what.
         </p>
         <p>
+          Reviews are public, and so are lists you put on Community Lists. Both show your nickname,
+          never your name or email. Whom you report is never shown to them.
+        </p>
+        <p>
           The people who run Gayflix can see accounts to keep the site safe, for example to stop
-          spam or answer a report. They can&apos;t see your password.
+          spam or answer a report, and can hide reviews or take lists off Community Lists that
+          break the rules. They can&apos;t see your password.
         </p>
       </LegalSection>
 
@@ -108,7 +118,7 @@ export default function PrivacyPage() {
         <p>
           You can change your name, email and password in Account, sign other devices out and
           delete your account in Account, then Setting. Deleting your account erases it with your
-          favorites, Watchlist, lists, ratings and history straight away.
+          nickname, reviews, favorites, Watchlist, lists, ratings and history straight away.
         </p>
         <p>
           You can also ask us for a copy of what we hold about you, or to correct or delete it, at{" "}

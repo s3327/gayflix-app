@@ -212,11 +212,17 @@ export async function renameList(listId: unknown, name: unknown): Promise<void> 
   });
 }
 
-/** Shares a list with anyone who has its link, or makes it private again. */
+/**
+ * Shares a list with anyone who has its link, or makes it private again,
+ * which also takes it off Community Lists.
+ */
 export async function setListPublic(listId: unknown, isPublic: unknown): Promise<void> {
   const userId = await requireUserId();
   if (typeof isPublic !== "boolean") throw new Error("Invalid setting");
-  await db.mediaList.update({ where: { id: await requireOwnList(userId, listId) }, data: { isPublic } });
+  await db.mediaList.update({
+    where: { id: await requireOwnList(userId, listId) },
+    data: isPublic ? { isPublic } : { isPublic, inCommunity: false },
+  });
 }
 
 export async function addToList(listId: unknown, value: unknown): Promise<void> {

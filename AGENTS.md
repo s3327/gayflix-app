@@ -53,6 +53,13 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   `src/lib/admin-subtitle-actions.ts`, whose file checks are in
   `src/lib/subtitles.ts`; they're served from this site at
   `/subtitles/<id>`, only while the title is published.
+- **Community:** members post under a nickname (`member_profile`), never
+  their account name or email. Nicknames, reviews (`review`), Community
+  Lists (`media_list.inCommunity`) and reports on them (`content_report`)
+  change only through `src/lib/community-actions.ts`, whose checks are in
+  `src/lib/community-rules.ts`; moderators act only through
+  `src/lib/admin-community-actions.ts` (/admin/community). They're read
+  through `src/lib/community.ts`.
 - **Crash reports** go to Sentry when `NEXT_PUBLIC_SENTRY_DSN` is set,
   from `src/instrumentation.ts` (server), `src/instrumentation-client.ts`
   (browser) and the error pages. What they may carry is decided in

@@ -64,6 +64,8 @@ export function toMediaList(list: {
   id: string;
   name: string;
   isPublic: boolean;
+  inCommunity: boolean;
+  communityBlocked: boolean;
   createdAt: Date;
   items: { entry: unknown }[];
 }): MediaList {
@@ -71,6 +73,8 @@ export function toMediaList(list: {
     id: list.id,
     name: list.name,
     isPublic: list.isPublic,
+    inCommunity: list.inCommunity,
+    communityBlocked: list.communityBlocked,
     createdAt: list.createdAt.toISOString(),
     items: list.items.map((item) => item.entry as FavoriteEntry),
   };

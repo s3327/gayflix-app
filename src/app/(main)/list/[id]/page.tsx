@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { getCommunityOwner } from "@/lib/community";
 import { findList } from "@/lib/library";
 import { OPEN_GRAPH } from "@/lib/page-metadata";
 import { getSession } from "@/lib/session";
@@ -15,7 +16,9 @@ const loadList = cache(async (id: string) => {
   const [found, session] = await Promise.all([findList(id), getSession()]);
   const isOwner = Boolean(found && session?.user.id === found.ownerId);
   if (!found || (!found.list.isPublic && !isOwner)) return null;
-  return { list: found.list, isOwner };
+  // On Community Lists, the page names its owner by nickname.
+  const owner = found.list.isPublic ? await getCommunityOwner(id) : null;
+  return { list: found.list, isOwner, owner };
 });
 
 function titleCount(count: number) {
@@ -57,5 +60,5 @@ export default async function ListPage({ params }: { params: Promise<{ id: strin
   // A private list looks the same as one that doesn't exist.
   if (!loaded) notFound();
 
-  return <ListView list={loaded.list} isOwner={loaded.isOwner} />;
+  return <ListView list={loaded.list} isOwner={loaded.isOwner} owner={loaded.owner} />;
 }

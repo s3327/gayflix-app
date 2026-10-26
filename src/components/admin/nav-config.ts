@@ -9,6 +9,7 @@ import {
   Settings,
   Activity,
   Clock,
+  MessageSquare,
   type LucideIcon,
 } from "lucide-react";
 
@@ -57,6 +58,7 @@ export const adminNav: NavEntry[] = [
   },
   { type: "link", label: "Users", href: "/admin/users", icon: Users },
   { type: "link", label: "Reports", href: "/admin/reports", icon: Flag },
+  { type: "link", label: "Community", href: "/admin/community", icon: MessageSquare },
   { type: "link", label: "Trash", href: "/admin/trash", icon: Trash2 },
   { type: "link", label: "Activity", href: "/admin/activity", icon: Activity },
   { type: "link", label: "Jobs", href: "/admin/jobs", icon: Clock },
