@@ -92,7 +92,8 @@ export default function PrivacyPage() {
         <p>
           When you log in we set one cookie that keeps you signed in. It can only be read by our
           server, and it ends when you log out. Your browser&apos;s local storage holds a
-          guest&apos;s watch history and small preferences. We use no advertising or tracking
+          guest&apos;s watch history, your last few searches (clear them from the search box) and
+          small preferences. We use no advertising or tracking
           cookies.
         </p>
         <p>
