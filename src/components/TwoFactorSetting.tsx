@@ -93,6 +93,9 @@ export default function TwoFactorSetting({
   const { showToast } = useToast();
   const [step, setStep] = useState<Step>("idle");
   const [newCodes, setNewCodes] = useState<string[] | null>(null);
+  // What a change just made it, shown at once; the page's refresh catches up.
+  const [changedTo, setChangedTo] = useState<boolean | null>(null);
+  const isOn = changedTo ?? enabled;
 
   if (!hasPassword) {
     return (
@@ -103,12 +106,13 @@ export default function TwoFactorSetting({
     );
   }
 
-  if (!enabled) {
+  if (!isOn) {
     return step === "enroll" ? (
       <div className="max-w-md">
         <TwoFactorEnrollment
           onEnabled={() => {
             setStep("idle");
+            setChangedTo(true);
             showToast("Two-factor sign-in is on");
             router.refresh();
           }}
@@ -176,6 +180,7 @@ export default function TwoFactorSetting({
             if (error) return authErrorMessage(error);
             setStep("idle");
             setNewCodes(null);
+            setChangedTo(false);
             showToast("Two-factor sign-in is off");
             router.refresh();
             return null;
