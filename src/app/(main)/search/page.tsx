@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import MediaCard from "@/components/MediaCard";
 import MediaGrid from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
+import RecordRecentSearch from "@/components/RecordRecentSearch";
 import { searchHref } from "@/lib/browse-href";
 import { searchTitles } from "@/lib/catalog";
 import { normalizeQuery } from "@/lib/search";
@@ -37,7 +38,7 @@ export default async function SearchPage({
   // country or language contain the query, or from that year; title
   // matches first.
   const requestedPage = pageParam(searchParams.page);
-  const { items: results, total, page, totalPages } = await searchTitles(query, requestedPage);
+  const { items: results, total, page, totalPages, fuzzy } = await searchTitles(query, requestedPage);
   // An address past the last page isn't a page.
   if (page !== requestedPage) notFound();
 
@@ -100,14 +101,20 @@ export default async function SearchPage({
       <div className="mt-12">
         {query ? (
           <div>
+            <RecordRecentSearch query={query} />
             <div className="mb-6 flex items-baseline justify-between border-b border-border-subtle pb-4">
               <h2 className="font-display text-xl font-bold">
                 Results for &ldquo;{query}&rdquo;
               </h2>
               <span className="text-xs font-semibold text-ink-muted">
-                {total} {total === 1 ? "title" : "titles"} found
+                {fuzzy ? "Close matches" : `${total} ${total === 1 ? "title" : "titles"} found`}
               </span>
             </div>
+            {fuzzy && (
+              <p className="-mt-2 mb-6 text-sm text-ink-secondary">
+                Nothing matched &ldquo;{query}&rdquo; exactly, so here are titles spelled like it.
+              </p>
+            )}
 
             {results.length > 0 ? (
               <>

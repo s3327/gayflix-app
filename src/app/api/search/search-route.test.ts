@@ -51,6 +51,8 @@ describe("GET /api/search", () => {
         { id: "m1", title: "Heartstopper", year: 2022, type: "series", posterUrl: "/poster1.jpg" },
       ],
       total: 9,
+      people: ["Joe Locke"],
+      fuzzy: false,
     });
 
     const req = new NextRequest("http://localhost:3000/api/search?q=heart");
@@ -62,6 +64,8 @@ describe("GET /api/search", () => {
     expect(body.results).toHaveLength(1);
     expect(body.results[0].title).toBe("Heartstopper");
     expect(body.total).toBe(9);
+    expect(body.people).toEqual(["Joe Locke"]);
+    expect(body.fuzzy).toBe(false);
   });
 
   it("returns 503 during maintenance mode for anonymous visitors", async () => {
@@ -114,6 +118,8 @@ describe("GET /api/search", () => {
         { id: "m2", title: "Fellow Travelers", year: 2023, type: "series", posterUrl: "/poster2.jpg" },
       ],
       total: 1,
+      people: [],
+      fuzzy: false,
     });
 
     const req = new NextRequest("http://localhost:3000/api/search?q=fellow");

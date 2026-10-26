@@ -14,7 +14,10 @@ import type {
 } from "@/lib/media";
 import { PAGE_SIZE, pageWindow } from "@/lib/paginate";
 import {
+  allowedTypos,
   escapeLike,
+  fuzzyMatches,
+  MAX_PEOPLE_SUGGESTIONS,
   MAX_SUGGESTIONS,
   normalizeQuery,
   queryYear,
@@ -391,6 +394,8 @@ export type TitlePage = {
   page: number;
   totalPages: number;
   total: number;
+  /** Search only: nothing matched as typed, so these are the titles spelled closest. */
+  fuzzy?: boolean;
 };
 
 /** One page of published titles, filtered and sorted. */
@@ -720,7 +725,30 @@ function titleMatchOrder(query: string) {
   return Prisma.sql`(title ILIKE ${`${escaped}%`}) DESC, (title ILIKE ${`%${escaped}%`}) DESC, lower(title), id`;
 }
 
-/** The search page: one page of matching published titles. */
+/** Fuzzy matching looks through at most this many titles (the catalog is far smaller). */
+const FUZZY_POOL = 5000;
+
+/**
+ * When nothing matches as typed: the published titles whose names are
+ * closest to the query, allowing a typo or two (fuzzyMatches in
+ * src/lib/search.ts), at most `limit`. Done here rather than in the
+ * database, which has no fuzzy matching built in.
+ */
+async function fuzzyTitles(query: string, limit: number): Promise<CardRow[]> {
+  if (allowedTypos(query.length) === 0) return [];
+  const rows = await db.media.findMany({
+    where: PUBLISHED,
+    orderBy: { viewCount: "desc" },
+    take: FUZZY_POOL,
+    select: CARD,
+  });
+  return fuzzyMatches(query, rows, (row) => row.title, limit);
+}
+
+/**
+ * The search page: one page of matching published titles. When none
+ * match as typed, the titles spelled closest to the query, on one page.
+ */
 export async function searchTitles(rawQuery: string, requestedPage: number): Promise<TitlePage> {
   await connection();
   const query = normalizeQuery(rawQuery);
@@ -731,6 +759,12 @@ export async function searchTitles(rawQuery: string, requestedPage: number): Pro
   const where = searchCondition(query);
   const [{ total }] = await db.$queryRaw<{ total: number }[]>`
     SELECT count(*)::int AS total FROM media WHERE ${where}`;
+  if (total === 0) {
+    const close = await fuzzyTitles(query, perPage);
+    if (close.length > 0) {
+      return { items: close.map(toMedia), page: 1, totalPages: 1, total: close.length, fuzzy: true };
+    }
+  }
   const { page, totalPages, skip } = pageWindow(total, requestedPage, perPage);
   const rows = await db.$queryRaw<CardRow[]>`
     SELECT ${CARD_COLUMNS} FROM media WHERE ${where}
@@ -741,23 +775,63 @@ export async function searchTitles(rawQuery: string, requestedPage: number): Pro
 
 /**
  * The header's live search: the first few of the titles the search page
- * finds, in its order, and how many it finds in all.
+ * finds, in its order, and how many it finds in all (the spelled-closest
+ * ones when none match as typed, as on the search page), and the people
+ * named on published titles whose names match.
  */
 export async function suggestTitles(
   rawQuery: string
-): Promise<{ items: SearchSuggestion[]; total: number }> {
+): Promise<{ items: SearchSuggestion[]; total: number; people: string[]; fuzzy: boolean }> {
   await connection();
   const query = normalizeQuery(rawQuery);
-  if (!query) return { items: [], total: 0 };
+  if (!query) return { items: [], total: 0, people: [], fuzzy: false };
   const where = searchCondition(query);
-  const [items, [{ total }]] = await Promise.all([
+  const [items, [{ total }], people] = await Promise.all([
     db.$queryRaw<SearchSuggestion[]>`
       SELECT id, type::text AS type, title, year, "posterUrl" FROM media WHERE ${where}
       ORDER BY ${titleMatchOrder(query)}
       LIMIT ${MAX_SUGGESTIONS}`,
     db.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total FROM media WHERE ${where}`,
+    suggestPeople(query),
   ]);
-  return { items, total };
+  if (total === 0) {
+    // As the search page would show them.
+    const settings = await getSiteSettings();
+    const close = await fuzzyTitles(query, settings.defaultPageSize || PAGE_SIZE);
+    if (close.length > 0) {
+      const suggestions = close.slice(0, MAX_SUGGESTIONS).map(({ id, type, title, year, posterUrl }) => ({
+        id,
+        type,
+        title,
+        year,
+        posterUrl,
+      }));
+      return { items: suggestions, total: close.length, people, fuzzy: true };
+    }
+  }
+  return { items, total, people, fuzzy: false };
+}
+
+/**
+ * People named on published titles (cast, directors, creators) whose
+ * names have the query, those starting with it first; or, when none do,
+ * the names spelled closest to it. At most MAX_PEOPLE_SUGGESTIONS.
+ */
+async function suggestPeople(query: string): Promise<string[]> {
+  const escaped = escapeLike(query);
+  const rows = await db.$queryRaw<{ name: string }[]>`
+    SELECT name FROM (
+      SELECT DISTINCT name FROM (
+        SELECT unnest("cast") AS name FROM media WHERE status = 'published'
+        UNION SELECT director FROM media WHERE status = 'published'
+        UNION SELECT creator FROM media WHERE status = 'published'
+      ) named
+      WHERE name ILIKE ${`%${escaped}%`}
+    ) people
+    ORDER BY (name ILIKE ${`${escaped}%`}) DESC, lower(name)
+    LIMIT ${MAX_PEOPLE_SUGGESTIONS}`;
+  if (rows.length > 0 || allowedTypos(query.length) === 0) return rows.map((row) => row.name);
+  return fuzzyMatches(query, await listPublishedPeople(), (name) => name, MAX_PEOPLE_SUGGESTIONS);
 }
 
 // --- Titles and episodes ------------------------------------------------------
