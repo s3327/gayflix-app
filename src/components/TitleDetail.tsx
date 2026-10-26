@@ -5,6 +5,8 @@ import type { Media, MediaDetail } from "@/lib/media";
 import ReadMoreText from "@/components/ReadMoreText";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import RecommendationSection from "@/components/RecommendationSection";
+import ReviewsSection from "@/components/ReviewsSection";
+import type { TitleReviews } from "@/lib/community";
 import SeasonTabs from "@/components/SeasonTabs";
 import SeriesPlayButton from "@/components/SeriesPlayButton";
 import TagList from "@/components/TagList";
@@ -39,7 +41,7 @@ const ICON_ACTION_BUTTON = `${ACTION_BASE} w-12`;
  * poster itself in it).
  *
  * Below: the synopsis, what the title contains, the details, a series'
- * episodes and the recommendations. Series aren't a different product,
+ * episodes, members' reviews and the recommendations. Series aren't a different product,
  * just a different metadata shape: Creator instead of Director, Seasons
  * and Episodes instead of a single Runtime, and "Start Watching" opens
  * the first episode, or "Continue" the one played last
@@ -48,9 +50,12 @@ const ICON_ACTION_BUTTON = `${ACTION_BASE} w-12`;
 export default function TitleDetail({
   title,
   recommended,
+  reviews,
 }: {
   title: MediaDetail;
   recommended: Media[];
+  /** Members' reviews; left out of the admin panel's draft preview. */
+  reviews?: TitleReviews;
 }) {
   const isSeries = title.type === "series";
   const { episodes } = title;
@@ -267,6 +272,8 @@ export default function TitleDetail({
             </div>
           </div>
         )}
+
+        {reviews && <ReviewsSection mediaId={title.id} title={title.title} initial={reviews} />}
       </div>
 
       {recommended.length > 0 && (

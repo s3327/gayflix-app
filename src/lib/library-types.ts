@@ -36,6 +36,10 @@ export type MediaList = {
   createdAt: string;
   /** Anyone with the link can view it; otherwise only the owner. */
   isPublic: boolean;
+  /** Also on Community Lists, under the owner's nickname. */
+  inCommunity: boolean;
+  /** A moderator took it off Community Lists, for good. */
+  communityBlocked: boolean;
   /** Snapshot copies, deduped by id, in the order they were added. */
   items: FavoriteEntry[];
 };

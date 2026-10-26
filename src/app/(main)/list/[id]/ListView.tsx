@@ -11,6 +11,7 @@ import CardIconButton from "@/components/CardIconButton";
 import ShareListModal from "@/components/ShareListModal";
 import NameListModal from "@/components/NameListModal";
 import ConfirmModal from "@/components/ConfirmModal";
+import ReportContentButton from "@/components/ReportContentButton";
 import { titleHref } from "@/lib/title-href";
 
 /**
@@ -18,7 +19,9 @@ import { titleHref } from "@/lib/title-href";
  * so removing a title updates straight away, and Share opens the switch
  * that shares it. Once shared, anyone with the link gets a read-only
  * view, and their Share copies the link. The owner also gets a way back
- * to My Lists, and Rename and Delete, the same as on My Lists.
+ * to My Lists, and Rename and Delete, the same as on My Lists. A list on
+ * Community Lists names its owner by nickname (`owner`), and others can
+ * report it.
  */
 const ACTION =
   "flex items-center gap-2 rounded-card border border-border-strong px-5 py-2.5 text-sm font-semibold text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary";
@@ -26,9 +29,11 @@ const ACTION =
 export default function ListView({
   list: saved,
   isOwner,
+  owner = null,
 }: {
   list: MediaList;
   isOwner: boolean;
+  owner?: string | null;
 }) {
   const { getList, removeFromList, renameList, deleteList } = useLists();
   const { showToast } = useToast();
@@ -52,11 +57,16 @@ export default function ListView({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-bold">{list.name}</h1>
-          <p className="mt-1 flex items-center gap-1 text-sm text-ink-muted">
+          <p className="mt-1 flex flex-wrap items-center gap-1 text-sm text-ink-muted">
+            {owner && !isOwner && <>by {owner} · </>}
             {list.items.length} {list.items.length === 1 ? "title" : "titles"}
             {isOwner &&
               (list.isPublic ? (
-                " · Shared with anyone who has the link"
+                list.inCommunity ? (
+                  " · On Community Lists"
+                ) : (
+                  " · Shared with anyone who has the link"
+                )
               ) : (
                 <>
                   {" · "}
@@ -65,6 +75,9 @@ export default function ListView({
                 </>
               ))}
           </p>
+          {owner && !isOwner && (
+            <ReportContentButton target={{ listId: list.id }} what={`list by ${owner}`} className="mt-2" />
+          )}
         </div>
 
         <div className="flex flex-wrap gap-2">

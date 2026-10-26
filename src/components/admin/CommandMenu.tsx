@@ -33,6 +33,7 @@ const STATIC_PAGES: SearchResultItem[] = [
   { id: "p-ep", title: "Episodes Library", href: "/admin/library/episodes", category: "Pages" },
   { id: "p-imp", title: "Import from TMDB", href: "/admin/import", category: "Pages" },
   { id: "p-rep", title: "Reports Queue", href: "/admin/reports", category: "Pages" },
+  { id: "p-com", title: "Community: Reviews & Lists", href: "/admin/community", category: "Pages" },
   { id: "p-usr", title: "Users & Accounts", href: "/admin/users", category: "Pages" },
   { id: "p-tr", title: "Trash", href: "/admin/trash", category: "Pages" },
   { id: "p-act", title: "Activity Log", href: "/admin/activity", category: "Pages" },

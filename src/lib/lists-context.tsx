@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { SAVE_FAILED } from "@/lib/favorites-context";
+import * as community from "@/lib/community-actions";
 import * as library from "@/lib/library-actions";
 import { cleanListName, type FavoriteEntry, type MediaList } from "@/lib/library-types";
 import { useToast } from "@/lib/toast-context";
@@ -15,6 +16,15 @@ type ListsContextValue = {
   deleteList: (id: string) => void;
   renameList: (id: string, name: string) => void;
   setListPublic: (id: string, isPublic: boolean) => void;
+  /**
+   * Puts a shared list on Community Lists or takes it off; `nickname` is
+   * a member's first, when they have none. Resolves to what to tell them.
+   */
+  setListInCommunity: (
+    id: string,
+    on: boolean,
+    nickname?: string
+  ) => Promise<{ error: string; needsNickname?: boolean } | null>;
   addToList: (listId: string, entry: FavoriteEntry) => void;
   removeFromList: (listId: string, itemId: string) => void;
   isInList: (listId: string, itemId: string) => boolean;
@@ -83,6 +93,8 @@ export function ListsProvider({
         id: crypto.randomUUID(),
         name: cleanListName(name),
         isPublic: false,
+        inCommunity: false,
+        communityBlocked: false,
         createdAt: new Date().toISOString(),
         items: firstItem ? [firstItem] : [],
       };
@@ -134,11 +146,30 @@ export function ListsProvider({
     (id: string, isPublic: boolean) => {
       commit(
         id,
-        (prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], isPublic } } : prev),
+        (prev) =>
+          prev[id]
+            ? {
+                ...prev,
+                // Unsharing also takes it off Community Lists.
+                [id]: { ...prev[id], isPublic, inCommunity: isPublic && prev[id].inCommunity },
+              }
+            : prev,
         () => library.setListPublic(id, isPublic)
       );
     },
     [commit]
+  );
+
+  // Not optimistic: a first nickname can be refused (taken, say).
+  const setListInCommunity = useCallback(
+    async (id: string, on: boolean, nickname?: string) => {
+      const result = await community.setListInCommunity(id, on, nickname).catch(() => null);
+      if (!result) return { error: SAVE_FAILED };
+      if (!result.ok) return { error: result.error, needsNickname: result.needsNickname };
+      setLists((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], inCommunity: on } } : prev));
+      return null;
+    },
+    []
   );
 
   const addToList = useCallback(
@@ -191,6 +222,7 @@ export function ListsProvider({
       deleteList,
       renameList,
       setListPublic,
+      setListInCommunity,
       addToList,
       removeFromList,
       isInList,
@@ -202,6 +234,7 @@ export function ListsProvider({
       deleteList,
       renameList,
       setListPublic,
+      setListInCommunity,
       addToList,
       removeFromList,
       isInList,

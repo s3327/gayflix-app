@@ -19,6 +19,7 @@ const STATIC_PATHS = [
   "/new-popular",
   "/trending",
   "/new-releases",
+  "/lists",
   "/browse",
   "/about",
   "/contact",
