@@ -137,6 +137,7 @@ export default async function AccountSettingPage() {
           enabled={Boolean(session.user.twoFactorEnabled)}
           hasPassword={hasPassword}
           isStaff={isStaffRole(session.user.role)}
+          isTwoFactorRequired={process.env.ADMIN_REQUIRE_2FA === "true" || process.env.ADMIN_REQUIRE_2FA === "1"}
         />
       </section>
 

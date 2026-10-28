@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronDown, ExternalLink, LogOut, Menu, PanelLeftClose, PanelLeftOpen, User, X } from "lucide-react";
+import { ChevronDown, ExternalLink, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Shield, User, X } from "lucide-react";
 import { adminNav, type NavEntry } from "@/components/admin/nav-config";
 import { authClient } from "@/lib/auth-client";
 import { useDropdown } from "@/lib/use-dropdown";
@@ -404,6 +404,14 @@ function AdminAccountSection({
 
             <div className="mt-2 flex flex-col gap-1">
               <Link
+                href="/account/setting"
+                role="menuitem"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary"
+              >
+                <Shield className="h-3.5 w-3.5" />
+                Account & 2FA
+              </Link>
+              <Link
                 href="/home"
                 role="menuitem"
                 className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary"
@@ -443,10 +451,17 @@ function AdminAccountSection({
         )}
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border-subtle pt-2">
+      <div className="mt-3 flex items-center justify-between gap-1 border-t border-border-subtle pt-2">
+        <Link
+          href="/account/setting"
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary"
+        >
+          <Shield className="h-3.5 w-3.5" />
+          Account & 2FA
+        </Link>
         <Link
           href="/home"
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary"
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-ink-secondary transition-colors hover:bg-bg-elevated hover:text-ink-primary"
         >
           <ExternalLink className="h-3.5 w-3.5" />
           View site
@@ -454,7 +469,7 @@ function AdminAccountSection({
         <button
           type="button"
           onClick={handleSignOut}
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-status-danger transition-colors hover:bg-status-danger/10"
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-status-danger transition-colors hover:bg-status-danger/10"
         >
           <LogOut className="h-3.5 w-3.5" />
           Sign out

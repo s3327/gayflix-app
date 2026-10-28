@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Save, Check, AlertCircle } from "lucide-react";
+import { Save, Check, AlertCircle, Shield } from "lucide-react";
 import type { SiteSettingsData } from "@/lib/site-settings";
 import { updateSiteSettingsAction } from "@/lib/admin-setting-actions";
 
@@ -252,6 +253,29 @@ export default function SettingsTabs({
                   </label>
                   <p className="text-xs text-ink-muted mt-0.5">
                     Allow new visitors to register accounts. When unchecked, the sign-up page shows registrations are currently closed.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 rounded-card border border-border-subtle bg-bg-surface p-4">
+                <Shield className="mt-1 h-5 w-5 text-ink-brand shrink-0" />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-ink-primary">
+                      Two-Factor Authentication (2FA)
+                    </span>
+                    <Link
+                      href="/account/setting"
+                      className="text-xs font-semibold text-ink-brand hover:underline"
+                    >
+                      Manage in Account Settings →
+                    </Link>
+                  </div>
+                  <p className="text-xs text-ink-muted mt-0.5">
+                    Two-factor sign-in is optional by default for all accounts. You can enable or disable 2FA for your account in{" "}
+                    <Link href="/account/setting" className="text-ink-primary underline hover:text-brand-pink">
+                      Account Settings
+                    </Link>. To mandate 2FA across all staff members, set <code className="rounded bg-bg-elevated px-1 py-0.5 font-mono text-xs text-ink-primary">ADMIN_REQUIRE_2FA=true</code> in your environment variables.
                   </p>
                 </div>
               </div>

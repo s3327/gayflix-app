@@ -260,6 +260,16 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
                 <Reset2FaButton userId={user.id} userEmail={user.email} />
               </div>
             )}
+            {isSelf && (
+              <div className="mt-4">
+                <Link
+                  href="/account/setting"
+                  className={BUTTON_SECONDARY}
+                >
+                  Manage in Account Settings →
+                </Link>
+              </div>
+            )}
           </Section>
         )}
 

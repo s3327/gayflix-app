@@ -84,10 +84,12 @@ export default function TwoFactorSetting({
   enabled,
   hasPassword,
   isStaff,
+  isTwoFactorRequired = false,
 }: {
   enabled: boolean;
   hasPassword: boolean;
   isStaff: boolean;
+  isTwoFactorRequired?: boolean;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -188,7 +190,7 @@ export default function TwoFactorSetting({
           <button type="button" onClick={() => setStep("codes")} className={SECONDARY_BUTTON}>
             New Backup Codes
           </button>
-          {isStaff ? (
+          {isStaff && isTwoFactorRequired ? (
             <p className="self-center text-xs text-ink-muted">Staff accounts keep two-factor on.</p>
           ) : (
             <button
