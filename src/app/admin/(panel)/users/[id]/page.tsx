@@ -252,26 +252,28 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
           )}
         </Section>
 
-        {user.twoFactorEnabled && (
-          <Section title="Two-Factor Authentication">
-            <p>Two-factor authentication is active on this account.</p>
-            {canChange && (
-              <div className="mt-4">
-                <Reset2FaButton userId={user.id} userEmail={user.email} />
-              </div>
-            )}
-            {isSelf && (
-              <div className="mt-4">
-                <Link
-                  href="/account/setting"
-                  className={BUTTON_SECONDARY}
-                >
-                  Manage in Account Settings →
-                </Link>
-              </div>
-            )}
-          </Section>
-        )}
+        <Section title="Two-Factor Authentication">
+          <p>
+            {user.twoFactorEnabled
+              ? "Two-factor authentication is active on this account."
+              : "Two-factor authentication is off for this account."}
+          </p>
+          {user.twoFactorEnabled && canChange && (
+            <div className="mt-4">
+              <Reset2FaButton userId={user.id} userEmail={user.email} />
+            </div>
+          )}
+          {isSelf && (
+            <div className="mt-4">
+              <Link
+                href="/account/setting"
+                className={BUTTON_SECONDARY}
+              >
+                Manage in Account Settings →
+              </Link>
+            </div>
+          )}
+        </Section>
 
         <Section title="Recent activity">
           {userActivity.length === 0 ? (

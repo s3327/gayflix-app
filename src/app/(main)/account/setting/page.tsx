@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { connection } from "next/server";
 import { Monitor, Smartphone } from "lucide-react";
 import DeleteAccount from "@/components/DeleteAccount";
 import NicknameSetting from "@/components/NicknameSetting";
@@ -8,6 +9,7 @@ import { accountDeletionProblem } from "@/lib/account-deletion";
 import { isStaffRole } from "@/lib/admin-roles";
 import { auth } from "@/lib/auth";
 import { getMyNickname } from "@/lib/community";
+import { db } from "@/lib/db";
 import { deviceName, isMobileDevice } from "@/lib/device-name";
 import { requireUser } from "@/lib/session";
 
@@ -31,11 +33,36 @@ const SECONDARY_BUTTON =
 export default async function AccountSettingPage() {
   const session = await requireUser("/account/setting");
   const requestHeaders = await headers();
-  const [sessions, accounts, nickname] = await Promise.all([
-    auth.api.listSessions({ headers: requestHeaders }),
-    auth.api.listUserAccounts({ headers: requestHeaders }),
-    getMyNickname(),
-  ]);
+  await connection();
+
+  let sessions: Array<{
+    id: string;
+    userAgent?: string | null;
+    createdAt: Date | string;
+    updatedAt: Date | string;
+  }> = [];
+
+  try {
+    sessions = await auth.api.listSessions({ headers: requestHeaders });
+  } catch {
+    const dbSessions = await db.session.findMany({
+      where: { userId: session.user.id, expiresAt: { gt: new Date() } },
+      select: { id: true, userAgent: true, createdAt: true, updatedAt: true },
+    });
+    sessions = dbSessions;
+  }
+
+  let accounts: Array<{ providerId: string }> = [];
+  try {
+    accounts = await auth.api.listUserAccounts({ headers: requestHeaders });
+  } catch {
+    accounts = await db.account.findMany({
+      where: { userId: session.user.id },
+      select: { providerId: true },
+    });
+  }
+
+  const nickname = await getMyNickname();
 
   const devices = sessions
     .map((s) => ({

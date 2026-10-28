@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import FormError from "@/components/FormError";
 import TwoFactorEnrollment, { BackupCodes } from "@/components/TwoFactorEnrollment";
+import { disableTwoFactorAction } from "@/lib/account-actions";
 import { authClient, authErrorMessage } from "@/lib/auth-client";
 import { useToast } from "@/lib/toast-context";
 
@@ -174,8 +175,8 @@ export default function TwoFactorSetting({
           submitLabel="Turn Off"
           onCancel={() => setStep("idle")}
           onSubmit={async (password) => {
-            const { error } = await authClient.twoFactor.disable({ password });
-            if (error) return authErrorMessage(error);
+            const res = await disableTwoFactorAction(password);
+            if (res.error) return res.error;
             setStep("idle");
             setNewCodes(null);
             showToast("Two-factor sign-in is off");
