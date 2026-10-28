@@ -3,6 +3,8 @@
 /* Tests hold strings that look like classes (some deliberately invalid). */
 @source not "../**/*.test.ts";
 @source not "../../e2e";
+@source not "../../gayflix-app";
+@source not "../../.agents";
 /* Migrations hold catalog data, not markup. */
 @source not "../../prisma";
 

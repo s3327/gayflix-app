@@ -19,16 +19,30 @@ describe("adminAccess", () => {
     expect(adminAccess(session({ role: "admin", twoFactorEnabled: true }, true), now)).toBe("ok");
   });
 
-  it("keeps out guests and non-admins", () => {
-    expect(adminAccess(null, now)).toBe("not-admin");
-    expect(adminAccess(session({ role: "user", twoFactorEnabled: true }, true), now)).toBe(
-      "not-admin"
-    );
+  it("lets in an admin with password only when two-factor is optional", () => {
+    expect(adminAccess(session({ role: "admin", twoFactorEnabled: false }, false), now)).toBe("ok");
   });
 
-  it("sends admins without two-factor to set it up", () => {
-    expect(adminAccess(session({ role: "admin", twoFactorEnabled: false }, false), now)).toBe(
-      "setup-2fa"
+  it("sends admins without two-factor to set it up when ADMIN_REQUIRE_2FA is enabled", () => {
+    expect(
+      adminAccess(session({ role: "admin", twoFactorEnabled: false }, false), now, {
+        ADMIN_REQUIRE_2FA: "true",
+      })
+    ).toBe("setup-2fa");
+    expect(
+      adminAccess(session({ role: "admin", twoFactorEnabled: false }, false), now, {
+        ADMIN_REQUIRE_2FA: "1",
+      })
+    ).toBe("setup-2fa");
+  });
+
+  it("keeps out guests and non-admins", () => {
+    expect(adminAccess(null, now)).toBe("not-admin");
+    expect(adminAccess(session({ role: "user", twoFactorEnabled: false }, false), now)).toBe(
+      "not-admin"
+    );
+    expect(adminAccess(session({ role: "user", twoFactorEnabled: true }, true), now)).toBe(
+      "not-admin"
     );
   });
 
@@ -37,5 +51,11 @@ describe("adminAccess", () => {
     expect(adminAccess(session(admin, false), now)).toBe("sign-in");
     expect(adminAccess(session(admin, true, ADMIN_SESSION_MAX_AGE_MS + 1), now)).toBe("sign-in");
     expect(adminAccess(session(admin, true, ADMIN_SESSION_MAX_AGE_MS - 1000), now)).toBe("ok");
+  });
+
+  it("asks for a fresh sign-in when a password-only admin session is too old", () => {
+    const admin = { role: "admin", twoFactorEnabled: false };
+    expect(adminAccess(session(admin, false, ADMIN_SESSION_MAX_AGE_MS + 1), now)).toBe("sign-in");
+    expect(adminAccess(session(admin, false, ADMIN_SESSION_MAX_AGE_MS - 1000), now)).toBe("ok");
   });
 });

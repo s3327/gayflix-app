@@ -58,7 +58,7 @@ describe("parseEntry", () => {
 
   it("only accepts gradient stops as the gradient", () => {
     expect(parseEntry({ ...entry, gradient: "from-pride-blue to-brand-pink" })).not.toBeNull();
-    for (const gradient of ["fixed inset-0 z-50", "from-pink to-blue extra", "from-[url(x)]"]) {
+    for (const gradient of ["fixed inset-0 z-50", "from-pink to-blue extra", "from-" + "[url(x)]"]) {
       expect(parseEntry({ ...entry, gradient })).toBeNull();
     }
   });

@@ -23,7 +23,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - **Accounts:** Better Auth (`src/lib/auth.ts`). Server code reads the
   session with `getSession()` / `requireUser()`; never trust client state
   for access decisions. Two-factor sign-in is optional for members (Account
-  → Setting) and required for staff, who can't turn it off.
+  → Setting) and for staff (by default; enforce with ADMIN_REQUIRE_2FA=true).
 - **Server functions** (`"use server"` files such as
   `src/lib/library-actions.ts` and `src/lib/report-actions.ts`) check the
   session and validate every argument themselves; list functions also

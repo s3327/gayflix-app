@@ -30,3 +30,6 @@ next-env.d.ts
 
 # Playwright accounts, sessions and outbox
 /.playwright/
+# local clones and agent scratch
+/.agents/
+/gayflix-app/

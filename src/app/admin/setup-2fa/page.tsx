@@ -5,11 +5,12 @@ import SetupTwoFactor from "./SetupTwoFactor";
 
 /**
  * Where requireAdmin() sends an admin who hasn't turned on two-factor
- * yet. Admins can't open the panel until they finish here.
+ * yet (when 2FA is required), or where staff can optionally enroll in 2FA.
  */
 export default async function SetupTwoFactorPage() {
-  const access = adminAccess(await getSession());
+  const session = await getSession();
+  const access = adminAccess(session);
   if (access === "not-admin") redirect("/admin/login");
-  if (access !== "setup-2fa") redirect("/admin/dashboard");
+  if (session?.user.twoFactorEnabled) redirect("/admin/dashboard");
   return <SetupTwoFactor />;
 }

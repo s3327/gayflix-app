@@ -179,12 +179,13 @@ export const auth = betterAuth({
         }
         return;
       }
-      // Two-factor is optional for members, but the admin panel needs it,
-      // so staff accounts can't turn it off.
+      // Two-factor is optional for members and staff, unless ADMIN_REQUIRE_2FA is enabled.
       if (ctx.path === "/two-factor/disable") {
-        const session = await getSessionFromCtx(ctx);
-        if (session && isStaffRole(session.user.role)) {
-          throw new APIError("FORBIDDEN", { message: "Staff accounts keep two-factor on." });
+        if (process.env.ADMIN_REQUIRE_2FA === "true" || process.env.ADMIN_REQUIRE_2FA === "1") {
+          const session = await getSessionFromCtx(ctx);
+          if (session && isStaffRole(session.user.role)) {
+            throw new APIError("FORBIDDEN", { message: "Staff accounts keep two-factor on." });
+          }
         }
         return;
       }
@@ -210,7 +211,7 @@ export const auth = betterAuth({
       if (!ctx.path.startsWith("/admin/")) return;
       const session = await getSessionFromCtx(ctx);
       if (!session || adminAccess(session) !== "ok" || !canManageUsers(session.user.role)) {
-        throw new APIError("FORBIDDEN", { message: "Admin access needs a two-factor sign-in." });
+        throw new APIError("FORBIDDEN", { message: "Admin access required." });
       }
       const action = ADMIN_ENDPOINT_ACTIONS[ctx.path];
       if (ctx.path === "/admin/list-users") return;

@@ -78,6 +78,7 @@ export default defineConfig({
       env: {
         ADMIN_BASIC_AUTH_USER: "e2e-admin",
         ADMIN_BASIC_AUTH_PASSWORD: "e2e-password",
+        ADMIN_REQUIRE_2FA: "true",
         CRON_SECRET: "e2e-cron-secret",
         BETTER_AUTH_URL: BASE_URL,
         EMAIL_OUTBOX_FILE: OUTBOX_FILE,
