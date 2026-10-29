@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition, useMemo } from "react";
+import { useState, useRef, useMemo } from "react";
 import Link from "next/link";
 import {
   Upload,
@@ -15,13 +15,11 @@ import {
   Tv,
   CheckCircle2,
   AlertCircle,
-  Clock,
   Sparkles,
   Loader2,
   ArrowRight,
-  Filter,
 } from "lucide-react";
-import { parseImdbExport, type ImdbImportItem, type ImdbExportResult } from "@/lib/imdb-csv";
+import { parseImdbExport, type ImdbExportResult } from "@/lib/imdb-csv";
 import {
   calculateEta,
   chunkArray,

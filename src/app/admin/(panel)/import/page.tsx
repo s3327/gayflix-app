@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ExternalLink, Sparkles, Film } from "lucide-react";
+import { ExternalLink, Sparkles, Film, Search, Upload } from "lucide-react";
 import ImportButton, { ImportedLink } from "@/components/admin/ImportButton";
 import ImportSearchBar from "@/components/admin/ImportSearchBar";
 import BatchImportBar from "@/components/admin/BatchImportBar";
+import ImdbBatchImporter from "@/components/admin/import/ImdbBatchImporter";
 import MediaCoverThumb from "@/components/MediaCoverThumb";
 import Pagination from "@/components/Pagination";
 import { importTitle } from "@/lib/admin-import-actions";
@@ -21,12 +22,14 @@ export const metadata: Metadata = {
 };
 
 /**
- * /admin/import: finds titles on TMDB, by title or IMDb ID, 40 to a page.
- * Enhanced with batch import, rich cards (synopsis, TMDB links), and empty state tips.
+ * /admin/import: finds titles on TMDB, by title or IMDb ID, 40 to a page,
+ * or imports IMDb export CSV files in chunked batches as drafts.
  */
 export default async function ImportPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   await requireAdmin();
   const params = await searchParams;
+  const tab = firstParam(params.tab) === "batch" ? "batch" : "search";
+
   const search: ImportSearch = {
     query: (firstParam(params.q) ?? "").trim().slice(0, 200),
     by: firstParam(params.by) === "imdb" ? "imdb" : "title",
@@ -48,73 +51,118 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
       <div className="px-6 pt-10 sm:px-10">
         <h1 className="font-display text-2xl font-bold">Import</h1>
         <p className="mt-2 max-w-2xl text-sm text-ink-muted">
-          Find a movie or series on TMDB and import it as a draft. Each import is checked against
-          IMDb first.
+          Find titles on TMDB or import an entire IMDb watchlist/ratings export in batch.
+          Titles are saved as drafts for editorial review.
           {tmdbConfigured() && !omdbConfigured() && " IMDb checks are off until OMDB_API_KEY is set."}
         </p>
+
+        {/* Tab Navigation */}
+        <div className="mt-6 flex border-b border-border-subtle">
+          <Link
+            href="/admin/import?tab=search"
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition-colors ${
+              tab === "search"
+                ? "border-brand-pink text-brand-pink"
+                : "border-transparent text-ink-secondary hover:text-ink-primary"
+            }`}
+          >
+            <Search className="h-4 w-4" />
+            Search TMDB &amp; IMDb
+          </Link>
+          <Link
+            href="/admin/import?tab=batch"
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition-colors ${
+              tab === "batch"
+                ? "border-brand-pink text-brand-pink"
+                : "border-transparent text-ink-secondary hover:text-ink-primary"
+            }`}
+          >
+            <Upload className="h-4 w-4" />
+            IMDb Batch Import (CSV)
+          </Link>
+        </div>
       </div>
 
-      <ImportSearchBar query={search.query} by={search.by} type={search.type} />
-
-      {!tmdbConfigured() ? (
-        <p className="mx-6 max-w-2xl text-sm text-ink-secondary sm:mx-10">
-          Searching needs a TMDB key. Add TMDB_API_KEY to the site&apos;s environment variables and
-          redeploy (see &ldquo;Importing titles&rdquo; in docs/DEPLOYMENT.md).
-        </p>
-      ) : search.query ? (
-        <Results search={search} />
+      {tab === "batch" ? (
+        <div className="px-6 py-6 sm:px-10">
+          <ImdbBatchImporter />
+        </div>
       ) : (
-        /* Empty State with Tips & Recent Imports */
-        <div className="px-6 py-6 sm:px-10 space-y-8">
-          <div className="rounded-xl border border-border-subtle bg-bg-surface p-6 max-w-3xl">
-            <h2 className="flex items-center gap-2 text-base font-bold text-ink-primary">
-              <Sparkles className="h-4 w-4 text-brand-pink" />
-              Quick Import Tips
-            </h2>
-            <ul className="mt-3 space-y-2 text-xs text-ink-secondary">
-              <li>• Search by exact title or paste an IMDb ID like <code className="bg-bg-elevated px-1.5 py-0.5 rounded text-ink-primary">tt0133093</code>.</li>
-              <li>• Select multiple search results to import entire franchises or film collections in batch.</li>
-              <li>• Imported titles start as <span className="font-semibold text-ink-primary">Drafts</span> so you can review posters, video sources, and cast before publishing.</li>
-            </ul>
-          </div>
+        <>
+          <ImportSearchBar query={search.query} by={search.by} type={search.type} />
 
-          {recentImports.length > 0 && (
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-ink-muted mb-4">
-                Recently Imported Titles
-              </h2>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-6">
-                {recentImports.map((item) => (
-                  <Link
-                    key={item.id}
-                    href={`${libraryPath(item.type)}/${item.id}`}
-                    className="group flex flex-col gap-2 rounded-card border border-border-subtle bg-bg-surface p-2.5 transition-colors hover:border-brand-pink/50 hover:bg-bg-elevated"
-                  >
-                    <div className="relative aspect-2/3 w-full overflow-hidden rounded bg-bg-base">
-                      {item.posterUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={item.posterUrl} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-ink-muted">
-                          <Film className="h-6 w-6" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold text-ink-primary group-hover:text-ink-brand">
-                        {item.title}
-                      </p>
-                      <p className="text-2xs text-ink-muted">{item.year}</p>
-                    </div>
-                  </Link>
-                ))}
+          {!tmdbConfigured() ? (
+            <p className="mx-6 max-w-2xl text-sm text-ink-secondary sm:mx-10">
+              Searching needs a TMDB key. Add TMDB_API_KEY to the site&apos;s environment variables and
+              redeploy (see &ldquo;Importing titles&rdquo; in docs/DEPLOYMENT.md).
+            </p>
+          ) : search.query ? (
+            <Results search={search} />
+          ) : (
+            /* Empty State with Tips & Recent Imports */
+            <div className="px-6 py-6 sm:px-10 space-y-8">
+              <div className="rounded-xl border border-border-subtle bg-bg-surface p-6 max-w-3xl">
+                <h2 className="flex items-center gap-2 text-base font-bold text-ink-primary">
+                  <Sparkles className="h-4 w-4 text-brand-pink" />
+                  Quick Import Tips
+                </h2>
+                <ul className="mt-3 space-y-2 text-xs text-ink-secondary">
+                  <li>• Search by exact title or paste an IMDb ID like <code className="bg-bg-elevated px-1.5 py-0.5 rounded text-ink-primary">tt0133093</code>.</li>
+                  <li>• Select multiple search results to import entire franchises or film collections in batch.</li>
+                  <li>
+                    • Have an IMDb Watchlist or export CSV?{" "}
+                    <Link
+                      href="/admin/import?tab=batch"
+                      className="font-semibold text-brand-pink hover:underline inline-flex items-center gap-1"
+                    >
+                      Switch to IMDb Batch Import
+                      <ExternalLink className="h-3 w-3 inline" />
+                    </Link>{" "}
+                    to import entire lists as drafts in batch.
+                  </li>
+                  <li>• Imported titles start as <span className="font-semibold text-ink-primary">Drafts</span> so you can review posters, video sources, and cast before publishing.</li>
+                </ul>
               </div>
+
+              {recentImports.length > 0 && (
+                <div>
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-ink-muted mb-4">
+                    Recently Imported Titles
+                  </h2>
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-6">
+                    {recentImports.map((item) => (
+                      <Link
+                        key={item.id}
+                        href={`${libraryPath(item.type)}/${item.id}`}
+                        className="group flex flex-col gap-2 rounded-card border border-border-subtle bg-bg-surface p-2.5 transition-colors hover:border-brand-pink/50 hover:bg-bg-elevated"
+                      >
+                        <div className="relative aspect-2/3 w-full overflow-hidden rounded bg-bg-base">
+                          {item.posterUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={item.posterUrl} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-ink-muted">
+                              <Film className="h-6 w-6" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-semibold text-ink-primary group-hover:text-ink-brand">
+                            {item.title}
+                          </p>
+                          <p className="text-2xs text-ink-muted">{item.year}</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      <BatchImportBar />
+          <BatchImportBar />
+        </>
+      )}
     </div>
   );
 }

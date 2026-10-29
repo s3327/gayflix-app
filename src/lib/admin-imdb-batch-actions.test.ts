@@ -1,9 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { checkExistingImdbBatch, importImdbBatchChunk } from "./admin-imdb-batch-actions";
-import { db } from "./db";
 import * as tmdb from "./tmdb";
-import * as omdb from "./omdb";
 import * as titleStore from "./title-store";
+
+const mockFindMany = vi.fn();
+const mockFindFirst = vi.fn();
 
 vi.mock("@/lib/admin-guard", () => ({
   catalogSession: vi.fn().mockResolvedValue({
@@ -16,8 +17,8 @@ vi.mock("@/lib/admin-guard", () => ({
 vi.mock("@/lib/db", () => ({
   db: {
     media: {
-      findMany: vi.fn(),
-      findFirst: vi.fn(),
+      findMany: (...args: unknown[]) => mockFindMany(...args),
+      findFirst: (...args: unknown[]) => mockFindFirst(...args),
       findUnique: vi.fn(),
     },
     episode: {
@@ -52,10 +53,10 @@ describe("checkExistingImdbBatch", () => {
   });
 
   it("returns existing IMDb IDs present in database", async () => {
-    vi.mocked(db.media.findMany).mockResolvedValue([
+    mockFindMany.mockResolvedValue([
       { imdbId: "tt17076682" },
       { imdbId: "tt21110704" },
-    ] as any);
+    ]);
 
     const res = await checkExistingImdbBatch(["tt17076682", "tt21110704", "tt99999999"]);
     expect(res.ok).toBe(true);
@@ -69,11 +70,11 @@ describe("importImdbBatchChunk", () => {
   });
 
   it("skips title if imdbId already exists in database", async () => {
-    vi.mocked(db.media.findFirst).mockResolvedValue({
+    mockFindFirst.mockResolvedValue({
       id: "concerned-citizen",
       title: "Concerned Citizen",
       imdbId: "tt17076682",
-    } as any);
+    });
 
     const res = await importImdbBatchChunk([
       { imdbId: "tt17076682", title: "Concerned Citizen", mediaType: "movie" },
@@ -86,11 +87,11 @@ describe("importImdbBatchChunk", () => {
   });
 
   it("imports title from TMDB and saves as draft", async () => {
-    vi.mocked(db.media.findFirst).mockResolvedValue(null);
+    mockFindFirst.mockResolvedValue(null);
     vi.mocked(tmdb.findOnTmdb).mockResolvedValue({
       movies: [{ id: 938472, title: "Concerned Citizen" }],
       series: [],
-    } as any);
+    } as unknown as { movies: { id: number; title: string }[]; series: never[] });
     vi.mocked(tmdb.getTmdbDetails).mockResolvedValue({
       id: 938472,
       title: "Concerned Citizen",
@@ -129,11 +130,11 @@ describe("importImdbBatchChunk", () => {
   });
 
   it("handles TMDB not found gracefully", async () => {
-    vi.mocked(db.media.findFirst).mockResolvedValue(null);
+    mockFindFirst.mockResolvedValue(null);
     vi.mocked(tmdb.findOnTmdb).mockResolvedValue({
       movies: [],
       series: [],
-    } as any);
+    } as unknown as { movies: never[]; series: never[] });
 
     const res = await importImdbBatchChunk([
       { imdbId: "tt99999999", title: "Nonexistent Movie", mediaType: "movie" },
