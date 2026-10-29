@@ -4,7 +4,9 @@ import { requireAdmin } from "@/lib/session";
 import { canManageJobs } from "@/lib/admin-roles";
 import { logActivity } from "@/lib/activity-logger";
 
-export type JobName = "purge_trash" | "publish_due" | "clean_orphans";
+import { backfillDefaultVideoSources } from "@/lib/video-backfill";
+
+export type JobName = "purge_trash" | "publish_due" | "clean_orphans" | "backfill_default_embeds";
 
 export const AVAILABLE_JOBS: {
   name: JobName;
@@ -28,6 +30,12 @@ export const AVAILABLE_JOBS: {
     name: "clean_orphans",
     label: "Scan Unreferenced Uploads (Preview)",
     description: "Preview scanner for unreferenced blob uploads. Real blob bucket scanning requires dedicated storage worker.",
+    schedule: "Manual only",
+  },
+  {
+    name: "backfill_default_embeds",
+    label: "Backfill Default Embed Video Sources",
+    description: "Populates missing default embed sources (Server 1) for movies and episodes with IMDb or TMDB IDs.",
     schedule: "Manual only",
   },
 ];
@@ -194,6 +202,43 @@ export async function runOrphanImageCleanupJob(triggeredBy = "scheduler") {
   });
 }
 
+export async function runBackfillDefaultEmbedsJob(triggeredBy = "scheduler") {
+  const startTime = Date.now();
+  try {
+    const res = await backfillDefaultVideoSources();
+    const durationMs = Date.now() - startTime;
+    const itemsCount = res.moviesUpdated + res.episodesUpdated;
+    const details = `Updated ${res.moviesUpdated} movies and ${res.episodesUpdated} episodes (processed ${res.moviesProcessed} movies, ${res.episodesProcessed} episodes).`;
+    const run = await db.scheduledJobRun.create({
+      data: {
+        jobName: "backfill_default_embeds",
+        status: "success",
+        itemsCount,
+        details,
+        durationMs,
+        triggeredBy,
+        finishedAt: new Date(),
+      },
+    });
+    return run;
+  } catch (err: unknown) {
+    const durationMs = Date.now() - startTime;
+    const msg = err instanceof Error ? err.message : String(err);
+    await db.scheduledJobRun.create({
+      data: {
+        jobName: "backfill_default_embeds",
+        status: "error",
+        itemsCount: 0,
+        details: `Failed: ${msg}`,
+        durationMs,
+        triggeredBy,
+        finishedAt: new Date(),
+      },
+    });
+    throw err;
+  }
+}
+
 /** Server action to manually trigger a background job. */
 export async function triggerJob(jobName: string): Promise<{ ok: boolean; message: string }> {
   const session = await requireAdmin();
@@ -208,6 +253,8 @@ export async function triggerJob(jobName: string): Promise<{ ok: boolean; messag
     result = await runPublishDueJob(session.user.email);
   } else if (jobName === "clean_orphans") {
     result = await runOrphanImageCleanupJob(session.user.email);
+  } else if (jobName === "backfill_default_embeds") {
+    result = await runBackfillDefaultEmbedsJob(session.user.email);
   } else {
     return { ok: false, message: "Unknown job name." };
   }
