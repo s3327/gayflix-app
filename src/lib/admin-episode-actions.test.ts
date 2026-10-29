@@ -47,7 +47,7 @@ vi.mock("@/lib/db", () => ({
     videoSource: {
       create: (...args: unknown[]) => mockVideoSourceCreate(...args),
     },
-    $transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => {
+    $transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
       return cb({
         episode: {
           create: mockEpisodeCreate,
@@ -102,7 +102,7 @@ describe("Episode default embed video sources", () => {
             still_path: "/still.jpg",
           },
         ],
-      } as any);
+      } as unknown as Awaited<ReturnType<typeof tmdb.getTmdbSeasonDetails>>);
 
       const result = await importSeriesSeasonsAction("fellow-travelers", [1]);
 
@@ -151,7 +151,7 @@ describe("Episode default embed video sources", () => {
             still_path: "/still2.jpg",
           },
         ],
-      } as any);
+      } as unknown as Awaited<ReturnType<typeof tmdb.getTmdbSeasonDetails>>);
 
       const result = await importSeriesSeasonsAction("fellow-travelers", [1]);
 
@@ -194,7 +194,7 @@ describe("Episode default embed video sources", () => {
       formData.set("airDate", "2023-11-12");
       formData.set("synopsis", "Hawk and Tim go on a road trip.");
 
-      const result = await createEpisode({ values: {} as any, version: 1 }, formData);
+      const result = await createEpisode({ values: {} as unknown as Record<string, string>, version: 1 }, formData);
 
       expect(result.ok).toBe(true);
       expect(mockVideoSourceCreate).toHaveBeenCalledWith({

@@ -7,7 +7,7 @@ const mockVideoSourceCreate = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   db: {
-    $transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => {
+    $transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
       return cb({
         media: {
           create: mockMediaCreate,
@@ -37,23 +37,29 @@ describe("insertTitle", () => {
     status: "draft",
     featured: false,
     year: 2011,
-    releaseDate: "2011-09-22",
+    releaseDate: new Date("2011-09-22"),
     runtimeMinutes: 97,
     genres: ["Drama", "Romance"],
     country: "United Kingdom",
     language: "English",
     synopsis: "After a drunken house party with his straight mates...",
     tagline: "A (short) story about love.",
-    rating: "18",
+    rating: 8.0,
     credit: "Andrew Haigh",
     cast: ["Tom Cullen", "Chris New"],
     tags: ["gay", "romance"],
+    posterUrl: "https://image.tmdb.org/t/p/w500/sample.jpg",
+    backdropUrl: null,
+    trailerUrl: null,
+    maturityRating: "18",
+    contentNotes: [],
+    publishAt: null,
   };
 
   it("creates a movie media record and default embed video source using imdbId as primary", async () => {
     const id = await insertTitle("movie", sampleInput, {
       imdbId: "tt1723816",
-      tmdbId: 78586,
+      tmdbId: "78586",
     });
 
     expect(id).toBeDefined();
@@ -72,7 +78,7 @@ describe("insertTitle", () => {
 
   it("falls back to numeric TMDB ID when IMDb ID is not provided", async () => {
     const id = await insertTitle("movie", sampleInput, {
-      tmdbId: 78586,
+      tmdbId: "78586",
     });
 
     expect(mockVideoSourceCreate).toHaveBeenCalledWith({
@@ -90,7 +96,7 @@ describe("insertTitle", () => {
   it("does not create a default video source for series on title insert (episodes get video sources)", async () => {
     await insertTitle("series", { ...sampleInput, runtimeMinutes: null }, {
       imdbId: "tt0944947",
-      tmdbId: 1399,
+      tmdbId: "1399",
     });
 
     expect(mockMediaCreate).toHaveBeenCalledTimes(1);

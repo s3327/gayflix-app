@@ -67,7 +67,7 @@ export function titleData(type: MediaType, input: TitleInput) {
 
 /** Where an imported title came from (media.tmdbId and media.imdbId). */
 export type SourceIds = {
-  tmdbId?: string | number | null;
+  tmdbId?: string | null;
   imdbId?: string | null;
 };
 
@@ -83,11 +83,9 @@ export async function insertTitle(
   const id = await freeId(slugify(input.title) || type);
   const rawTmdbId = sources.tmdbId ?? null;
   const tmdbId =
-    typeof rawTmdbId === "number"
-      ? `tmdb-${rawTmdbId}`
-      : rawTmdbId
-        ? (String(rawTmdbId).startsWith("tmdb-") ? String(rawTmdbId) : `tmdb-${rawTmdbId}`)
-        : null;
+    rawTmdbId
+      ? (String(rawTmdbId).startsWith("tmdb-") ? String(rawTmdbId) : `tmdb-${rawTmdbId}`)
+      : null;
   const imdbId = sources.imdbId ?? null;
 
   try {
