@@ -15,6 +15,9 @@ export const metadata: Metadata = {
   // Added to an iPhone's home screen, it opens full screen as "Gayflix"
   // (the manifest, src/app/manifest.ts, does this for everything else).
   appleWebApp: { capable: true, title: "Gayflix", statusBarStyle: "black-translucent" },
+  alternates: {
+    canonical: "/",
+  },
 };
 
 /** The browser's own bars match the page when installed or on a phone. */
