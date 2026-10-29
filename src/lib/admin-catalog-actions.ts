@@ -14,6 +14,7 @@ import { createTitleRevision } from "@/lib/title-revisions";
 import { logActivity } from "@/lib/activity-logger";
 import { getTmdbDetails, getTmdbSeasonDetails } from "@/lib/tmdb";
 import { videoHosts, videoUrlAllowed } from "@/lib/video-hosts";
+import { buildDefaultEpisodeEmbedUrl } from "@/lib/embed-builder";
 import {
   EPISODE_FIELDS,
   TITLE_FIELDS,
@@ -715,7 +716,7 @@ export async function createEpisode(_state: FormState, form: FormData): Promise<
 
   const series = await db.media.findUnique({
     where: { id: seriesId },
-    select: { type: true, trashedAt: true },
+    select: { type: true, trashedAt: true, imdbId: true, tmdbId: true },
   });
   if (series?.type !== "series" || series.trashedAt) {
     return { errors: { series: "Choose the series." }, values, version: Date.now() };
@@ -743,6 +744,26 @@ export async function createEpisode(_state: FormState, form: FormData): Promise<
           synopsis,
         },
       });
+
+      const defaultEmbedUrl = buildDefaultEpisodeEmbedUrl({
+        imdbId: series.imdbId,
+        tmdbId: series.tmdbId,
+        seasonNumber,
+        episodeNumber,
+      });
+      if (defaultEmbedUrl) {
+        await tx.videoSource.create({
+          data: {
+            episodeId: id,
+            label: "Server 1",
+            kind: "embed",
+            url: defaultEmbedUrl,
+            position: 1,
+            enabled: true,
+          },
+        });
+      }
+
       await refreshSeasons(tx, seriesId);
     });
   } catch (error) {
@@ -913,7 +934,7 @@ export async function importSeriesSeasonsAction(
   }
   const series = await db.media.findUnique({
     where: { id: seriesId },
-    select: { id: true, type: true, tmdbId: true, trashedAt: true },
+    select: { id: true, type: true, tmdbId: true, imdbId: true, trashedAt: true },
   });
   if (!series || series.type !== "series" || series.trashedAt) {
     return { ok: false, message: "Series not found or is in trash." };
@@ -951,6 +972,26 @@ export async function importSeriesSeasonsAction(
             synopsis: tmdbEpisodeSynopsis(ep.overview),
           },
         });
+
+        const defaultEmbedUrl = buildDefaultEpisodeEmbedUrl({
+          imdbId: series.imdbId,
+          tmdbId: ref.id,
+          seasonNumber: sNum,
+          episodeNumber: ep.episode_number,
+        });
+        if (defaultEmbedUrl) {
+          await db.videoSource.create({
+            data: {
+              episodeId: id,
+              label: "Server 1",
+              kind: "embed",
+              url: defaultEmbedUrl,
+              position: 1,
+              enabled: true,
+            },
+          });
+        }
+
         importedCount++;
       }
     }
