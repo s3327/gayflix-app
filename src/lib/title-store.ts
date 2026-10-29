@@ -2,6 +2,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import type { MediaType } from "@/lib/media";
 import { gradientFor, movieDuration, seriesDuration, slugify, type TitleInput } from "@/lib/title-form";
+import { buildDefaultMovieEmbedUrl } from "@/lib/embed-builder";
 
 /*
  * Writes shared by the admin title editor (src/lib/admin-catalog-actions.ts)
@@ -65,7 +66,10 @@ export function titleData(type: MediaType, input: TitleInput) {
 }
 
 /** Where an imported title came from (media.tmdbId and media.imdbId). */
-export type SourceIds = { tmdbId: string | null; imdbId: string | null };
+export type SourceIds = {
+  tmdbId?: string | number | null;
+  imdbId?: string | null;
+};
 
 /**
  * Adds a title, at an address made from its name. Returns the address,
@@ -74,9 +78,18 @@ export type SourceIds = { tmdbId: string | null; imdbId: string | null };
 export async function insertTitle(
   type: MediaType,
   input: TitleInput,
-  { tmdbId, imdbId }: SourceIds = { tmdbId: null, imdbId: null }
+  sources: SourceIds = {}
 ): Promise<string | null> {
   const id = await freeId(slugify(input.title) || type);
+  const rawTmdbId = sources.tmdbId ?? null;
+  const tmdbId =
+    typeof rawTmdbId === "number"
+      ? `tmdb-${rawTmdbId}`
+      : rawTmdbId
+        ? (String(rawTmdbId).startsWith("tmdb-") ? String(rawTmdbId) : `tmdb-${rawTmdbId}`)
+        : null;
+  const imdbId = sources.imdbId ?? null;
+
   try {
     await db.$transaction(async (tx) => {
       if (input.featured && input.status === "published") await unfeatureOthers(tx, id);
@@ -93,6 +106,25 @@ export async function insertTitle(
           imdbId,
         },
       });
+
+      if (type === "movie") {
+        const defaultEmbedUrl = buildDefaultMovieEmbedUrl({
+          imdbId,
+          tmdbId: rawTmdbId ?? tmdbId,
+        });
+        if (defaultEmbedUrl) {
+          await tx.videoSource.create({
+            data: {
+              mediaId: id,
+              label: "Server 1",
+              kind: "embed",
+              url: defaultEmbedUrl,
+              position: 1,
+              enabled: true,
+            },
+          });
+        }
+      }
     });
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;
