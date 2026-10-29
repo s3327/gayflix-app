@@ -12,12 +12,14 @@
  * hosts of its playlists and of its segments. Redeploy after changing
  * it. With none, no video can be added.
  */
+export const DEFAULT_VIDEO_HOSTS = ["gayflix.my.id"];
+
 export function videoHosts(env: Record<string, string | undefined> = process.env): string[] {
   const hosts = (env.VIDEO_HOSTS ?? "")
     .split(",")
     .map((entry) => hostnameOf(entry.trim().toLowerCase()))
     .filter((host) => /^(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host));
-  return [...new Set(hosts)];
+  return [...new Set([...DEFAULT_VIDEO_HOSTS, ...hosts])];
 }
 
 /** Whether `hostname` is one of `hosts`, or a subdomain of a "*." entry. */

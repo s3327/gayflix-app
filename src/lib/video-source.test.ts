@@ -9,11 +9,15 @@ function source(overrides: Partial<VideoSourceValues> = {}): VideoSourceValues {
 }
 
 describe("videoHosts", () => {
+  it("includes gayflix.my.id as default video host", () => {
+    expect(videoHosts({})).toContain("gayflix.my.id");
+    expect(videoUrlAllowed("https://gayflix.my.id/embed/movie/tt27987047", videoHosts({}))).toBe(true);
+  });
+
   it("reads hostnames and *. entries from VIDEO_HOSTS", () => {
     expect(
       videoHosts({ VIDEO_HOSTS: " Player.Example.com , *.b-cdn.net,https://cdn.example.org/videos,,not a host" })
-    ).toEqual(["player.example.com", "*.b-cdn.net", "cdn.example.org"]);
-    expect(videoHosts({})).toEqual([]);
+    ).toEqual(["gayflix.my.id", "player.example.com", "*.b-cdn.net", "cdn.example.org"]);
   });
 
   it("allows a *. entry's subdomains, not the host itself", () => {
