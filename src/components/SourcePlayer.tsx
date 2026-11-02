@@ -90,8 +90,9 @@ function EmbedPlayer({
     <iframe
       src={source.url}
       title={`${title} (${source.label})`}
-      allow="autoplay; picture-in-picture; encrypted-media"
+      allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope"
       allowFullScreen
+      referrerPolicy="no-referrer"
       className="absolute inset-0 h-full w-full border-0 bg-black focus-visible:-outline-offset-4"
     />
   );
