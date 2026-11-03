@@ -1,23 +1,27 @@
 import type { Metadata, Viewport } from "next";
 import { connection } from "next/server";
 import { AuthProvider } from "@/lib/auth-context";
-import { OPEN_GRAPH, SITE_DESCRIPTION, SITE_TITLE, TWITTER } from "@/lib/page-metadata";
+import { OPEN_GRAPH, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, TWITTER } from "@/lib/page-metadata";
 import { siteUrl } from "@/lib/site-url";
 import { fontVariables } from "./fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: siteUrl(),
-  title: SITE_TITLE,
+  title: {
+    default: SITE_TITLE,
+    template: `%s · ${SITE_NAME}`,
+  },
+
   description: SITE_DESCRIPTION,
   openGraph: OPEN_GRAPH,
   twitter: TWITTER,
   // Added to an iPhone's home screen, it opens full screen as "Gayflix"
   // (the manifest, src/app/manifest.ts, does this for everything else).
   appleWebApp: { capable: true, title: "Gayflix", statusBarStyle: "black-translucent" },
-  alternates: {
-    canonical: "/",
-  },
+
+
+
 };
 
 /** The browser's own bars match the page when installed or on a phone. */

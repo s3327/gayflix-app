@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import LegalPage, { LegalLink, LegalSection } from "@/components/LegalPage";
 import { LEGAL } from "@/lib/legal";
-import { SITE_NAME } from "@/lib/page-metadata";
 
-export const metadata: Metadata = { title: `About · ${SITE_NAME}` };
+
+export const metadata: Metadata = {
+  title: "About",
+  alternates: { canonical: "/about" },
+};
 
 /** Who runs Gayflix and what it's for. The operator comes from src/lib/legal.ts. */
 export default function AboutPage() {

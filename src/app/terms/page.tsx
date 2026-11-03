@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import LegalPage, { ContactEmail, LegalLink, LegalSection } from "@/components/LegalPage";
 import { LEGAL } from "@/lib/legal";
-import { SITE_NAME } from "@/lib/page-metadata";
 
-export const metadata: Metadata = { title: `Terms of Service · ${SITE_NAME}` };
+
+export const metadata: Metadata = {
+  title: "Terms of Service",
+  alternates: { canonical: "/terms" },
+};
 
 /**
  * The Terms the sign-up checkbox agrees to. Written for the site as it

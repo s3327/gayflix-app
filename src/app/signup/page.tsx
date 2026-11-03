@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { googleSignInEnabled } from "@/lib/auth";
-import { SITE_NAME } from "@/lib/page-metadata";
+
 import { nextParam } from "@/lib/safe-redirect";
 import { getSession } from "@/lib/session";
 import SignupForm from "./SignupForm";
 
-export const metadata: Metadata = { title: `Sign Up · ${SITE_NAME}` };
+export const metadata: Metadata = {
+  title: "Sign Up",
+  robots: { index: false, follow: false },
+};
 
 /**
  * Public sign-up. `?next=` is the page to come back to once the email is

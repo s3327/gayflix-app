@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import ContentRow from "@/components/ContentRow";
+import JsonLd from "@/components/JsonLd";
 import ContinueWatchingSection from "@/components/ContinueWatchingSection";
 import HeroCarousel from "@/components/HeroCarousel";
 import TopTenSection from "@/components/TopTenSection";
@@ -11,6 +12,8 @@ import {
   type BecauseYouWatched,
 } from "@/lib/catalog";
 import { listingMetadata } from "@/lib/page-metadata";
+import { buildWebsiteJsonLd } from "@/lib/schema-org";
+import { siteUrl } from "@/lib/site-url";
 
 /** A Because You Watched row says why it's there. */
 const BECAUSE_HEADINGS: Record<BecauseYouWatched["seed"]["reason"], string> = {
@@ -40,6 +43,7 @@ export default async function HomePage() {
 
   return (
     <main>
+      <JsonLd data={buildWebsiteJsonLd(siteUrl().origin)} />
       {heroes.length > 0 ? (
         <HeroCarousel heroes={heroes} />
       ) : (

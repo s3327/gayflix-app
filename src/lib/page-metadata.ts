@@ -46,6 +46,11 @@ export function listingMetadata(name: string, path: string, description: string,
     description,
     alternates: { canonical: url },
     openGraph: { ...OPEN_GRAPH, title: name, description, url },
+    twitter: {
+      ...TWITTER,
+      title: name,
+      description,
+    },
   };
 }
 

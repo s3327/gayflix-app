@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import LegalPage, { ContactEmail, LegalLink, LegalSection } from "@/components/LegalPage";
 import { LEGAL } from "@/lib/legal";
-import { SITE_NAME } from "@/lib/page-metadata";
 
-export const metadata: Metadata = { title: `Privacy Policy · ${SITE_NAME}` };
+
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  alternates: { canonical: "/privacy" },
+};
 
 /**
  * What the site keeps, written from the code: accounts (src/lib/auth.ts),

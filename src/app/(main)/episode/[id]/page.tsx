@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getEpisode, getSubtitles, getVideoSources, resolveEpisodeRedirect } from "@/lib/catalog";
 import { getResumePosition } from "@/lib/library";
+import JsonLd from "@/components/JsonLd";
 import WatchPlayer from "@/components/WatchPlayer";
 import EpisodeSelectorDrawer from "@/components/watch/EpisodeSelectorDrawer";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
@@ -13,6 +14,9 @@ import TagList from "@/components/TagList";
 import TitleActions from "@/components/TitleActions";
 import { countryHref, genreHref, languageHref, personHref } from "@/lib/browse-href";
 import { episodeMetadata } from "@/lib/page-metadata";
+import { buildBreadcrumbJsonLd, buildEpisodeJsonLd } from "@/lib/schema-org";
+import { siteUrl } from "@/lib/site-url";
+import { titleHref } from "@/lib/title-href";
 import type { SearchParams } from "@/lib/search-params";
 
 export async function generateMetadata({
@@ -79,8 +83,20 @@ export default async function EpisodePage({
   const previous = currentIndex > 0 ? episodes[currentIndex - 1] : undefined;
   const next = currentIndex < episodes.length - 1 ? episodes[currentIndex + 1] : undefined;
 
+  const origin = siteUrl().origin;
+  const structuredData = [
+    buildEpisodeJsonLd(episode, series, origin),
+    buildBreadcrumbJsonLd([
+      { name: "Home", url: origin },
+      { name: "Series", url: `${origin}/series` },
+      { name: series.title, url: `${origin}${titleHref(series)}` },
+      { name: `S${episode.seasonNumber} E${episode.episodeNumber}: ${episode.title}`, url: `${origin}/episode/${episode.id}` },
+    ]),
+  ];
+
   return (
     <main className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
+      <JsonLd data={structuredData} />
       {/* Player and its server tabs. Play (inside WatchPlayer) records a
           History entry. Keyed so the next episode starts on its own
           first server, not playing unless Up next sent it. */}

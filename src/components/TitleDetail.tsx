@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Play, Star, ThumbsUp } from "lucide-react";
 import type { Media, MediaDetail } from "@/lib/media";
+import JsonLd from "@/components/JsonLd";
 import ReadMoreText from "@/components/ReadMoreText";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import RecommendationSection from "@/components/RecommendationSection";
@@ -18,6 +19,9 @@ import WatchlistButton from "@/components/WatchlistButton";
 import TrailerButton from "@/components/TrailerButton";
 import { countryHref, genreHref, languageHref, personHref } from "@/lib/browse-href";
 import { contentNotesLabel, maturityLabel } from "@/lib/title-extras";
+import { buildBreadcrumbJsonLd, buildMovieJsonLd, buildSeriesJsonLd } from "@/lib/schema-org";
+import { siteUrl } from "@/lib/site-url";
+import { titleHref } from "@/lib/title-href";
 
 const PLAY_BUTTON =
   "flex h-12 items-center justify-center gap-2 rounded-card bg-brand-pink px-6 text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark";
@@ -76,8 +80,19 @@ export default function TitleDetail({
     gradient: title.gradient,
   };
 
+  const origin = siteUrl().origin;
+  const structuredData = [
+    title.type === "movie" ? buildMovieJsonLd(title, origin) : buildSeriesJsonLd(title, origin),
+    buildBreadcrumbJsonLd([
+      { name: "Home", url: origin },
+      { name: title.type === "movie" ? "Movies" : "Series", url: `${origin}/${title.type}` },
+      { name: title.title, url: `${origin}${titleHref(title)}` },
+    ]),
+  ];
+
   return (
     <main>
+      <JsonLd data={structuredData} />
       {/* Header */}
       {/* No stacking context of its own (no isolate or z-index), so a
           dialog opened in it, the trailer's, stays above the site header. */}

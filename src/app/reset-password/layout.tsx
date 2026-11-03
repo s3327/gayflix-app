@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
-import { SITE_NAME } from "@/lib/page-metadata";
+
 
 // The page is a client component, which can't name itself in the tab.
-export const metadata: Metadata = { title: `Reset Password · ${SITE_NAME}` };
+export const metadata: Metadata = {
+  title: "Reset Password",
+  robots: { index: false, follow: false },
+};
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return children;

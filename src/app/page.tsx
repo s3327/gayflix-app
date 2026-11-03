@@ -1,7 +1,9 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronRight, Clapperboard, Heart, History } from "lucide-react";
 import Footer from "@/components/Footer";
+import JsonLd from "@/components/JsonLd";
 import MediaCard from "@/components/MediaCard";
 import { genreHref } from "@/lib/browse-href";
 import { listFilterValues, listTitles } from "@/lib/catalog";
@@ -9,6 +11,14 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { getSiteSettings } from "@/lib/site-settings";
 import { isStaffRole } from "@/lib/admin-roles";
+import { buildWebsiteJsonLd } from "@/lib/schema-org";
+import { siteUrl } from "@/lib/site-url";
+
+export const metadata: Metadata = {
+  alternates: {
+    canonical: "/",
+  },
+};
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +78,7 @@ function Actions({ signedIn }: { signedIn: boolean }) {
     <div className="mx-auto flex w-full max-w-xs flex-col gap-3 sm:max-w-none sm:flex-row sm:justify-center">
       {signedIn ? (
         <>
+
           <Link href="/home" className={PRIMARY_BUTTON}>
             Go to Home
           </Link>
@@ -77,6 +88,7 @@ function Actions({ signedIn }: { signedIn: boolean }) {
         </>
       ) : (
         <>
+
           <Link href="/home" className={PRIMARY_BUTTON}>
             Start Browsing
           </Link>
@@ -111,6 +123,8 @@ export default async function LandingPage() {
 
   return (
     <>
+
+      <JsonLd data={buildWebsiteJsonLd(siteUrl().origin)} />
       <header className="absolute inset-x-0 top-0 z-20">
         <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-4 px-4 sm:h-20 sm:px-8">
           {/* Icon-only below lg, the full lockup from lg, like Header. */}
@@ -140,6 +154,7 @@ export default async function LandingPage() {
               </Link>
             ) : (
               <>
+
                 <Link href="/login" className={`${SECONDARY_BUTTON} px-4 py-2 sm:px-5`}>
                   Log In
                 </Link>

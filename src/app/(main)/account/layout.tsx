@@ -4,7 +4,10 @@ import AccountSidebar from "@/components/AccountSidebar";
 import RequireLogin from "@/components/RequireLogin";
 import { requireUser } from "@/lib/session";
 
-export const metadata: Metadata = { title: "Account" };
+export const metadata: Metadata = {
+  title: "Account",
+  robots: { index: false, follow: false },
+};
 
 /**
  * Shared layout for /account and its sub-pages (favorite, history,

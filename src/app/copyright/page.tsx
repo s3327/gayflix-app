@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import LegalPage, { ContactEmail, LegalSection } from "@/components/LegalPage";
-import { SITE_NAME } from "@/lib/page-metadata";
 
-export const metadata: Metadata = { title: `Copyright · ${SITE_NAME}` };
+
+export const metadata: Metadata = {
+  title: "Copyright",
+  alternates: { canonical: "/copyright" },
+};
 
 /**
  * How a rights holder has a title taken down, and how the publisher can

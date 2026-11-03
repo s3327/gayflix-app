@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MediaDetail } from "@/lib/media";
-import { episodeMetadata, shortDescription, titleMetadata } from "@/lib/page-metadata";
+import { episodeMetadata, listingMetadata, shortDescription, titleMetadata } from "@/lib/page-metadata";
 
 const BASE: MediaDetail = {
   id: "chosen-family",
@@ -74,5 +74,30 @@ describe("episodeMetadata", () => {
     expect(meta.title).toBe("Chosen Family S1 E2: Pilot");
     expect(meta.description).toBe(BASE.synopsis);
     expect(meta.openGraph).toMatchObject({ type: "video.episode", url: "/episode/fam-s1e2" });
+  });
+});
+
+describe("listingMetadata", () => {
+  it("includes canonical, openGraph and twitter cards", () => {
+    const meta = listingMetadata("Movies", "/movie", "All LGBTQ+ movies.", 1);
+    expect(meta.title).toBe("Movies");
+    expect(meta.description).toBe("All LGBTQ+ movies.");
+    expect(meta.alternates?.canonical).toBe("/movie");
+    expect(meta.openGraph).toMatchObject({
+      title: "Movies",
+      description: "All LGBTQ+ movies.",
+      url: "/movie",
+    });
+    expect(meta.twitter).toMatchObject({
+      card: "summary_large_image",
+      title: "Movies",
+      description: "All LGBTQ+ movies.",
+    });
+  });
+
+  it("appends page parameter on page 2+", () => {
+    const meta = listingMetadata("Movies", "/movie", "All LGBTQ+ movies.", 2);
+    expect(meta.title).toBe("Movies · Page 2");
+    expect(meta.alternates?.canonical).toBe("/movie?page=2");
   });
 });

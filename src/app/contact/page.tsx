@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import LegalPage, { ContactEmail, LegalLink, LegalSection } from "@/components/LegalPage";
-import { SITE_NAME } from "@/lib/page-metadata";
 
-export const metadata: Metadata = { title: `Contact · ${SITE_NAME}` };
+
+export const metadata: Metadata = {
+  title: "Contact",
+  alternates: { canonical: "/contact" },
+};
 
 /** How to reach the people behind Gayflix. The address comes from src/lib/legal.ts. */
 export default function ContactPage() {

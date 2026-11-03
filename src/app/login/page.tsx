@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { googleSignInEnabled } from "@/lib/auth";
-import { SITE_NAME } from "@/lib/page-metadata";
+
 import { nextParam } from "@/lib/safe-redirect";
 import { getSession } from "@/lib/session";
 import LoginForm from "./LoginForm";
 
-export const metadata: Metadata = { title: `Log In · ${SITE_NAME}` };
+export const metadata: Metadata = {
+  title: "Log In",
+  robots: { index: false, follow: false },
+};
 
 /**
  * Public log-in. `?next=` is the page to come back to, kept only when
