@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import Badge from "@/components/Badge";
 import CardQuickActions from "@/components/CardQuickActions";
 import type { Media } from "@/lib/media";
 import { titleHref } from "@/lib/title-href";
@@ -28,6 +29,13 @@ export default function MediaCard({
   actions?: boolean;
 }) {
   const href = titleHref(item);
+  const cardBadge =
+    badge ??
+    (item.category ? (
+      <Badge tone="brand" size="sm">
+        {item.category}
+      </Badge>
+    ) : null);
 
   return (
     <div className="group relative">
@@ -42,7 +50,7 @@ export default function MediaCard({
           />
           <div className="absolute inset-0 bg-linear-to-t from-bg-base/40 via-transparent to-transparent" />
 
-          {badge && <span className="absolute left-2 top-2">{badge}</span>}
+          {cardBadge && <span className="absolute left-2 top-2 z-10">{cardBadge}</span>}
         </div>
 
         <p className="mt-2 truncate font-display text-sm font-semibold leading-tight text-ink-primary">

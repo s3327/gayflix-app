@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import Badge from "@/components/Badge";
 import CardQuickActions from "@/components/CardQuickActions";
 import type { Media } from "@/lib/media";
 import { titleHref } from "@/lib/title-href";
@@ -25,6 +26,13 @@ export default function PosterCard({ media }: { media: Media }) {
             className="object-cover"
           />
           <div className="absolute inset-0 bg-linear-to-t from-bg-base/40 via-transparent to-transparent" />
+          {media.category && (
+            <span className="absolute left-2 top-2 z-10">
+              <Badge tone="brand" size="sm">
+                {media.category}
+              </Badge>
+            </span>
+          )}
         </div>
 
         <p className="mt-2 truncate font-display text-sm font-semibold leading-tight text-ink-primary">

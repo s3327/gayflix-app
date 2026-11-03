@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Play, Star, ThumbsUp } from "lucide-react";
 import type { Media, MediaDetail } from "@/lib/media";
+import Badge from "@/components/Badge";
 import JsonLd from "@/components/JsonLd";
 import ReadMoreText from "@/components/ReadMoreText";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
@@ -141,6 +142,11 @@ export default function TitleDetail({
 
             <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-ink-secondary">
               <span>{title.year}</span>
+              {title.category && (
+                <Badge tone="brand" size="sm">
+                  {title.category}
+                </Badge>
+              )}
               {title.maturityRating && (
                 <span
                   className="rounded-sm border border-ink-secondary/60 px-1.5 py-px text-xs font-semibold text-ink-primary"

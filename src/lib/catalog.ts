@@ -93,6 +93,7 @@ const CARD = {
   genres: true,
   posterUrl: true,
   gradient: true,
+  category: true,
   createdAt: true,
   publishedAt: true,
 } satisfies Prisma.MediaSelect;
@@ -100,7 +101,7 @@ const CARD = {
 type CardRow = Prisma.MediaGetPayload<{ select: typeof CARD }>;
 
 /** CARD for raw queries, which get the same row shape back. */
-const CARD_COLUMNS = Prisma.sql`id, type::text AS type, title, year, duration, genres, "posterUrl", gradient, "createdAt", "publishedAt"`;
+const CARD_COLUMNS = Prisma.sql`id, type::text AS type, title, year, duration, genres, "posterUrl", gradient, "createdAt", "publishedAt", category`;
 
 // Dates are stored as calendar days (UTC midnight), so they're shown in UTC.
 const longDate = new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeZone: "UTC" });
@@ -113,6 +114,7 @@ function toMedia(row: CardRow): Media {
     year: row.year,
     duration: row.duration,
     genre: row.genres?.[0] ?? "",
+    category: row.category ?? undefined,
     posterUrl: row.posterUrl,
     gradient: row.gradient ?? undefined,
     createdAt: row.createdAt.toISOString(),
@@ -381,6 +383,7 @@ export async function listContinueWatching(): Promise<RecentlyWatched[]> {
 
 export type TitleFilter = {
   type?: MediaType;
+  category?: string;
   genre?: string;
   country?: string;
   language?: string;
@@ -409,6 +412,7 @@ export async function listTitles({
   const where: Prisma.MediaWhereInput = {
     ...PUBLISHED,
     type: filter.type,
+    category: filter.category ? filter.category : undefined,
     genres: filter.genre ? { has: filter.genre } : undefined,
     country: filter.country,
     language: filter.language,
