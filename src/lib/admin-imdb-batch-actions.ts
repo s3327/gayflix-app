@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
+import { getSiteSettings } from "@/lib/site-settings";
 import { db } from "@/lib/db";
 import { imageHosts } from "@/lib/image-hosts.mjs";
 import {
@@ -178,14 +179,16 @@ export async function importImdbBatchChunk(items: ImdbImportItem[]): Promise<Bat
         }
 
         const targetType = candidateKind === "tv" ? "series" : "movie";
-        let values = tmdbValues(candidateKind, details, targetType);
+        const settings = await getSiteSettings();
+        const cutoffOptions = { shortFilmCutoffMinutes: settings.shortFilmCutoffMinutes };
+        let values = tmdbValues(candidateKind, details, targetType, cutoffOptions);
 
         // Gap fill with OMDb if configured
         if (omdbConfigured()) {
           try {
             const omdbData = await getOmdbById(imdbId);
             if (omdbData) {
-              values = fillGaps(values, omdbValues(omdbData, targetType)).values;
+              values = fillGaps(values, omdbValues(omdbData, targetType), cutoffOptions).values;
             }
           } catch {
             // Non-fatal: continue with TMDB values
@@ -198,6 +201,10 @@ export async function importImdbBatchChunk(items: ImdbImportItem[]): Promise<Bat
         if (targetType === "movie") {
           values.runtime =
             values.runtime || (item.runtimeMinutes ? String(item.runtimeMinutes) : "90");
+          const runtimeNum = Number(values.runtime);
+          if (runtimeNum > 0 && runtimeNum <= settings.shortFilmCutoffMinutes) {
+            values.category = "Short Film";
+          }
         }
         values.country = values.country || "United States";
         values.language = values.language || "English";
@@ -273,6 +280,10 @@ export async function importImdbBatchChunk(items: ImdbImportItem[]): Promise<Bat
             if (targetType === "movie") {
               values.runtime =
                 values.runtime || (item.runtimeMinutes ? String(item.runtimeMinutes) : "90");
+          const runtimeNum = Number(values.runtime);
+          if (runtimeNum > 0 && runtimeNum <= settings.shortFilmCutoffMinutes) {
+            values.category = "Short Film";
+          }
             }
             values.country = values.country || "United States";
             values.language = values.language || "English";

@@ -1,4 +1,5 @@
 import { findImported } from "@/lib/catalog";
+import { getSiteSettings } from "@/lib/site-settings";
 import {
   checkMatch,
   fillGaps,
@@ -200,11 +201,13 @@ export async function prepareImport(ref: TmdbRef, as: MediaType | null): Promise
   }
 
   const type = as ?? tmdb.type;
-  let values = tmdbValues(ref.kind, details, type);
+  const settings = await getSiteSettings();
+  const cutoffOptions = { shortFilmCutoffMinutes: settings.shortFilmCutoffMinutes };
+  let values = tmdbValues(ref.kind, details, type, cutoffOptions);
   const notices: string[] = [];
   let doubtful = false;
   if (imdb.found) {
-    values = fillGaps(values, omdbValues(imdb.answer, type)).values;
+    values = fillGaps(values, omdbValues(imdb.answer, type), cutoffOptions).values;
     notices.push(...matchNotices(tmdb, imdb.facts, imdb.check));
     doubtful = !imdb.check.sameTitle || !imdb.check.sameYear;
   } else {
@@ -253,8 +256,10 @@ export async function freshValues(
     throw error;
   }
   if (details === null) return { ok: false, message: "TMDB doesn't have that title any more." };
-  let values = tmdbValues(ref.kind, details, type);
+  const settings = await getSiteSettings();
+  const cutoffOptions = { shortFilmCutoffMinutes: settings.shortFilmCutoffMinutes };
+  let values = tmdbValues(ref.kind, details, type, cutoffOptions);
   const imdb = await lookUpImdb(tmdbFacts(ref.kind, details));
-  if (imdb.found) values = fillGaps(values, omdbValues(imdb.answer, type)).values;
+  if (imdb.found) values = fillGaps(values, omdbValues(imdb.answer, type), cutoffOptions).values;
   return { ok: true, values };
 }

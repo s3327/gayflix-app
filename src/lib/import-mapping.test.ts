@@ -176,6 +176,32 @@ describe("tmdbValues", () => {
     });
   });
 
+  it("categorizes movie as Short Film when runtime <= shortFilmCutoffMinutes", () => {
+    const shortMovie = { ...TMDB_MOVIE, runtime: 25 };
+    const values = tmdbValues("movie", shortMovie, "movie", { shortFilmCutoffMinutes: 30 });
+    expect(values.category).toBe("Short Film");
+
+    const exactMovie = { ...TMDB_MOVIE, runtime: 30 };
+    const exactValues = tmdbValues("movie", exactMovie, "movie", { shortFilmCutoffMinutes: 30 });
+    expect(exactValues.category).toBe("Short Film");
+  });
+
+  it("does not categorize movie as Short Film when runtime > shortFilmCutoffMinutes or zero", () => {
+    const featureMovie = { ...TMDB_MOVIE, runtime: 31 };
+    const featureValues = tmdbValues("movie", featureMovie, "movie", { shortFilmCutoffMinutes: 30 });
+    expect(featureValues.category).toBe("");
+
+    const zeroMovie = { ...TMDB_MOVIE, runtime: 0 };
+    const zeroValues = tmdbValues("movie", zeroMovie, "movie", { shortFilmCutoffMinutes: 30 });
+    expect(zeroValues.category).toBe("");
+  });
+
+  it("does not categorize TV series as Short Film even if episode runtime <= cutoff", () => {
+    const shortSeries = { ...TMDB_SERIES, episode_run_time: [15] };
+    const values = tmdbValues("tv", shortSeries, "series", { shortFilmCutoffMinutes: 30 });
+    expect(values.category).toBe("");
+  });
+
   it("fills the series form, with its creators and keywords", () => {
     const values = tmdbValues("tv", TMDB_SERIES, "series");
     expect(values).toMatchObject({

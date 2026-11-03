@@ -247,7 +247,12 @@ export function tmdbFacts(kind: TmdbKind, details: unknown): TmdbFacts {
  * TMDB's own type, unless IMDb disagreed and an admin picked the other.
  * Always a draft, never featured.
  */
-export function tmdbValues(kind: TmdbKind, details: unknown, type: MediaType): TitleValues {
+export function tmdbValues(
+  kind: TmdbKind,
+  details: unknown,
+  type: MediaType,
+  options?: { shortFilmCutoffMinutes?: number }
+): TitleValues {
   const movie = kind === "movie";
   const values = emptyTitleValues();
   values.title = text(field(details, movie ? "title" : "name"));
@@ -259,6 +264,12 @@ export function tmdbValues(kind: TmdbKind, details: unknown, type: MediaType): T
     values.runtime = movie
       ? positiveWhole(field(details, "runtime"))
       : positiveWhole(list(field(details, "episode_run_time"))[0]);
+    if (options?.shortFilmCutoffMinutes !== undefined) {
+      const runtimeMinutes = Number(values.runtime);
+      if (runtimeMinutes > 0 && runtimeMinutes <= options.shortFilmCutoffMinutes) {
+        values.category = "Short Film";
+      }
+    }
   }
 
   values.genres = joinList(names(field(details, "genres")), 10, 40);
@@ -388,13 +399,23 @@ const SOURCE_FIELDS = TITLE_FIELDS.filter((name) => name !== "status" && name !=
  * `values` with every field it leaves empty taken from `extra` (OMDb's
  * values for a TMDB title), and the names of the fields that were.
  */
-export function fillGaps(values: TitleValues, extra: TitleValues) {
+export function fillGaps(
+  values: TitleValues,
+  extra: TitleValues,
+  options?: { shortFilmCutoffMinutes?: number }
+) {
   const filled: TitleField[] = [];
   const result = { ...values };
   for (const name of SOURCE_FIELDS) {
     if (!result[name] && extra[name]) {
       result[name] = extra[name];
       filled.push(name);
+    }
+  }
+  if (options?.shortFilmCutoffMinutes !== undefined && !result.category && result.runtime) {
+    const runtimeMinutes = Number(result.runtime);
+    if (runtimeMinutes > 0 && runtimeMinutes <= options.shortFilmCutoffMinutes) {
+      result.category = "Short Film";
     }
   }
   return { values: result, filled };
