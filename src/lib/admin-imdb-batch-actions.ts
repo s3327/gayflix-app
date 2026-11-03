@@ -102,6 +102,7 @@ export async function importImdbBatchChunk(items: ImdbImportItem[]): Promise<Bat
   let importedCount = 0;
   let alreadyExistsCount = 0;
   let failedCount = 0;
+  const settings = await getSiteSettings();
 
   for (const item of chunk) {
     const imdbId = item.imdbId.trim().toLowerCase();
@@ -179,7 +180,7 @@ export async function importImdbBatchChunk(items: ImdbImportItem[]): Promise<Bat
         }
 
         const targetType = candidateKind === "tv" ? "series" : "movie";
-        const settings = await getSiteSettings();
+
         const cutoffOptions = { shortFilmCutoffMinutes: settings.shortFilmCutoffMinutes };
         let values = tmdbValues(candidateKind, details, targetType, cutoffOptions);
 

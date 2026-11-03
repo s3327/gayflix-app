@@ -76,18 +76,18 @@ describe("parseTitle", () => {
   });
 
   it("parses valid category and trims whitespace", () => {
-    const result = parse(movie({ category: "  Short Film  " } as any));
+    const result = parse(movie({ category: "  Short Film  " }));
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect((result.data as any).category).toBe("Short Film");
+      expect(result.data.category).toBe("Short Film");
     }
   });
 
   it("handles empty or whitespace-only category as null", () => {
-    const result = parse(movie({ category: "   " } as any));
+    const result = parse(movie({ category: "   " }));
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect((result.data as any).category).toBeNull();
+      expect(result.data.category).toBeNull();
     }
   });
 

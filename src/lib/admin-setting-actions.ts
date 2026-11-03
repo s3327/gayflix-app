@@ -7,3 +7,8 @@ export async function updateSiteSettingsAction(
 ): Promise<{ ok: boolean; message?: string }> {
   return updateSiteSettings(formOrData);
 }
+
+export async function backfillShortFilmCategoriesAction(cutoff?: number) {
+  const { backfillShortFilmCategories } = await import("@/lib/category-backfill");
+  return backfillShortFilmCategories(cutoff);
+}
