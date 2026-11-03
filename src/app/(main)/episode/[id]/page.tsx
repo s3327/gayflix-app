@@ -14,7 +14,7 @@ import TagList from "@/components/TagList";
 import TitleActions from "@/components/TitleActions";
 import { countryHref, genreHref, languageHref, personHref } from "@/lib/browse-href";
 import { episodeMetadata } from "@/lib/page-metadata";
-import { buildBreadcrumbJsonLd, buildEpisodeJsonLd } from "@/lib/schema-org";
+import { buildBreadcrumbJsonLd, buildEpisodeJsonLd, buildEpisodeVideoJsonLd } from "@/lib/schema-org";
 import { siteUrl } from "@/lib/site-url";
 import { titleHref } from "@/lib/title-href";
 import type { SearchParams } from "@/lib/search-params";
@@ -86,6 +86,7 @@ export default async function EpisodePage({
   const origin = siteUrl().origin;
   const structuredData = [
     buildEpisodeJsonLd(episode, series, origin),
+    buildEpisodeVideoJsonLd(episode, series, origin),
     buildBreadcrumbJsonLd([
       { name: "Home", url: origin },
       { name: "Series", url: `${origin}/series` },

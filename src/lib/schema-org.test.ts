@@ -3,7 +3,9 @@ import type { Episode, MediaDetail } from "@/lib/media";
 import {
   buildBreadcrumbJsonLd,
   buildEpisodeJsonLd,
+  buildEpisodeVideoJsonLd,
   buildMovieJsonLd,
+  buildMovieVideoJsonLd,
   buildSeriesJsonLd,
   buildWebsiteJsonLd,
   formatDurationToIso,
@@ -171,5 +173,49 @@ describe("buildBreadcrumbJsonLd", () => {
       { "@type": "ListItem", position: 2, name: "Movies", item: "https://gayflix.cc/movie" },
       { "@type": "ListItem", position: 3, name: "Chosen Family", item: "https://gayflix.cc/movie/chosen-family" },
     ]);
+  });
+});
+
+describe("buildMovieVideoJsonLd", () => {
+  it("creates valid schema.org VideoObject markup for a movie", () => {
+    const jsonLd = buildMovieVideoJsonLd(SAMPLE_MOVIE, "https://gayflix.cc");
+    expect(jsonLd["@context"]).toBe("https://schema.org");
+    expect(jsonLd["@type"]).toBe("VideoObject");
+    expect(jsonLd.name).toBe("Chosen Family");
+    expect(jsonLd.description).toBe("A heartwarming story about chosen queer family in Seattle.");
+    expect(jsonLd.thumbnailUrl).toEqual([
+      "https://example.com/backdrop.jpg",
+      "https://example.com/poster.jpg",
+    ]);
+    expect(jsonLd.uploadDate).toBe("2024-01-01T00:00:00.000Z");
+    expect(jsonLd.duration).toBe("PT1H35M");
+    expect(jsonLd.embedUrl).toBe("https://gayflix.cc/watch/m-123");
+    expect(jsonLd.genre).toEqual(["Drama", "Comedy"]);
+    expect(jsonLd.inLanguage).toBe("English");
+    expect(jsonLd.director).toEqual([{ "@type": "Person", name: "Heather Graham" }]);
+    expect(jsonLd.actor).toHaveLength(3);
+  });
+});
+
+describe("buildEpisodeVideoJsonLd", () => {
+  it("creates valid schema.org VideoObject markup for an episode", () => {
+    const jsonLd = buildEpisodeVideoJsonLd(SAMPLE_EPISODE, SAMPLE_SERIES, "https://gayflix.cc");
+    expect(jsonLd["@context"]).toBe("https://schema.org");
+    expect(jsonLd["@type"]).toBe("VideoObject");
+    expect(jsonLd.name).toBe("Heartstopper S1 E1: Meet");
+    expect(jsonLd.description).toBe("Charlie and Nick meet for the first time in homeroom.");
+    expect(jsonLd.thumbnailUrl).toEqual([
+      "https://example.com/ep1.jpg",
+      "https://example.com/heartstopper.jpg",
+      "https://example.com/heartstopper-poster.jpg",
+    ]);
+    expect(jsonLd.uploadDate).toBe("2024-01-01T00:00:00.000Z");
+    expect(jsonLd.duration).toBe("PT28M");
+    expect(jsonLd.embedUrl).toBe("https://gayflix.cc/episode/ep-789");
+    expect(jsonLd.partOfSeries).toEqual({
+      "@type": "TVSeries",
+      name: "Heartstopper",
+      url: "https://gayflix.cc/series/s-456",
+    });
   });
 });

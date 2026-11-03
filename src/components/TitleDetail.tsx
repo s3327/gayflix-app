@@ -19,7 +19,7 @@ import WatchlistButton from "@/components/WatchlistButton";
 import TrailerButton from "@/components/TrailerButton";
 import { countryHref, genreHref, languageHref, personHref } from "@/lib/browse-href";
 import { contentNotesLabel, maturityLabel } from "@/lib/title-extras";
-import { buildBreadcrumbJsonLd, buildMovieJsonLd, buildSeriesJsonLd } from "@/lib/schema-org";
+import { buildBreadcrumbJsonLd, buildMovieJsonLd, buildMovieVideoJsonLd, buildSeriesJsonLd } from "@/lib/schema-org";
 import { siteUrl } from "@/lib/site-url";
 import { titleHref } from "@/lib/title-href";
 
@@ -83,6 +83,7 @@ export default function TitleDetail({
   const origin = siteUrl().origin;
   const structuredData = [
     title.type === "movie" ? buildMovieJsonLd(title, origin) : buildSeriesJsonLd(title, origin),
+    ...(title.type === "movie" ? [buildMovieVideoJsonLd(title, origin)] : []),
     buildBreadcrumbJsonLd([
       { name: "Home", url: origin },
       { name: title.type === "movie" ? "Movies" : "Series", url: `${origin}/${title.type}` },

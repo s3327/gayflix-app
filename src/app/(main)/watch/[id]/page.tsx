@@ -6,12 +6,16 @@ import { Star } from "lucide-react";
 import { getSubtitles, getTitle, getVideoSources } from "@/lib/catalog";
 import { getResumePosition } from "@/lib/library";
 import WatchPlayer from "@/components/WatchPlayer";
+import JsonLd from "@/components/JsonLd";
 import { MetaLink, MetaLinkList } from "@/components/MetaLink";
 import TagList from "@/components/TagList";
 import TitleActions from "@/components/TitleActions";
 import type { FavoriteEntry } from "@/lib/favorites-context";
 import { countryHref, genreHref, languageHref, personHref } from "@/lib/browse-href";
 import { watchMetadata } from "@/lib/page-metadata";
+import { buildBreadcrumbJsonLd, buildMovieVideoJsonLd } from "@/lib/schema-org";
+import { siteUrl } from "@/lib/site-url";
+import { titleHref } from "@/lib/title-href";
 
 export async function generateMetadata({
   params,
@@ -53,8 +57,20 @@ export default async function WatchPage({
     posterUrl: movie.posterUrl,
   };
 
+  const origin = siteUrl().origin;
+  const structuredData = [
+    buildMovieVideoJsonLd(movie, origin),
+    buildBreadcrumbJsonLd([
+      { name: "Home", url: origin },
+      { name: "Movies", url: `${origin}/movie` },
+      { name: movie.title, url: `${origin}${titleHref(movie)}` },
+      { name: `Watch ${movie.title}`, url: `${origin}/watch/${movie.id}` },
+    ]),
+  ];
+
   return (
     <main className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
+      <JsonLd data={structuredData} />
       {/* Player and its server tabs; it records History and picks up where it stopped */}
       <WatchPlayer
         media={entry}

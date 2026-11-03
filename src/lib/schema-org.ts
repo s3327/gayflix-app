@@ -130,3 +130,56 @@ export function buildBreadcrumbJsonLd(items: { name: string; url: string }[]) {
     })),
   };
 }
+
+/** Schema.org VideoObject markup for a movie, required for Google video search and badges. */
+export function buildMovieVideoJsonLd(movie: MediaDetail, siteUrl: string) {
+  const origin = siteUrl.replace(/\/+$/, "");
+  const thumbnails = [movie.backdropUrl, movie.posterUrl].filter((u): u is string => Boolean(u));
+  const uploadDate =
+    movie.publishedAt || movie.createdAt || (movie.year ? `${movie.year}-01-01T00:00:00.000Z` : "2024-01-01T00:00:00.000Z");
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    name: movie.title,
+    description: movie.synopsis || movie.tagline || `Watch ${movie.title} (${movie.year}) on ${SITE_NAME}.`,
+    thumbnailUrl: thumbnails.length > 0 ? thumbnails : [`${origin}/brand/gayflix-share.png`],
+    uploadDate,
+    duration: formatDurationToIso(movie.runtimeMinutes ?? movie.duration),
+    embedUrl: `${origin}/watch/${movie.id}`,
+    genre: movie.genres && movie.genres.length > 0 ? movie.genres : undefined,
+    inLanguage: movie.language || undefined,
+    director: movie.director ? [{ "@type": "Person", name: movie.director }] : undefined,
+    actor: movie.cast && movie.cast.length > 0
+      ? movie.cast.map((name) => ({ "@type": "Person", name }))
+      : undefined,
+  };
+}
+
+/** Schema.org VideoObject markup for a series episode. */
+export function buildEpisodeVideoJsonLd(episode: Episode, series: MediaDetail, siteUrl: string) {
+  const origin = siteUrl.replace(/\/+$/, "");
+  const thumbnails = [episode.stillUrl, series.backdropUrl, series.posterUrl].filter((u): u is string => Boolean(u));
+  const uploadDate =
+    series.publishedAt || series.createdAt || (series.year ? `${series.year}-01-01T00:00:00.000Z` : "2024-01-01T00:00:00.000Z");
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    name: `${series.title} S${episode.seasonNumber} E${episode.episodeNumber}: ${episode.title}`,
+    description:
+      episode.synopsis ||
+      series.synopsis ||
+      `Watch ${series.title} season ${episode.seasonNumber} episode ${episode.episodeNumber} on ${SITE_NAME}.`,
+    thumbnailUrl: thumbnails.length > 0 ? thumbnails : [`${origin}/brand/gayflix-share.png`],
+    uploadDate,
+    duration: formatDurationToIso(episode.duration),
+    embedUrl: `${origin}/episode/${episode.id}`,
+    partOfSeries: {
+      "@type": "TVSeries",
+      name: series.title,
+      url: `${origin}${titleHref(series)}`,
+    },
+    inLanguage: series.language || undefined,
+  };
+}
