@@ -1,4 +1,4 @@
-import { cache } from "react";
+﻿import { cache } from "react";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
@@ -16,6 +16,7 @@ export type SiteSettingsData = {
   maintenanceMode: boolean;
   allowedEmbedHosts: string[];
   defaultPageSize: number;
+  shortFilmCutoffMinutes: number;
   webhookUrl: string | null;
   updatedAt: Date;
   updatedBy: string | null;
@@ -30,6 +31,7 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   maintenanceMode: false,
   allowedEmbedHosts: [],
   defaultPageSize: 24,
+  shortFilmCutoffMinutes: 40,
   webhookUrl: null,
   updatedAt: new Date(),
   updatedBy: null,
@@ -87,6 +89,7 @@ export type UpdateSiteSettingsInput = {
   registrationOpen?: boolean;
   maintenanceMode?: boolean;
   defaultPageSize?: number;
+  shortFilmCutoffMinutes?: number;
   webhookUrl?: string | null;
   allowedEmbedHosts?: string[] | string;
 };
@@ -128,6 +131,7 @@ export async function updateSiteSettings(
   let tagline = existing.tagline;
   let contactEmail = existing.contactEmail;
   let defaultPageSize = existing.defaultPageSize;
+  let shortFilmCutoffMinutes = existing.shortFilmCutoffMinutes ?? DEFAULT_SETTINGS.shortFilmCutoffMinutes;
   let webhookUrl = existing.webhookUrl;
   let maintenanceMode = existing.maintenanceMode;
   let registrationOpen = existing.registrationOpen;
@@ -156,6 +160,12 @@ export async function updateSiteSettings(
       defaultPageSize = Number.isFinite(parsed)
         ? Math.max(12, Math.min(100, Math.floor(parsed)))
         : existing.defaultPageSize;
+    }
+    if (getFormField("shortFilmCutoffMinutes") !== null) {
+      const parsed = Number(getFormField("shortFilmCutoffMinutes"));
+      shortFilmCutoffMinutes = Number.isFinite(parsed)
+        ? Math.max(1, Math.min(300, Math.floor(parsed)))
+        : existing.shortFilmCutoffMinutes;
     }
     if (getFormField("webhookUrl") !== null) {
       const val = getFormField("webhookUrl")!.trim();
@@ -205,6 +215,12 @@ export async function updateSiteSettings(
         ? Math.max(12, Math.min(100, Math.floor(parsed)))
         : existing.defaultPageSize;
     }
+    if (rawObj.shortFilmCutoffMinutes !== undefined) {
+      const parsed = Number(rawObj.shortFilmCutoffMinutes);
+      shortFilmCutoffMinutes = Number.isFinite(parsed)
+        ? Math.max(1, Math.min(300, Math.floor(parsed)))
+        : existing.shortFilmCutoffMinutes;
+    }
     if (rawObj.webhookUrl !== undefined) {
       const val = rawObj.webhookUrl ? String(rawObj.webhookUrl).trim() : null;
       if (val) {
@@ -241,6 +257,7 @@ export async function updateSiteSettings(
       maintenanceMode,
       allowedEmbedHosts: existing.allowedEmbedHosts ?? [],
       defaultPageSize,
+      shortFilmCutoffMinutes,
       webhookUrl,
       updatedBy: session.user.email,
     },
@@ -252,6 +269,7 @@ export async function updateSiteSettings(
       maintenanceMode,
       allowedEmbedHosts: existing.allowedEmbedHosts ?? [],
       defaultPageSize,
+      shortFilmCutoffMinutes,
       webhookUrl,
       updatedBy: session.user.email,
     },
@@ -271,6 +289,7 @@ export async function updateSiteSettings(
       registrationOpen,
       maintenanceMode,
       defaultPageSize,
+      shortFilmCutoffMinutes,
     },
   });
 

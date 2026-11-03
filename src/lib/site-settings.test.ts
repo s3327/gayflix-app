@@ -53,6 +53,7 @@ describe("site-settings", () => {
     expect(DEFAULT_SETTINGS.registrationOpen).toBe(true);
     expect(DEFAULT_SETTINGS.maintenanceMode).toBe(false);
     expect(DEFAULT_SETTINGS.defaultPageSize).toBe(24);
+    expect(DEFAULT_SETTINGS.shortFilmCutoffMinutes).toBe(40);
     expect(DEFAULT_SETTINGS.allowedEmbedHosts).toEqual([]);
     expect(DEFAULT_SETTINGS.webhookUrl).toBeNull();
   });
@@ -140,6 +141,30 @@ describe("site-settings", () => {
       expect(mockUpsert).toHaveBeenCalledWith(
         expect.objectContaining({
           update: expect.objectContaining({ defaultPageSize: 100 }),
+        })
+      );
+    });
+
+    it("updates shortFilmCutoffMinutes within valid bounds (1 to 300)", async () => {
+      const res = await updateSiteSettings({ shortFilmCutoffMinutes: 30 });
+      expect(res.ok).toBe(true);
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ shortFilmCutoffMinutes: 30 }),
+        })
+      );
+
+      await updateSiteSettings({ shortFilmCutoffMinutes: 0 });
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ shortFilmCutoffMinutes: 1 }),
+        })
+      );
+
+      await updateSiteSettings({ shortFilmCutoffMinutes: 500 });
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ shortFilmCutoffMinutes: 300 }),
         })
       );
     });

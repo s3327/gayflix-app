@@ -37,6 +37,7 @@ export default function SettingsTabs({
   const [tagline, setTagline] = useState(initialSettings.tagline);
   const [contactEmail, setContactEmail] = useState(initialSettings.contactEmail ?? "");
   const [defaultPageSize, setDefaultPageSize] = useState(String(initialSettings.defaultPageSize));
+  const [shortFilmCutoffMinutes, setShortFilmCutoffMinutes] = useState(String(initialSettings.shortFilmCutoffMinutes ?? 40));
   const [webhookUrl, setWebhookUrl] = useState(initialSettings.webhookUrl ?? "");
   const [maintenanceMode, setMaintenanceMode] = useState(initialSettings.maintenanceMode);
   const [registrationOpen, setRegistrationOpen] = useState(initialSettings.registrationOpen);
@@ -59,6 +60,7 @@ export default function SettingsTabs({
       tagline,
       contactEmail,
       defaultPageSize: Number(defaultPageSize),
+      shortFilmCutoffMinutes: Number(shortFilmCutoffMinutes),
       webhookUrl,
       maintenanceMode: currentMaintenanceMode,
       registrationOpen: currentRegistrationOpen,
@@ -194,6 +196,25 @@ export default function SettingsTabs({
                   <option value="48">48 items</option>
                   <option value="96">96 items</option>
                 </select>
+              </div>
+
+              <div>
+                <label htmlFor="shortFilmCutoffMinutes" className="block text-xs font-semibold uppercase text-ink-secondary mb-1">
+                  Short Film Runtime Cutoff (Minutes)
+                </label>
+                <input
+                  id="shortFilmCutoffMinutes"
+                  name="shortFilmCutoffMinutes"
+                  type="number"
+                  min="1"
+                  max="300"
+                  value={shortFilmCutoffMinutes}
+                  onChange={(e) => setShortFilmCutoffMinutes(e.target.value)}
+                  className="w-full rounded-md border border-border-subtle bg-bg-surface px-3 py-2 text-sm text-ink-primary focus:border-brand-pink focus:outline-hidden"
+                />
+                <p className="mt-1 text-xs text-ink-muted">
+                  Imported movies with runtime less than or equal to this duration will automatically receive the “Short Film” category taxonomy.
+                </p>
               </div>
 
               <div>
