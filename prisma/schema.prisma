@@ -153,6 +153,8 @@ model Media {
   releaseDate    DateTime?     @db.Date
   /// Movies only.
   runtimeMinutes Int?
+  /// Category taxonomy under type movie/series (e.g. "Short Film").
+  category       String?
   posterUrl      String
   /// 16:9, for the home page hero.
   backdropUrl    String?
@@ -609,6 +611,8 @@ model SiteSetting {
   maintenanceMode   Boolean  @default(false)
   allowedEmbedHosts String[] @default(["vidsrc.to", "superembed.stream", "2embed.cc", "multiembed.mov", "autoembed.to", "player.vidsrc.me"])
   defaultPageSize   Int      @default(24)
+  /// Maximum runtime in minutes to automatically categorize imported movies as "Short Film" (e.g. 30 or 40).
+  shortFilmCutoffMinutes Int @default(40)
   webhookUrl        String?
   updatedAt         DateTime @updatedAt
   updatedBy         String?
