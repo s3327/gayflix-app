@@ -18,6 +18,7 @@ export type Media = {
   duration: string;
   /** The main genre (a title can have several). */
   genre: string;
+  category?: string | null;
   posterUrl: string;
   /** Tailwind gradient stops shown behind the poster while it loads. */
   gradient?: string;

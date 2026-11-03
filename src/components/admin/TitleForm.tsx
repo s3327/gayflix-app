@@ -217,6 +217,15 @@ export default function TitleForm({
           />
         )}
         <TextField
+          name="category"
+          label="Category"
+          optional
+          hint='Taxonomy classification (e.g. "Short Film"). Assigned automatically on import if runtime ≤ cutoff.'
+          defaultValue={values.category}
+          error={errors.category}
+          maxLength={60}
+        />
+        <TextField
           name="rating"
           label="Rating"
           type="number"

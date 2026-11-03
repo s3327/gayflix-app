@@ -56,6 +56,7 @@ export const TITLE_FIELDS = [
   "year",
   "releaseDate",
   "runtime",
+  "category",
   "genres",
   "country",
   "language",
@@ -84,6 +85,7 @@ export type TitleInput = {
   releaseDate: Date | null;
   /** Movies only. */
   runtimeMinutes: number | null;
+  category?: string | null;
   genres: string[];
   country: string;
   language: string;
@@ -152,6 +154,7 @@ export function parseTitle(
   if (genres.length === 0) errors.genres = "Enter at least one genre.";
   else check("genres", listProblem(genres, 10, 40, "genres"));
 
+  check("category", optionalText(values.category, 60));
   check("country", requiredText(values.country, 60, "Enter the country."));
   check("language", requiredText(values.language, 60, "Enter the language."));
   check("credit", optionalText(values.credit, 120));
@@ -204,6 +207,7 @@ export function parseTitle(
       year: year!,
       releaseDate,
       runtimeMinutes,
+      category: values.category?.trim() || null,
       genres,
       country: values.country,
       language: values.language,
@@ -339,6 +343,7 @@ export function titleValues(row: {
   year: number;
   releaseDate: Date | null;
   runtimeMinutes: number | null;
+  category?: string | null;
   duration: string;
   genres: string[];
   country: string;
@@ -365,6 +370,7 @@ export function titleValues(row: {
     year: String(row.year),
     releaseDate: row.releaseDate ? row.releaseDate.toISOString().slice(0, 10) : "",
     runtime: runtime === null ? "" : String(runtime),
+    category: row.category ?? "",
     genres: row.genres.join(", "),
     country: row.country,
     language: row.language,

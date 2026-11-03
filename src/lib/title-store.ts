@@ -55,6 +55,7 @@ export function titleData(type: MediaType, input: TitleInput) {
     maturityRating: input.maturityRating,
     contentNotes: input.contentNotes,
     status: input.status,
+    category: input.category ?? null,
     // Publishing now replaces a schedule.
     publishAt: input.status === "published" ? null : input.publishAt,
     featured: input.featured,
