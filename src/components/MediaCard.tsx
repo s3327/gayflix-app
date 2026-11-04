@@ -39,7 +39,7 @@ export default function MediaCard({
 
   return (
     <div className="group relative">
-      <Link href={href} className="block">
+      <Link href={href} prefetch={false} className="block">
         <div className="relative aspect-2/3 w-full overflow-hidden rounded-card bg-bg-surface transition-transform duration-200 ease-out group-hover:z-10 group-hover:scale-105">
           <Image
             src={item.posterUrl}

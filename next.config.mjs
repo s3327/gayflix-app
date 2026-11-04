@@ -34,7 +34,16 @@ const nextConfig = {
       __SENTRY_TRACING__: false,
     },
   },
+  experimental: {
+    optimizePackageImports: ["lucide-react"],
+  },
   images: {
+    // Custom loader maps TMDB to native Cloudflare CDN sizes and serves
+    // Blob / S3 / Picsum directly, cutting Vercel transformations to 0.
+    loader: "custom",
+    loaderFile: "./src/lib/image-loader.ts",
+    deviceSizes: [640, 1080, 1920],
+    imageSizes: [96, 160, 240, 360],
     // The sample catalog's placeholder photos, the Blob store uploads go
     // to, and the hosts in IMAGE_HOSTS (see src/lib/image-hosts.mjs).
     remotePatterns: imageHosts().map((hostname) => ({ protocol: "https", hostname })),

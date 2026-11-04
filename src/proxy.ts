@@ -78,6 +78,6 @@ export const config = {
     // the image optimizer, and static files in public/ and app/.
     // Prefetches are deliberately NOT skipped, so they can't be used to
     // fetch /admin content without passing the admin check.
-    "/((?!api/|_next/static|_next/image|favicon.ico|icon.png|robots.txt|sitemap.xml|brand/).*)",
+    "/((?!api/|_next/static|_next/image|favicon.ico|icon.png|icon-.*\\.png|robots.txt|sitemap.xml|manifest.webmanifest|brand/).*)",
   ],
 };

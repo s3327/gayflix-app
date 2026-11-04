@@ -32,6 +32,7 @@ export default function ContinueWatchingCard({
     <div className="relative">
       <Link
         href={episode ? `/episode/${episode.id}` : `/watch/${item.id}`}
+        prefetch={false}
         className="group/card block w-full text-left"
         aria-label={label}
       >

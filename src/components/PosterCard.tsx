@@ -10,7 +10,7 @@ export default function PosterCard({ media }: { media: Media }) {
 
   return (
     <div className="group relative">
-      <Link href={href} className="block w-full text-left">
+      <Link href={href} prefetch={false} className="block w-full text-left">
         {/* Hover enlarges the poster. Keyboard focus doesn't: the bigger
             poster would cover most of the focus ring. */}
         <div
