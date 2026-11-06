@@ -53,7 +53,9 @@ export default function PrivacyPage() {
           <li>
             <strong className="font-semibold text-ink-primary">Sign-in sessions</strong>: one per
             device, kept for up to 30 days. Each keeps the browser&apos;s name so you can tell your
-            devices apart in Setting, but never your IP address.
+            devices apart in Setting, but never your IP address. We also remember the names of the
+            devices you&apos;ve signed in from (like &ldquo;Chrome on Windows&rdquo;), so we can email
+            you when a new one signs in.
           </li>
           <li>
             <strong className="font-semibold text-ink-primary">

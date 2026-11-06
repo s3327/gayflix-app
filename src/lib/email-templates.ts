@@ -207,3 +207,35 @@ export function emailChangedEmail(newEmail: string, origin: string): EmailConten
     }),
   };
 }
+
+const signInTime = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "long",
+  timeStyle: "short",
+  timeZone: "UTC",
+});
+
+/** Sent when an account signs in from a device it hasn't used before (src/lib/sign-in-alerts.ts). */
+export function newSignInEmail(device: string, at: Date, origin: string): EmailContent {
+  const when = `${signInTime.format(at)} UTC`;
+  const line = `Your Gayflix account was just signed in to on ${device}, on ${when}.`;
+  const done = "If this was you, there's nothing more to do.";
+  const action =
+    "If it wasn't, change your password and sign that device out in Setting. Turning on two-factor sign-in there stops a stolen password from being enough.";
+  const setting = `${origin}/account/setting`;
+  return {
+    subject: "New sign-in to your Gayflix account",
+    text: `${line}\n\n${done}\n\n${action}\n${setting}`,
+    html: layout({
+      origin,
+      preheader: `A new sign-in on ${device}.`,
+      heading: "New sign-in",
+      blocks: [
+        { kind: "paragraph", text: line },
+        { kind: "paragraph", text: done },
+        { kind: "paragraph", text: action },
+        { kind: "button", label: "Review your devices", url: setting },
+      ],
+      footnote: "We send this the first time an account signs in on a device. We never keep your IP address.",
+    }),
+  };
+}

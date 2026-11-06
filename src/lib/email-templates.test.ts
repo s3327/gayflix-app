@@ -4,6 +4,7 @@ import {
   emailChangedEmail,
   escapeHtml,
   existingAccountEmail,
+  newSignInEmail,
   resetPasswordEmail,
 } from "@/lib/email-templates";
 
@@ -67,5 +68,19 @@ describe("emailChangedEmail", () => {
 describe("escapeHtml", () => {
   it("escapes markup and quotes", () => {
     expect(escapeHtml(`<a href="x">'&'</a>`)).toBe("&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;");
+  });
+});
+
+describe("newSignInEmail", () => {
+  it("names the device and the time, and links to Setting", () => {
+    const email = newSignInEmail("Firefox on Linux", new Date("2026-10-26T14:05:00Z"), ORIGIN);
+    expect(email.subject).toBe("New sign-in to your Gayflix account");
+    expect(email.text).toContain("on Firefox on Linux, on October 26, 2026 at 2:05 PM UTC.");
+    expect(email.text).toContain(`${ORIGIN}/account/setting`);
+    expect(email.html).toContain(`href="${ORIGIN}/account/setting"`);
+  });
+
+  it("escapes the device name in the HTML", () => {
+    expect(newSignInEmail("<script>", new Date(), ORIGIN).html).not.toContain("<script>");
   });
 });

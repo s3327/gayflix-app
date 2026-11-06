@@ -10,7 +10,14 @@ import { adminAccess } from "@/lib/admin-access";
 import { canManageUsers, isStaffRole, roleChangeProblem, staffTargetProblem } from "@/lib/admin-roles";
 import { db } from "@/lib/db";
 import { sendEmail, type Email } from "@/lib/email";
-import { codeEmail, emailChangedEmail, existingAccountEmail, resetPasswordEmail } from "@/lib/email-templates";
+import {
+  codeEmail,
+  emailChangedEmail,
+  existingAccountEmail,
+  newSignInEmail,
+  resetPasswordEmail,
+} from "@/lib/email-templates";
+import { noteSignInDevice } from "@/lib/sign-in-alerts";
 import { siteUrl } from "@/lib/site-url";
 import { ADMIN_API_PATHS, ADMIN_ENDPOINT_ACTIONS, isUserId, userActionProblem } from "@/lib/user-admin";
 
@@ -66,6 +73,8 @@ export const googleSignInEnabled = Boolean(googleClientId && googleClientSecret)
  *   production, SameSite=Lax).
  * - Roles come from the admin plugin: "user" by default, "admin" for
  *   the admin panel (see requireAdmin in src/lib/session.ts).
+ * - An email when an account signs in from a device it hasn't used
+ *   before (src/lib/sign-in-alerts.ts).
  * - Two-factor sign-in with an authenticator app (plus backup codes).
  *   Admins must turn it on, and the admin panel only accepts a session
  *   that passed it in the last 12 hours (src/lib/admin-access.ts). Each
@@ -158,6 +167,22 @@ export const auth = betterAuth({
             twoFactorVerified: TWO_FACTOR_VERIFY_PATHS.has(ctx?.path ?? ""),
           },
         }),
+        // A sign-in from a device the account hasn't used before emails
+        // it (src/lib/sign-in-alerts.ts), after the response. Not for an
+        // admin's "sign in as" (impersonation).
+        after: async (session) => {
+          if ((session as { impersonatedBy?: string | null }).impersonatedBy) return;
+          after(async () => {
+            try {
+              const device = await noteSignInDevice(session.userId, session.userAgent);
+              if (!device) return;
+              const user = await db.user.findUnique({ where: { id: session.userId }, select: { email: true } });
+              if (user) await sendEmail({ to: user.email, ...newSignInEmail(device, new Date(), authOrigin) });
+            } catch (error) {
+              console.error("[sign-in alert] failed:", error);
+            }
+          });
+        },
       },
     },
   },
