@@ -5,11 +5,44 @@ import type { Account } from "./accounts";
 export const ADMIN_CREDENTIALS = { username: "e2e-admin", password: "e2e-password" };
 
 /**
+ * The cookie notice is a banner fixed to the bottom of the screen, where
+ * it could cover what a test clicks, so every browser here says OK to it
+ * first. A test about the notice sets the cookie `e2e-cookie-notice=show`
+ * before opening a page (cookie-notice.spec.ts).
+ */
+function acceptCookieNotice() {
+  if (document.cookie.includes("e2e-cookie-notice=show")) return;
+  try {
+    localStorage.setItem("gayflix:cookie-notice", "seen");
+  } catch {
+    // A page without storage (about:blank) has no notice either.
+  }
+}
+
+/**
  * Every test page fails the test on uncaught errors, CSP violations and
  * hydration mismatches. Failed resource loads are ignored: poster images
  * come from a third-party placeholder service that may be unreachable.
+ * Every browser it opens has said OK to the cookie notice (above).
  */
-export const test = base.extend<{ consoleProblems: string[] }>({
+export const test = base.extend<{ consoleProblems: string[] }, { cookieNoticeAccepted: void }>({
+  cookieNoticeAccepted: [
+    async ({ browser }, provide) => {
+      // Browsers the tests open themselves (guestPage, signedInPage, ...).
+      const newContext = browser.newContext.bind(browser);
+      browser.newContext = async (options) => {
+        const context = await newContext(options);
+        await context.addInitScript(acceptCookieNotice);
+        return context;
+      };
+      await provide();
+    },
+    { scope: "worker", auto: true },
+  ],
+  context: async ({ context }, provide) => {
+    await context.addInitScript(acceptCookieNotice);
+    await provide(context);
+  },
   consoleProblems: async ({ page }, provide) => {
     const problems: string[] = [];
     page.on("pageerror", (error) => problems.push(`pageerror: ${error.message}`));

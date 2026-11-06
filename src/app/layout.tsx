@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { connection } from "next/server";
+import CookieNotice from "@/components/CookieNotice";
 import { AuthProvider } from "@/lib/auth-context";
 import { OPEN_GRAPH, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, TWITTER } from "@/lib/page-metadata";
 import { siteUrl } from "@/lib/site-url";
@@ -43,7 +44,10 @@ export default async function RootLayout({
   return (
     <html lang="en" className={fontVariables}>
       <body className="bg-bg-base text-ink-primary font-body antialiased">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          {children}
+          <CookieNotice />
+        </AuthProvider>
       </body>
     </html>
   );
