@@ -12,3 +12,8 @@ export async function backfillShortFilmCategoriesAction(cutoff?: number) {
   const { backfillShortFilmCategories } = await import("@/lib/category-backfill");
   return backfillShortFilmCategories(cutoff);
 }
+
+export async function backfillCleanSynopsesAction() {
+  const { backfillCleanSynopses } = await import("@/lib/synopsis-backfill");
+  return backfillCleanSynopses();
+}

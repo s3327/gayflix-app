@@ -1,4 +1,4 @@
-﻿import { cache } from "react";
+import { cache } from "react";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
@@ -14,6 +14,7 @@ export type SiteSettingsData = {
   contactEmail: string | null;
   registrationOpen: boolean;
   maintenanceMode: boolean;
+  donationEnabled: boolean;
   allowedEmbedHosts: string[];
   defaultPageSize: number;
   shortFilmCutoffMinutes: number;
@@ -29,6 +30,7 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   contactEmail: "support@gayflix.com",
   registrationOpen: true,
   maintenanceMode: false,
+  donationEnabled: false,
   allowedEmbedHosts: [],
   defaultPageSize: 24,
   shortFilmCutoffMinutes: 40,
@@ -45,6 +47,7 @@ export const FAIL_SAFE_SETTINGS: SiteSettingsData = {
   ...DEFAULT_SETTINGS,
   registrationOpen: false,
   maintenanceMode: true,
+  donationEnabled: false,
 };
 
 /** The stored settings (defaults before the first save). Throws when they can't be read. */
@@ -82,12 +85,21 @@ export async function isRegistrationOpen(): Promise<boolean> {
   return settings.registrationOpen;
 }
 
+/**
+ * Helper to check whether donation (VIP) is enabled.
+ */
+export async function isDonationEnabled(): Promise<boolean> {
+  const settings = await getSiteSettings();
+  return settings.donationEnabled;
+}
+
 export type UpdateSiteSettingsInput = {
   siteTitle?: string;
   tagline?: string;
   contactEmail?: string | null;
   registrationOpen?: boolean;
   maintenanceMode?: boolean;
+  donationEnabled?: boolean;
   defaultPageSize?: number;
   shortFilmCutoffMinutes?: number;
   webhookUrl?: string | null;
@@ -135,6 +147,7 @@ export async function updateSiteSettings(
   let webhookUrl = existing.webhookUrl;
   let maintenanceMode = existing.maintenanceMode;
   let registrationOpen = existing.registrationOpen;
+  let donationEnabled = existing.donationEnabled ?? DEFAULT_SETTINGS.donationEnabled;
 
   if (isForm) {
     if (getFormField("siteTitle") !== null) {
@@ -190,6 +203,13 @@ export async function updateSiteSettings(
         getFormField("registrationOpen") === "true" ||
         getFormField("registrationOpen") === "1";
     }
+
+    if (getFormField("donationEnabled") !== null) {
+      donationEnabled =
+        getFormField("donationEnabled") === "on" ||
+        getFormField("donationEnabled") === "true" ||
+        getFormField("donationEnabled") === "1";
+    }
   } else {
     if (rawObj.siteTitle !== undefined) {
       const val = String(rawObj.siteTitle).trim().slice(0, 100);
@@ -244,6 +264,12 @@ export async function updateSiteSettings(
           ? rawObj.registrationOpen
           : rawObj.registrationOpen === "true" || rawObj.registrationOpen === "on" || rawObj.registrationOpen === "1";
     }
+    if (rawObj.donationEnabled !== undefined) {
+      donationEnabled =
+        typeof rawObj.donationEnabled === "boolean"
+          ? rawObj.donationEnabled
+          : rawObj.donationEnabled === "true" || rawObj.donationEnabled === "on" || rawObj.donationEnabled === "1";
+    }
   }
 
   const saved = await db.siteSetting.upsert({
@@ -255,6 +281,7 @@ export async function updateSiteSettings(
       contactEmail,
       registrationOpen,
       maintenanceMode,
+      donationEnabled,
       allowedEmbedHosts: existing.allowedEmbedHosts ?? [],
       defaultPageSize,
       shortFilmCutoffMinutes,
@@ -267,6 +294,7 @@ export async function updateSiteSettings(
       contactEmail,
       registrationOpen,
       maintenanceMode,
+      donationEnabled,
       allowedEmbedHosts: existing.allowedEmbedHosts ?? [],
       defaultPageSize,
       shortFilmCutoffMinutes,
@@ -282,12 +310,13 @@ export async function updateSiteSettings(
     action: "setting.update",
     entityType: "setting",
     entityId: "default",
-    summary: `Updated site settings (maintenance=${saved.maintenanceMode}, registration=${saved.registrationOpen})`,
+    summary: `Updated site settings (maintenance=${saved.maintenanceMode}, registration=${saved.registrationOpen}, donation=${saved.donationEnabled})`,
     details: {
       siteTitle,
       tagline,
       registrationOpen,
       maintenanceMode,
+      donationEnabled,
       defaultPageSize,
       shortFilmCutoffMinutes,
     },

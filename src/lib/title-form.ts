@@ -1,3 +1,4 @@
+import { stripHtmlAndEntities } from "@/lib/sanitize-text";
 import { imageHosts } from "@/lib/image-hosts.mjs";
 import { isMediaId } from "@/lib/library-types";
 import type { MediaStatus, MediaType } from "@/lib/media";
@@ -216,7 +217,7 @@ export function parseTitle(
       tags,
       rating,
       tagline: values.tagline || null,
-      synopsis: values.synopsis,
+      synopsis: stripHtmlAndEntities(values.synopsis),
       posterUrl,
       backdropUrl: values.backdropUrl || null,
       trailerUrl: trailerId ? trailerWatchUrl(trailerId) : null,
@@ -379,7 +380,7 @@ export function titleValues(row: {
     tags: row.tags.join(", "),
     rating: row.rating === null ? "" : String(row.rating),
     tagline: row.tagline ?? "",
-    synopsis: row.synopsis,
+    synopsis: stripHtmlAndEntities(row.synopsis),
     posterUrl: row.posterUrl === NO_POSTER ? "" : row.posterUrl,
     backdropUrl: row.backdropUrl ?? "",
     trailerUrl: row.trailerUrl ?? "",
@@ -444,7 +445,7 @@ export function parseEpisode(values: EpisodeValues): Parsed<EpisodeInput> {
       title: values.title,
       minutes: minutes!,
       airDate,
-      synopsis: values.synopsis,
+      synopsis: stripHtmlAndEntities(values.synopsis),
     },
   };
 }
@@ -466,7 +467,7 @@ export function episodeValues(row: {
     title: row.title,
     minutes: minutes === null ? "" : String(minutes),
     airDate: row.airDate ? row.airDate.toISOString().slice(0, 10) : "",
-    synopsis: row.synopsis,
+    synopsis: stripHtmlAndEntities(row.synopsis),
   };
 }
 

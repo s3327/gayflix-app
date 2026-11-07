@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_SETTINGS,
   FAIL_SAFE_SETTINGS,
+  isDonationEnabled,
   isRegistrationOpen,
   updateSiteSettings,
 } from "./site-settings";
@@ -52,6 +53,7 @@ describe("site-settings", () => {
     expect(DEFAULT_SETTINGS.contactEmail).toBe("support@gayflix.com");
     expect(DEFAULT_SETTINGS.registrationOpen).toBe(true);
     expect(DEFAULT_SETTINGS.maintenanceMode).toBe(false);
+    expect(DEFAULT_SETTINGS.donationEnabled).toBe(false);
     expect(DEFAULT_SETTINGS.defaultPageSize).toBe(24);
     expect(DEFAULT_SETTINGS.shortFilmCutoffMinutes).toBe(40);
     expect(DEFAULT_SETTINGS.allowedEmbedHosts).toEqual([]);
@@ -66,9 +68,18 @@ describe("site-settings", () => {
     expect(await isRegistrationOpen()).toBe(false);
   });
 
+  it("isDonationEnabled reflects site settings", async () => {
+    mockFindUnique.mockResolvedValueOnce({
+      ...DEFAULT_SETTINGS,
+      donationEnabled: true,
+    });
+    expect(await isDonationEnabled()).toBe(true);
+  });
+
   it("fails safe when the settings can't be read", async () => {
     mockFindUnique.mockRejectedValueOnce(new Error("database unreachable"));
     expect(await isRegistrationOpen()).toBe(false);
+    expect(await isDonationEnabled()).toBe(false);
     expect(FAIL_SAFE_SETTINGS.maintenanceMode).toBe(true);
   });
 
@@ -169,11 +180,22 @@ describe("site-settings", () => {
       );
     });
 
+    it("updates donationEnabled setting", async () => {
+      const res = await updateSiteSettings({ donationEnabled: true });
+      expect(res.ok).toBe(true);
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ donationEnabled: true }),
+        })
+      );
+    });
+
     it("preserves unmodified fields from existing database record on partial update", async () => {
       mockFindUnique.mockResolvedValueOnce({
         ...DEFAULT_SETTINGS,
         maintenanceMode: true,
         registrationOpen: false,
+        donationEnabled: true,
         siteTitle: "Custom Gayflix",
         defaultPageSize: 48,
       });
@@ -188,6 +210,7 @@ describe("site-settings", () => {
             tagline: "New Custom Tagline",
             maintenanceMode: true,
             registrationOpen: false,
+            donationEnabled: true,
             defaultPageSize: 48,
           }),
         })

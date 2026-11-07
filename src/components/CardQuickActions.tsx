@@ -56,7 +56,7 @@ export default function CardQuickActions({ media }: { media: Media }) {
     <>
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 z-20 hidden aspect-2/3 opacity-0 transition duration-200 ease-out group-hover:scale-105 group-hover:opacity-100 [@media(hover:hover)]:block"
+        className="pointer-events-none absolute inset-x-0 top-0 z-20 hidden aspect-2/3 opacity-0 transition-[opacity,transform] duration-200 ease-out group-hover:scale-105 group-hover:opacity-100 transform-gpu will-change-transform [backface-visibility:hidden] [transform:translateZ(0)] [@media(hover:hover)]:block"
       >
         <div className="pointer-events-auto absolute inset-x-2 bottom-2 flex items-center gap-1.5">
           <Link

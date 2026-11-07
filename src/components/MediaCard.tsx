@@ -38,17 +38,17 @@ export default function MediaCard({
     ) : null);
 
   return (
-    <div className="group relative">
+    <div className="group relative hover:z-20">
       <Link href={href} prefetch={false} className="block">
-        <div className="relative aspect-2/3 w-full overflow-hidden rounded-card bg-bg-surface transition-transform duration-200 ease-out group-hover:z-10 group-hover:scale-105">
+        <div className="relative aspect-2/3 w-full overflow-hidden rounded-card bg-bg-surface transition-transform duration-200 ease-out group-hover:scale-105 transform-gpu will-change-transform [backface-visibility:hidden] [transform:translateZ(0)]">
           <Image
             src={item.posterUrl}
             alt=""
             fill
             sizes="(min-width: 1024px) 220px, (min-width: 640px) 200px, 30vw"
-            className="object-cover"
+            className="object-cover transform-gpu [backface-visibility:hidden]"
           />
-          <div className="absolute inset-0 bg-linear-to-t from-bg-base/40 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-linear-to-t from-bg-base/40 via-transparent to-transparent pointer-events-none" />
 
           {cardBadge && <span className="absolute left-2 top-2 z-10">{cardBadge}</span>}
         </div>

@@ -613,6 +613,8 @@ model SiteSetting {
   defaultPageSize   Int      @default(24)
   /// Maximum runtime in minutes to automatically categorize imported movies as "Short Film" (e.g. 30 or 40).
   shortFilmCutoffMinutes Int @default(40)
+  /// Whether donation / VIP membership is enabled on the site.
+  donationEnabled   Boolean  @default(false)
   webhookUrl        String?
   updatedAt         DateTime @updatedAt
   updatedBy         String?

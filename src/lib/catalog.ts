@@ -1,3 +1,4 @@
+import { stripHtmlAndEntities } from "@/lib/sanitize-text";
 import { connection } from "next/server";
 import { cache } from "react";
 import { Prisma } from "@/generated/prisma/client";
@@ -131,7 +132,7 @@ function toEpisode(row: Prisma.EpisodeModel): Episode {
     duration: row.duration,
     airDate: row.airDate ? longDate.format(row.airDate) : undefined,
     stillUrl: row.stillUrl ?? undefined,
-    synopsis: row.synopsis || undefined,
+    synopsis: row.synopsis ? stripHtmlAndEntities(row.synopsis) : undefined,
   };
 }
 
@@ -143,7 +144,7 @@ function toDetail(row: DetailRow): MediaDetail {
     genres: row.genres ?? [],
     country: row.country,
     language: row.language,
-    synopsis: row.synopsis,
+    synopsis: stripHtmlAndEntities(row.synopsis),
     tagline: row.tagline ?? undefined,
     rating: row.rating ?? undefined,
     director: row.director ?? undefined,
@@ -250,7 +251,7 @@ export async function getHome() {
     .slice(0, HERO_SIZE - 1);
   const toFeatured = (row: NonNullable<typeof hero>): Featured => ({
     ...toMedia(row),
-    synopsis: row.synopsis,
+    synopsis: stripHtmlAndEntities(row.synopsis),
     backdropUrl: row.backdropUrl ?? undefined,
   });
 

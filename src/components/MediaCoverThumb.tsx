@@ -27,7 +27,7 @@ export default function MediaCoverThumb({
 }) {
   return (
     <div
-      className={`relative aspect-2/3 w-full overflow-hidden rounded-card bg-bg-elevated transition-transform duration-200 ease-out group-hover:scale-105 ${
+      className={`relative aspect-2/3 w-full overflow-hidden rounded-card bg-bg-elevated transition-transform duration-200 ease-out group-hover:scale-105 transform-gpu will-change-transform [backface-visibility:hidden] [transform:translateZ(0)] ${
         !entry.posterUrl && entry.gradient ? `bg-linear-to-br ${entry.gradient}` : ""
       }`}
     >
@@ -37,10 +37,10 @@ export default function MediaCoverThumb({
           alt={entry.title}
           fill
           sizes={sizes}
-          className="object-cover"
+          className="object-cover transform-gpu [backface-visibility:hidden]"
         />
       )}
-      <div className="absolute inset-0 bg-linear-to-t from-bg-base/40 via-transparent to-transparent" />
+      <div className="absolute inset-0 bg-linear-to-t from-bg-base/40 via-transparent to-transparent pointer-events-none" />
     </div>
   );
 }
