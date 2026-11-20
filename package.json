@@ -19,15 +19,15 @@
     "db:types": "kysely-codegen --dialect postgres --out-file src/lib/db-types.ts --include-pattern \"public.*\" --exclude-pattern \"{supabase_migrations.*,auth.*,_prisma_migrations}\""
   },
   "dependencies": {
-    "@prisma/adapter-pg": "7.10.0",
-    "@prisma/client": "7.10.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
     "@sentry/nextjs": "11.6.0",
-    "@vercel/blob": "2.8.0",
+    "@vercel/blob": "2.9.0",
     "better-auth": "1.7.7",
     "hls.js": "1.7.3",
     "kysely": "0.29.9",
     "lucide-react": "0.427.0",
-    "next": "16.3.8",
+    "next": "16.4.6",
     "pg": "8.23.1",
     "qrcode": "1.5.4",
     "react": "19.2.8",
@@ -35,7 +35,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
-    "@next/env": "16.3.8",
+    "@next/env": "16.4.6",
     "@playwright/test": "1.56.1",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "22.20.5",
@@ -43,11 +43,11 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.3.8",
+    "eslint-config-next": "16.4.6",
     "kysely-codegen": "0.20.0",
     "playwright-core": "1.56.1",
     "postcss": "8.5.29",
-    "prisma": "7.10.0",
+    "prisma": "7.10.1",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3",
     "vite": "7.3.7",
@@ -61,7 +61,10 @@
       "mysql2": "3.24.5"
     },
     "@prisma/config": {
-      "deepmerge-ts": "8.0.2"
-    }
+      "deepmerge-ts": "8.0.2",
+      "effect": "3.22.5"
+    },
+    "undici": "6.29.1",
+    "zod": "4.6.7"
   }
 }
