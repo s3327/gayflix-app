@@ -1,5 +1,6 @@
 // Database schema. Supabase Postgres in production, any Postgres locally.
 // The connection string lives in prisma.config.ts (Prisma 7), not here.
+// Migrations now live in supabase/migrations and run with `npm run db:deploy`.
 
 generator client {
   provider = "prisma-client"

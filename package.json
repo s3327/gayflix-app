@@ -14,7 +14,7 @@
     "test:e2e": "playwright test",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
+    "db:deploy": "node scripts/migrate.mjs",
     "make-admin": "node scripts/make-admin.mjs"
   },
   "dependencies": {

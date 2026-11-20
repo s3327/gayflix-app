@@ -1,7 +1,8 @@
 #!/bin/sh
 # Vercel's build command (set in vercel.json).
 #
-# Applies pending database migrations, then builds. If a required setting
+# Applies pending database migrations (npm run db:deploy, our own runner
+# over supabase/migrations), then builds. If a required setting
 # is missing or a migration fails, the build stops and Vercel keeps the
 # previous deploy live. Preview deploys skip the migrations: they usually
 # share the production database, and a pull request's schema change
