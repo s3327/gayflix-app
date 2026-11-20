@@ -26,16 +26,19 @@ has to change before launch.
 ## Getting started
 
 Requires Node.js 20.19+, 22.12+ or 24+ (Prisma 7's range; CI uses 22)
-and a Postgres database.
+and Docker (for Supabase's local stack: Postgres, Auth and Mailpit).
 
 ```bash
-# A local Postgres, if you don't have one (Docker):
-docker run -d --name gayflix-db -p 5432:5432 \
-  -e POSTGRES_USER=gayflix -e POSTGRES_PASSWORD=gayflix -e POSTGRES_DB=gayflix postgres:16
+npx supabase@3.2.0 start -x studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector
+npx supabase@3.2.0 status -o env   # DB_URL, API_URL, PUBLISHABLE_KEY, SECRET_KEY
 
 npm install                  # also generates the Prisma client
-cp .env.example .env.local   # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
-npm run db:migrate           # creates the tables
+cp .env.example .env.local   # set DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL,
+                             # SUPABASE_PUBLISHABLE_KEY and SUPABASE_SECRET_KEY
+                             # from the status output (the secret key stays
+                             # server-only), and BETTER_AUTH_SECRET
+                             # (openssl rand -base64 32)
+npm run db:deploy            # "No pending migrations." (start applied them)
 npm run dev
 ```
 

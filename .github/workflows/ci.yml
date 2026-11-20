@@ -20,23 +20,6 @@ jobs:
     name: lint, types, unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # A throwaway Postgres for the integration tests (*.integration.test.ts).
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: gayflix
-          POSTGRES_PASSWORD: gayflix
-          POSTGRES_DB: gayflix
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U gayflix"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgresql://gayflix:gayflix@localhost:5432/gayflix
-      TEST_DATABASE_URL: postgresql://gayflix:gayflix@localhost:5432/gayflix
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -44,6 +27,23 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Supabase's local stack: Postgres plus Auth and Mailpit. It applies
+      # supabase/migrations itself, so db:deploy below must find nothing
+      # pending (the two runners share one ledger).
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
+        with:
+          version: 3.2.0
+      - run: supabase start -x studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector
+      - name: Export the stack's connection settings
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "DATABASE_URL=$DB_URL"
+            echo "TEST_DATABASE_URL=$DB_URL"
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY"
+            echo "SUPABASE_SECRET_KEY=$SECRET_KEY"
+          } >> "$GITHUB_ENV"
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run db:deploy
@@ -61,23 +61,9 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4, 5]
-    # Each shard gets its own throwaway Postgres (the catalog, accounts,
-    # roles), and its own copy of the setup project's accounts.
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: gayflix
-          POSTGRES_PASSWORD: gayflix
-          POSTGRES_DB: gayflix
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U gayflix"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    # Each shard runs its own Supabase local stack (the catalog, accounts,
+    # roles), and has its own copy of the setup project's accounts.
     env:
-      DATABASE_URL: postgresql://gayflix:gayflix@localhost:5432/gayflix
       # Only signs sessions in this CI database; not used anywhere else.
       BETTER_AUTH_SECRET: ci-only-secret-for-the-throwaway-test-database
       # Imported posters' host, built into next/image's allowed hosts. The
@@ -93,6 +79,22 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Supabase's local stack: Postgres plus Auth and Mailpit. It applies
+      # supabase/migrations itself, so db:deploy below must find nothing
+      # pending (the two runners share one ledger).
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
+        with:
+          version: 3.2.0
+      - run: supabase start -x studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector
+      - name: Export the stack's connection settings
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "DATABASE_URL=$DB_URL"
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY"
+            echo "SUPABASE_SECRET_KEY=$SECRET_KEY"
+          } >> "$GITHUB_ENV"
       - run: npm run db:deploy
       # Next.js keeps its compile work in .next/cache and rebuilds only what
       # changed. Pull requests restore the cache main saved last; only

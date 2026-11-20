@@ -53,6 +53,32 @@ export async function waitForEmail(to: string, since: number): Promise<string> {
   throw new Error(`No email to ${to} arrived`);
 }
 
+/**
+ * Same as waitForEmail, but reads the Supabase local stack's Mailpit
+ * (the Auth emails: sign-up, recovery, email change). Returns the newest
+ * message's text, from Mailpit's API.
+ */
+export async function waitForMailpitEmail(to: string, since: number): Promise<string> {
+  const base = process.env.MAILPIT_URL ?? "http://127.0.0.1:54424";
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const search = await fetch(`${base}/api/v1/search?query=${encodeURIComponent(`to:${to}`)}`);
+    if (search.ok) {
+      const { messages } = (await search.json()) as {
+        messages?: { ID: string; Created: string }[];
+      };
+      const fresh = (messages ?? [])
+        .filter((message) => new Date(message.Created).getTime() >= since)
+        .sort((a, b) => new Date(b.Created).getTime() - new Date(a.Created).getTime());
+      if (fresh.length > 0) {
+        const message = await fetch(`${base}/api/v1/message/${fresh[0].ID}`);
+        if (message.ok) return ((await message.json()) as { Text: string }).Text;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`No email to ${to} arrived in Mailpit`);
+}
+
 export const codeFrom = (text: string) => /\b(\d{6})\b/.exec(text)?.[1] ?? "";
 export const linkFrom = (text: string) => /(https?:\/\/\S+)/.exec(text)?.[1] ?? "";
 
