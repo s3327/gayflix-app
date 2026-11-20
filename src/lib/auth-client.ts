@@ -4,8 +4,11 @@ import { adminClient, emailOTPClient, twoFactorClient } from "better-auth/client
 import { createAuthClient } from "better-auth/react";
 
 /**
- * Browser-side auth calls (sign-up, sign-in, codes, sign-out). Talks to
- * /api/auth on the same origin, so no base URL is needed.
+ * Better Auth's browser client, for what hasn't moved to Supabase Auth
+ * yet (two-factor, account settings, deleting an account). Sign-up,
+ * sign-in, email codes, password reset, Google and sign-out are server
+ * actions now (src/lib/auth-actions.ts). Talks to /api/auth on the same
+ * origin, so no base URL is needed.
  */
 export const authClient = createAuthClient({
   // Sign-in forms handle the two-factor step themselves (TwoFactorForm),
@@ -48,16 +51,4 @@ export function authErrorMessage(error: AuthError | null | undefined): string {
   if (error.status === 403) return error.message || "Public registration is currently closed.";
   if (error.status === 429) return "Too many attempts. Please wait a minute and try again.";
   return error.message || "Something went wrong. Please try again.";
-}
-
-/**
- * Starts Google sign-in; the browser leaves for Google and comes back to
- * `callbackURL`. Resolves with an error message only if it can't start
- * (for example, Google sign-in isn't configured on the server).
- */
-export async function signInWithGoogle(callbackURL: string): Promise<string> {
-  const { error } = await authClient.signIn.social({ provider: "google", callbackURL });
-  if (!error) return "";
-  if (error.status === 404) return "Google sign-in isn't available yet.";
-  return authErrorMessage(error);
 }

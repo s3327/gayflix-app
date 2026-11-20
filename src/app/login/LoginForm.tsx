@@ -7,8 +7,8 @@ import Link from "next/link";
 import FormError from "@/components/FormError";
 import GoogleAuthButton from "@/components/GoogleAuthButton";
 import PasswordInput from "@/components/PasswordInput";
-import TwoFactorForm from "@/components/TwoFactorForm";
-import { authClient, authErrorMessage, signInWithGoogle } from "@/lib/auth-client";
+import { signIn } from "@/lib/auth-actions";
+import { isActionRedirect, startGoogleSignIn } from "@/lib/auth-redirects";
 import { authHref } from "@/lib/safe-redirect";
 
 /**
@@ -20,21 +20,31 @@ import { authHref } from "@/lib/safe-redirect";
  * but this is a separate page: admin auth and user auth are different
  * systems.
  *
- * Signs in with Better Auth and goes to `next` (the validated ?next=
- * page that sent the visitor here), or /account. An account whose email
- * was never confirmed gets a fresh code and is sent to /verify-email
- * instead (Better Auth sends the code on that sign-in attempt). Accounts
- * with two-factor turned on (admins) enter a code from their
- * authenticator app before the session starts. Google shows only where
- * it's set up (`google`, from src/lib/auth.ts).
+ * Signs in on the server (signIn in src/lib/auth-actions.ts), which
+ * sends the browser on to `next` (the validated ?next= page that sent
+ * the visitor here), or /account. An account whose email was never confirmed gets a fresh code
+ * and is sent to /verify-email instead. Accounts with two-factor turned
+ * on can't finish here yet: the code step comes with two-factor's move
+ * to Supabase, and until then signIn ends their session. Google shows
+ * only where Supabase Auth has it turned on (`google`); `googleFailed`
+ * is a Google sign-in that came back without a session.
  */
-export default function LoginForm({ next, google }: { next: string | null; google: boolean }) {
+export default function LoginForm({
+  next,
+  google,
+  googleFailed = false,
+}: {
+  next: string | null;
+  google: boolean;
+  googleFailed?: boolean;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(
+    googleFailed ? "Google sign-in didn't finish. Please try again." : ""
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
 
   const destination = next ?? "/account";
 
@@ -42,28 +52,34 @@ export default function LoginForm({ next, google }: { next: string | null; googl
     event.preventDefault();
     setError("");
     setIsSubmitting(true);
-    const { data, error } = await authClient.signIn.email({ email, password });
+    let result: Awaited<ReturnType<typeof signIn>>;
+    try {
+      result = await signIn(email, password, destination);
+    } catch (thrown) {
+      // Signed in: the server is sending the browser to `destination`.
+      if (isActionRedirect(thrown)) return;
+      setIsSubmitting(false);
+      throw thrown;
+    }
     setIsSubmitting(false);
 
-    if (error?.code === "EMAIL_NOT_VERIFIED") {
-      const params = new URLSearchParams({ email, next: destination });
+    if ("needsEmailCode" in result) {
+      const params = new URLSearchParams({ email: email.trim(), next: destination });
       router.push(`/verify-email?${params}`);
       return;
     }
-    if (error) {
-      setError(authErrorMessage(error));
+    if ("needsTwoFactor" in result) {
+      setError(
+        "This account uses two-factor sign-in, which is being moved and can't be finished here just now. Please try again later."
+      );
       return;
     }
-    if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
-      setNeedsTwoFactor(true);
-      return;
-    }
-    router.push(destination);
+    setError(result.error);
   }
 
   async function handleGoogleAuth() {
     // Google verifies the email itself, so this skips /verify-email.
-    setError(await signInWithGoogle(destination));
+    setError(await startGoogleSignIn(destination));
   }
 
   return (
@@ -84,72 +100,62 @@ export default function LoginForm({ next, google }: { next: string | null; googl
           <p className="mt-1 text-sm text-ink-muted">Log in to Gayflix</p>
         </div>
 
-        {needsTwoFactor ? (
-          <TwoFactorForm
-            onVerified={() => router.push(destination)}
-            onStartOver={() => {
-              setNeedsTwoFactor(false);
-              setPassword("");
-            }}
-          />
-        ) : (
-          <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
-            <div className="flex flex-col gap-1.5">
+        <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="email"
+              className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
+            >
+              Email
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
               <label
-                htmlFor="email"
+                htmlFor="password"
                 className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
               >
-                Email
+                Password
               </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@example.com"
-                className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
-              />
+              <Link
+                href="/forgot-password"
+                className="text-xs font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
+              >
+                Forgot password?
+              </Link>
             </div>
+            <PasswordInput
+              id="password"
+              name="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </div>
 
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <label
-                  htmlFor="password"
-                  className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
-                >
-                  Password
-                </label>
-                <Link
-                  href="/forgot-password"
-                  className="text-xs font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
-                >
-                  Forgot password?
-                </Link>
-              </div>
-              <PasswordInput
-                id="password"
-                name="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </div>
+          <FormError message={error} />
 
-            <FormError message={error} />
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-wait disabled:opacity-70"
-            >
-              {isSubmitting ? "Logging In…" : "Log In"}
-            </button>
-          </form>
-        )}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-wait disabled:opacity-70"
+          >
+            {isSubmitting ? "Logging In…" : "Log In"}
+          </button>
+        </form>
 
         {google && (
           <>

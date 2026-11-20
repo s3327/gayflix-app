@@ -5,20 +5,24 @@ import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import FormError from "@/components/FormError";
+import OtpInput from "@/components/OtpInput";
 import PasswordInput from "@/components/PasswordInput";
-import { authClient, authErrorMessage } from "@/lib/auth-client";
+import { resetPassword } from "@/lib/auth-actions";
+
+const CODE_LENGTH = 6;
 
 /**
- * Where the emailed reset link lands. Better Auth checks the link first,
- * then sends the browser here with ?token= (or ?error= when the link is
- * invalid or expired). Setting a new password signs out every existing
- * session for the account.
+ * The second step of a password reset: /forgot-password sends the
+ * visitor here with ?email=, and Supabase Auth has emailed a 6-digit
+ * code if the account exists. The code and a new password go to
+ * resetPassword (src/lib/auth-actions.ts), which signs out every
+ * session of the account; the user then logs in with the new password.
  */
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
-  const token = searchParams.get("token");
-  const linkError = searchParams.get("error") || !token;
+  const email = searchParams.get("email") ?? "";
 
+  const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,13 +30,13 @@ function ResetPasswordForm() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!token) return;
+    if (!email || code.length !== CODE_LENGTH) return;
     setError("");
     setIsSubmitting(true);
-    const { error } = await authClient.resetPassword({ newPassword: password, token });
+    const result = await resetPassword(email, code, password);
     setIsSubmitting(false);
-    if (error) {
-      setError(authErrorMessage(error));
+    if ("error" in result) {
+      setError(result.error);
       return;
     }
     setDone(true);
@@ -54,26 +58,34 @@ function ResetPasswordForm() {
           </Link>
           <h1 className="mt-4 font-display text-2xl font-bold">Reset Password</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            {done ? "Your password has been changed" : "Choose a new password"}
+            {done ? "Your password has been changed" : "Enter the code and a new password"}
           </p>
         </div>
 
-        {done || linkError ? (
+        {done || !email ? (
           <div className="mt-8 flex flex-col gap-6 text-center">
             {!done && (
               <p className="text-sm text-ink-secondary">
-                This reset link is invalid or has expired. Request a new one.
+                This link is missing the email address. Request a new code.
               </p>
             )}
             <Link
               href={done ? "/login" : "/forgot-password"}
               className="w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark"
             >
-              {done ? "Log In" : "Request a New Link"}
+              {done ? "Log In" : "Request a New Code"}
             </Link>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
+            <p className="text-center text-sm text-ink-secondary">
+              If an account exists for{" "}
+              <span className="font-semibold text-ink-primary">{email}</span>, we&apos;ve
+              emailed it a 6-digit code.
+            </p>
+
+            <OtpInput autoFocus onChange={setCode} />
+
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="password"
@@ -100,11 +112,18 @@ function ResetPasswordForm() {
 
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-wait disabled:opacity-70"
+              disabled={isSubmitting || code.length !== CODE_LENGTH}
+              className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? "Saving…" : "Set New Password"}
             </button>
+
+            <Link
+              href="/forgot-password"
+              className="text-center text-sm font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
+            >
+              Send a new code
+            </Link>
           </form>
         )}
       </div>

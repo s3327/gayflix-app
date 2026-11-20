@@ -2,8 +2,9 @@ import GoogleIcon from "@/components/GoogleIcon";
 
 /**
  * "Continue with Google" button shared by /login and /signup. The pages
- * pass signInWithGoogle() (src/lib/auth-client.ts), which hands the
- * browser to Google once GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are set.
+ * pass startGoogleSignIn() (src/lib/auth-redirects.ts), which hands the
+ * browser to Google; they show the button only while Supabase Auth has
+ * Google turned on.
  */
 export default function GoogleAuthButton({
   label,

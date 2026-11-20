@@ -2,7 +2,6 @@ import { createHmac } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import pg from "pg";
-import { BASE_URL, OUTBOX_FILE } from "../playwright.config";
 
 export type Account = {
   name: string;
@@ -23,8 +22,11 @@ export function newAccount(label: string): Account {
   return { name: `E2E ${label}`, email: `e2e-${label}-${id}@example.com`, password: `pw-${id}` };
 }
 
-export function saveAccounts(accounts: { user: Account; admin: Account }) {
-  writeFileSync(ACCOUNTS_FILE, JSON.stringify(accounts));
+/** Records the setup's user or admin, keeping the other one (accounts.setup.ts makes them one at a time). */
+export function saveAccount(role: "user" | "admin", account: Account) {
+  // The user is made first, so it starts the file afresh.
+  const saved = role === "user" || !existsSync(ACCOUNTS_FILE) ? {} : JSON.parse(readFileSync(ACCOUNTS_FILE, "utf8"));
+  writeFileSync(ACCOUNTS_FILE, JSON.stringify({ ...saved, [role]: account }));
 }
 
 /** The verified user and admin made by accounts.setup.ts. */
@@ -33,40 +35,67 @@ export function accounts(): { user: Account; admin: Account } {
 }
 
 /**
- * The newest code or link emailed to `to` after `since` (ms), read from
- * the server's outbox file. Polls, since the server sends after
- * responding.
+ * The newest email to `to` sent after `since` (ms), as text, read from
+ * the Supabase local stack's Mailpit, which catches Supabase Auth's
+ * emails (sign-up and password-reset codes). Polls, since Auth sends
+ * after responding.
  */
 export async function waitForEmail(to: string, since: number): Promise<string> {
+  const base = process.env.MAILPIT_URL ?? "http://127.0.0.1:54424";
   for (let attempt = 0; attempt < 50; attempt++) {
-    if (existsSync(OUTBOX_FILE)) {
-      const emails = readFileSync(OUTBOX_FILE, "utf8")
-        .trim()
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => JSON.parse(line) as { to: string; text: string; sentAt: number })
-        .filter((email) => email.to === to && email.sentAt >= since);
-      if (emails.length > 0) return emails[emails.length - 1].text;
+    const search = await fetch(`${base}/api/v1/search?query=${encodeURIComponent(`to:${to}`)}`);
+    if (search.ok) {
+      const { messages } = (await search.json()) as {
+        messages?: { ID: string; Created: string }[];
+      };
+      const fresh = (messages ?? [])
+        .filter((message) => new Date(message.Created).getTime() >= since)
+        .sort((a, b) => new Date(b.Created).getTime() - new Date(a.Created).getTime());
+      if (fresh.length > 0) {
+        const message = await fetch(`${base}/api/v1/message/${fresh[0].ID}`);
+        if (message.ok) return ((await message.json()) as { Text: string }).Text;
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`No email to ${to} arrived`);
+  throw new Error(`No email to ${to} arrived in Mailpit`);
 }
 
 export const codeFrom = (text: string) => /\b(\d{6})\b/.exec(text)?.[1] ?? "";
-export const linkFrom = (text: string) => /(https?:\/\/\S+)/.exec(text)?.[1] ?? "";
 
-/** Signs up through the API and confirms the email with the emailed code. */
-export async function createVerifiedAccount(request: APIRequestContext, account: Account) {
-  const headers = { Origin: BASE_URL };
-  const since = Date.now();
-  const signUp = await request.post("/api/auth/sign-up/email", { data: account, headers });
-  if (!signUp.ok()) throw new Error(`sign-up failed: ${signUp.status()} ${await signUp.text()}`);
-  const otp = codeFrom(await waitForEmail(account.email, since));
-  const verify = await request.post("/api/auth/email-otp/verify-email", {
-    data: { email: account.email, otp },
+/**
+ * Supabase Auth's own API, as the site's server actions call it (the
+ * tests can't call server actions directly). Same publishable key as
+ * the server, from the environment.
+ */
+function authApi(path: string) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const apikey = process.env.SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !apikey) throw new Error("Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY for e2e.");
+  return { url: `${url}/auth/v1/${path}`, headers: { apikey } };
+}
+
+/** Signs up without confirming the email (Supabase emails a code). */
+export async function signUpUnverified(request: APIRequestContext, account: Account) {
+  const { url, headers } = authApi("signup");
+  const response = await request.post(url, {
     headers,
+    data: { email: account.email, password: account.password, data: { name: account.name } },
   });
+  if (!response.ok()) throw new Error(`sign-up failed: ${response.status()} ${await response.text()}`);
+}
+
+/** Confirms a sign-up with the emailed code. */
+export async function confirmSignUp(request: APIRequestContext, email: string, code: string) {
+  const { url, headers } = authApi("verify");
+  return request.post(url, { headers, data: { type: "signup", email, token: code } });
+}
+
+/** Signs up and confirms the email with the emailed code. */
+export async function createVerifiedAccount(request: APIRequestContext, account: Account) {
+  const since = Date.now();
+  await signUpUnverified(request, account);
+  const verify = await confirmSignUp(request, account.email, codeFrom(await waitForEmail(account.email, since)));
   if (!verify.ok()) throw new Error(`verify failed: ${verify.status()} ${await verify.text()}`);
 }
 
@@ -81,9 +110,9 @@ export async function sql<Row = Record<string, unknown>>(query: string, params: 
   }
 }
 
-/** Same as `npm run make-admin -- <email>`. */
+/** Makes the account an admin (its role lives in `profile`). */
 export async function grantAdmin(email: string) {
-  await sql(`UPDATE "user" SET role = 'admin' WHERE email = $1`, [email]);
+  await sql(`UPDATE profile SET role = 'admin' WHERE id = (SELECT id FROM auth.users WHERE email = $1)`, [email]);
 }
 
 /** Makes every session of this account look `hours` old. */

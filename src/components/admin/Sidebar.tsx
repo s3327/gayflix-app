@@ -6,7 +6,8 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronDown, ExternalLink, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Shield, User, X } from "lucide-react";
 import { adminNav, type NavEntry } from "@/components/admin/nav-config";
-import { authClient } from "@/lib/auth-client";
+import { signOut } from "@/lib/auth-actions";
+import { isActionRedirect } from "@/lib/auth-redirects";
 import { useDropdown } from "@/lib/use-dropdown";
 
 /** For useSyncExternalStore: nothing changes after the page starts. */
@@ -343,8 +344,14 @@ function AdminAccountSection({
 
   const router = useRouter();
 
+  // signOut sends the browser to the admin login page from the server.
+  // If signing out fails, go there anyway, as before.
   async function handleSignOut() {
-    await authClient.signOut().catch(() => {});
+    try {
+      await signOut("/admin/login");
+    } catch (thrown) {
+      if (isActionRedirect(thrown)) return;
+    }
     router.push("/admin/login");
     router.refresh();
   }

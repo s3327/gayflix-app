@@ -25,7 +25,7 @@ async function requireSession() {
 /** Signs out one of the account's other devices. */
 export async function signOutDevice(sessionId: unknown): Promise<void> {
   const session = await requireSession();
-  if (typeof sessionId !== "string" || sessionId === session.session.id) {
+  if (typeof sessionId !== "string" || sessionId === session.sessionId) {
     throw new Error("Invalid device");
   }
   const requestHeaders = await headers();
@@ -52,7 +52,7 @@ export async function signOutOtherDevices(): Promise<void> {
   } catch {
     await connection();
     await db.session.deleteMany({
-      where: { userId: session.user.id, id: { not: session.session.id } },
+      where: { userId: session.user.id, id: { not: session.sessionId } },
     });
   }
   revalidatePath("/account/setting");

@@ -7,7 +7,8 @@ import Link from "next/link";
 import FormError from "@/components/FormError";
 import GoogleAuthButton from "@/components/GoogleAuthButton";
 import PasswordInput from "@/components/PasswordInput";
-import { authClient, authErrorMessage, signInWithGoogle } from "@/lib/auth-client";
+import { signUp } from "@/lib/auth-actions";
+import { startGoogleSignIn } from "@/lib/auth-redirects";
 import { authHref } from "@/lib/safe-redirect";
 
 /**
@@ -16,17 +17,18 @@ import { authHref } from "@/lib/safe-redirect";
  * `next` is the validated ?next= page that sent the visitor here; the
  * email check and Google both come back to it, else to /account.
  *
- * Creates the account with Better Auth, which emails a 6-digit code;
- * /verify-email takes it from there and signs the user in. No session
- * exists until the email is confirmed.
+ * Creates the account on the server (signUp in src/lib/auth-actions.ts):
+ * Supabase Auth emails a 6-digit code, and /verify-email takes it from
+ * there and signs the user in. No session exists until the email is
+ * confirmed.
  *
- * If the email already has an account, Better Auth answers the same way
- * (so sign-up can't be used to find out who has an account) and no new
+ * If the email already has an account, the answer is the same (so
+ * sign-up can't be used to find out who has an account) and no new
  * account is created.
  *
  * Both ways in need the age and terms box ticked; trying without it says
  * so next to the box rather than greying the buttons out. Google shows
- * only where it's set up (`google`, from src/lib/auth.ts).
+ * only where Supabase Auth has it turned on (`google`).
  */
 export default function SignupForm({ next, google }: { next: string | null; google: boolean }) {
   const router = useRouter();
@@ -52,13 +54,13 @@ export default function SignupForm({ next, google }: { next: string | null; goog
     if (!checkTerms()) return;
     setError("");
     setIsSubmitting(true);
-    const { error } = await authClient.signUp.email({ name, email, password });
+    const result = await signUp(email, password, name);
     setIsSubmitting(false);
-    if (error) {
-      setError(authErrorMessage(error));
+    if ("error" in result) {
+      setError(result.error);
       return;
     }
-    const params = new URLSearchParams({ email });
+    const params = new URLSearchParams({ email: email.trim() });
     if (next) params.set("next", next);
     router.push(`/verify-email?${params}`);
   }
@@ -66,7 +68,7 @@ export default function SignupForm({ next, google }: { next: string | null; goog
   async function handleGoogleAuth() {
     if (!checkTerms()) return;
     // Google verifies the email itself, so this skips /verify-email.
-    setError(await signInWithGoogle(next ?? "/account"));
+    setError(await startGoogleSignIn(next ?? "/account"));
   }
 
   return (

@@ -8,6 +8,7 @@ import { signOutDevice, signOutOtherDevices } from "@/lib/account-actions";
 import { accountDeletionProblem } from "@/lib/account-deletion";
 import { isStaffRole } from "@/lib/admin-roles";
 import { auth } from "@/lib/auth";
+import { hasVerifiedTotpFactor } from "@/lib/auth-profile";
 import { getMyNickname } from "@/lib/community";
 import { db } from "@/lib/db";
 import { deviceName, isMobileDevice } from "@/lib/device-name";
@@ -62,14 +63,17 @@ export default async function AccountSettingPage() {
     });
   }
 
-  const nickname = await getMyNickname();
+  const [nickname, twoFactorEnabled] = await Promise.all([
+    getMyNickname(),
+    hasVerifiedTotpFactor(session.user.id),
+  ]);
 
   const devices = sessions
     .map((s) => ({
       id: s.id,
       name: deviceName(s.userAgent),
       mobile: isMobileDevice(s.userAgent),
-      current: s.id === session.session.id,
+      current: s.id === session.sessionId,
       createdAt: new Date(s.createdAt),
       updatedAt: new Date(s.updatedAt),
     }))
@@ -81,7 +85,8 @@ export default async function AccountSettingPage() {
   // Anything that stops deletion besides the password, which the dialog asks for.
   const deletionProblem = accountDeletionProblem({
     role: session.user.role,
-    impersonating: Boolean(session.session.impersonatedBy),
+    // Supabase Auth has no impersonation.
+    impersonating: false,
     hasPassword,
     passwordGiven: true,
   });
@@ -161,7 +166,7 @@ export default async function AccountSettingPage() {
           Two-factor sign-in
         </h2>
         <TwoFactorSetting
-          enabled={Boolean(session.user.twoFactorEnabled)}
+          enabled={twoFactorEnabled}
           hasPassword={hasPassword}
           isStaff={isStaffRole(session.user.role)}
           isTwoFactorRequired={process.env.ADMIN_REQUIRE_2FA === "true" || process.env.ADMIN_REQUIRE_2FA === "1"}

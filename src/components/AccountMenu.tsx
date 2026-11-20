@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { User } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
@@ -32,7 +32,6 @@ const MENU_ITEMS = [
 export default function AccountMenu() {
   const { isLoggedIn, logout } = useAuth();
   const { showToast } = useToast();
-  const router = useRouter();
   const pathname = usePathname();
   const here = useCurrentPath();
   const [isOpen, setIsOpen] = useState(false);
@@ -48,11 +47,12 @@ export default function AccountMenu() {
     setIsOpen(false);
   }
 
+  // On success, logout() has the server send the browser to /home.
   async function handleLogout() {
     setIsOpen(false);
-    await logout();
-    showToast("Logged out");
-    router.push("/home");
+    const error = await logout();
+    if (error) showToast(error, { type: "error" });
+    else showToast("Logged out");
   }
 
   if (!isLoggedIn) {
