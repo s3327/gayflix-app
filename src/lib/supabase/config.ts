@@ -18,6 +18,25 @@ export function supabaseConfig() {
 }
 
 /**
+ * Attributes for the session cookie (access and refresh tokens), for
+ * every client that reads or writes it (src/lib/supabase/server.ts,
+ * src/lib/supabase/proxy-session.ts, the sign-in actions):
+ * - HttpOnly: the browser never calls Supabase, so no script needs it;
+ * - Secure in production, or on a request that came over https (local
+ *   http dev still works);
+ * - SameSite=Lax and Path=/, as @supabase/ssr sets them by default.
+ * The cookie's lifetime stays @supabase/ssr's own.
+ */
+export function sessionCookieOptions(protocol?: string) {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production" || protocol === "https:",
+    sameSite: "lax" as const,
+    path: "/",
+  };
+}
+
+/**
  * Whether the request carries a Supabase Auth cookie (the session,
  * possibly split into `.0`, `.1` chunks, or a sign-in's code verifier).
  * Guests have none, so there's nothing to read or refresh.

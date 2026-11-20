@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import type { NextRequest, NextResponse } from "next/server";
-import { hasSupabaseAuthCookie, supabaseConfig } from "@/lib/supabase/config";
+import { hasSupabaseAuthCookie, sessionCookieOptions, supabaseConfig } from "@/lib/supabase/config";
 
 /**
  * Refreshes the signed-in user's session when its access token has
@@ -25,6 +25,7 @@ export async function refreshSessionCookies(
   if (!hasSupabaseAuthCookie(request.cookies.getAll())) return;
   const { url, publishableKey } = supabaseConfig();
   const supabase = createServerClient(url, publishableKey, {
+    cookieOptions: sessionCookieOptions(request.nextUrl.protocol),
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll(cookiesToSet, headers) {

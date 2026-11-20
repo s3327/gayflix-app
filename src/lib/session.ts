@@ -93,15 +93,17 @@ export const getSession = cache(async (): Promise<AppSession | null> => {
 });
 
 /**
- * Like getSession(), but the role (and whether the account has
- * two-factor) comes from the database: admin access decisions see a
- * role change at once, not at the next token refresh. Null when the
- * account has no profile row.
+ * Like getSession(), but checked against the database, so admin access
+ * decisions see a sign-out, ban or role change at once, not when the
+ * token expires (up to an hour later). Null unless the token's session
+ * still exists in Supabase Auth, the account isn't banned, and it has a
+ * profile row; the role (and whether the account has two-factor) comes
+ * from the database (src/lib/auth-profile.ts).
  */
 export const getVerifiedSession = cache(async (): Promise<AppSession | null> => {
   const claims = await readClaims();
-  if (!claims) return null;
-  const profile = await readAuthProfile(claims.sub);
+  if (!claims || typeof claims.session_id !== "string") return null;
+  const profile = await readAuthProfile(claims.sub, claims.session_id);
   if (!profile) return null;
   return sessionFromClaims(claims, profile.role, profile.hasVerifiedTotp);
 });

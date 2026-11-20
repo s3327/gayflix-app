@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type CookieMethods = {
   getAll: () => { name: string; value: string }[];
@@ -55,6 +55,8 @@ function pageRequest(path = "/home", cookie = `sb-127-auth-token=${OLD_TOKEN}; t
   return new NextRequest(new URL(path, "http://localhost:3000"), { headers: { cookie } });
 }
 
+afterEach(() => vi.unstubAllEnvs());
+
 beforeEach(() => {
   createServerClient.mockReset();
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54421");
@@ -90,6 +92,79 @@ describe("refreshSessionCookies", () => {
 
     expect(createServerClient).not.toHaveBeenCalled();
     expect(response.headers.get("set-cookie")).toBeNull();
+  });
+});
+
+/** A JWT the fake Auth server below accepts (HS256, so getClaims asks /user). */
+function fakeJwt(payload: Record<string, unknown>) {
+  const part = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${part({ alg: "HS256", typ: "JWT" })}.${part(payload)}.c2ln`;
+}
+
+/**
+ * The real @supabase/ssr client against a fake Auth server: the cookie's
+ * session has expired, so getClaims() refreshes it and the library
+ * writes the new cookie with the options we gave it.
+ */
+async function realClientWithFakeAuth() {
+  const actual = await vi.importActual<typeof import("@supabase/ssr")>("@supabase/ssr");
+  const now = Math.floor(Date.now() / 1000);
+  const user = { id: "u1", aud: "authenticated", role: "authenticated", email: "m@gayflix.test" };
+  const accessToken = fakeJwt({ sub: "u1", exp: now + 3600, aal: "aal1", session_id: "s1" });
+  const fakeFetch = async (input: RequestInfo | URL) => {
+    const url = String(input);
+    const body = url.includes("grant_type=refresh_token")
+      ? { access_token: accessToken, refresh_token: "refresh-2", expires_in: 3600, expires_at: now + 3600, token_type: "bearer", user }
+      : user;
+    return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  createServerClient.mockImplementation((url: string, key: string, options: object) =>
+    actual.createServerClient(url, key, { ...options, global: { fetch: fakeFetch } } as never)
+  );
+  const expired = {
+    access_token: fakeJwt({ sub: "u1", exp: now - 60 }),
+    refresh_token: "refresh-1",
+    expires_in: 3600,
+    expires_at: now - 60,
+    token_type: "bearer",
+    user,
+  };
+  return `sb-127-auth-token=base64-${Buffer.from(JSON.stringify(expired)).toString("base64url")}`;
+}
+
+describe("session cookie attributes", () => {
+  it("are HttpOnly, SameSite=Lax and Path=/, and not Secure on local http", async () => {
+    const cookie = await realClientWithFakeAuth();
+    const response = NextResponse.next();
+    await refreshSessionCookies(pageRequest("/home", cookie), response);
+
+    const setCookie = response.headers.getSetCookie().find((c) => c.startsWith("sb-127-auth-token="));
+    expect(setCookie).toBeDefined();
+    expect(setCookie).toMatch(/; HttpOnly/i);
+    expect(setCookie).toMatch(/; SameSite=Lax/i);
+    expect(setCookie).toMatch(/; Path=\//i);
+    expect(setCookie).not.toMatch(/; Secure/i);
+  });
+
+  it("are Secure in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const cookie = await realClientWithFakeAuth();
+    const response = NextResponse.next();
+    await refreshSessionCookies(pageRequest("/home", cookie), response);
+
+    const setCookie = response.headers.getSetCookie().find((c) => c.startsWith("sb-127-auth-token="));
+    expect(setCookie).toMatch(/; Secure/i);
+    expect(setCookie).toMatch(/; HttpOnly/i);
+  });
+
+  it("are Secure on an https request", async () => {
+    const cookie = await realClientWithFakeAuth();
+    const response = NextResponse.next();
+    const request = new NextRequest("https://gayflix.test/home", { headers: { cookie } });
+    await refreshSessionCookies(request, response);
+
+    const setCookie = response.headers.getSetCookie().find((c) => c.startsWith("sb-127-auth-token="));
+    expect(setCookie).toMatch(/; Secure/i);
   });
 });
 
