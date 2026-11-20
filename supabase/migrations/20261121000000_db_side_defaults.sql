@@ -66,3 +66,16 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON "review"
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON "site_setting"
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- Inserts that omit "updatedAt" (Kysely) get now in UTC; Prisma sends its own.
+ALTER TABLE "user" ALTER COLUMN "updatedAt" SET DEFAULT (now() AT TIME ZONE 'UTC');
+ALTER TABLE "session" ALTER COLUMN "updatedAt" SET DEFAULT (now() AT TIME ZONE 'UTC');
+ALTER TABLE "account" ALTER COLUMN "updatedAt" SET DEFAULT (now() AT TIME ZONE 'UTC');
+ALTER TABLE "verification" ALTER COLUMN "updatedAt" SET DEFAULT (now() AT TIME ZONE 'UTC');
+ALTER TABLE "media" ALTER COLUMN "updatedAt" SET DEFAULT (now() AT TIME ZONE 'UTC');
+ALTER TABLE "collection" ALTER COLUMN "updatedAt" SET DEFAULT (now() AT TIME ZONE 'UTC');
+ALTER TABLE "video_source" ALTER COLUMN "updatedAt" SET DEFAULT (now() AT TIME ZONE 'UTC');
+ALTER TABLE "media_list" ALTER COLUMN "updatedAt" SET DEFAULT (now() AT TIME ZONE 'UTC');
+ALTER TABLE "member_profile" ALTER COLUMN "updatedAt" SET DEFAULT (now() AT TIME ZONE 'UTC');
+ALTER TABLE "review" ALTER COLUMN "updatedAt" SET DEFAULT (now() AT TIME ZONE 'UTC');
+ALTER TABLE "site_setting" ALTER COLUMN "updatedAt" SET DEFAULT (now() AT TIME ZONE 'UTC');

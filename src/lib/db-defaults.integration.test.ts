@@ -40,10 +40,21 @@ describe("database-side defaults", () => {
       await insertProbe(trx);
       await sql`update media set title = 'After' where id = 'db-defaults-probe'`.execute(trx);
       const { rows } = await sql<{ fresh: boolean }>`
-        select "updatedAt" > (now() at time zone 'UTC') - interval '1 minute' as fresh
+        select abs(extract(epoch from ("updatedAt" - (now() at time zone 'UTC')))) < 60 as fresh
         from media where id = 'db-defaults-probe'`.execute(trx);
       expect(rows[0].fresh).toBe(true);
       expect((await updatedAt(trx)).getUTCFullYear()).toBeGreaterThan(2000);
+    });
+  });
+
+  it("defaults updatedAt to now in UTC on insert, whatever the session time zone", async () => {
+    await withRollback(async (trx) => {
+      await sql`set local time zone 'Asia/Bangkok'`.execute(trx);
+      await sql`insert into collection (id, title) values ('db-defaults-collection', 'Probe')`.execute(trx);
+      const { rows } = await sql<{ fresh: boolean }>`
+        select abs(extract(epoch from ("updatedAt" - (now() at time zone 'UTC')))) < 60 as fresh
+        from collection where id = 'db-defaults-collection'`.execute(trx);
+      expect(rows[0].fresh).toBe(true);
     });
   });
 

@@ -45,7 +45,7 @@ export interface Account {
   refreshToken: string | null;
   refreshTokenExpiresAt: Timestamp | null;
   scope: string | null;
-  updatedAt: Timestamp;
+  updatedAt: Generated<Timestamp>;
   userId: string;
 }
 
@@ -72,7 +72,7 @@ export interface Collection {
   published: Generated<boolean>;
   startsAt: Timestamp | null;
   title: string;
-  updatedAt: Timestamp;
+  updatedAt: Generated<Timestamp>;
 }
 
 export interface CollectionItem {
@@ -167,7 +167,7 @@ export interface Media {
   trailerUrl: string | null;
   trashedAt: Timestamp | null;
   type: MediaType;
-  updatedAt: Timestamp;
+  updatedAt: Generated<Timestamp>;
   viewCount: Generated<number>;
   year: number;
 }
@@ -179,7 +179,7 @@ export interface MediaList {
   inCommunity: Generated<boolean>;
   isPublic: Generated<boolean>;
   name: string;
-  updatedAt: Timestamp;
+  updatedAt: Generated<Timestamp>;
   userId: string;
 }
 
@@ -200,7 +200,7 @@ export interface MemberProfile {
   createdAt: Generated<Timestamp>;
   nickname: string;
   nicknameKey: string;
-  updatedAt: Timestamp;
+  updatedAt: Generated<Timestamp>;
   userId: string;
 }
 
@@ -233,7 +233,7 @@ export interface Review {
   hiddenBy: string | null;
   id: Generated<string>;
   mediaId: string;
-  updatedAt: Timestamp;
+  updatedAt: Generated<Timestamp>;
   userId: string;
 }
 
@@ -257,7 +257,7 @@ export interface Session {
   ipAddress: string | null;
   token: string;
   twoFactorVerified: Generated<boolean | null>;
-  updatedAt: Timestamp;
+  updatedAt: Generated<Timestamp>;
   userAgent: string | null;
   userId: string;
 }
@@ -320,7 +320,7 @@ export interface User {
   name: string;
   role: string | null;
   twoFactorEnabled: Generated<boolean | null>;
-  updatedAt: Timestamp;
+  updatedAt: Generated<Timestamp>;
 }
 
 export interface Verification {
@@ -328,7 +328,7 @@ export interface Verification {
   expiresAt: Timestamp;
   id: string;
   identifier: string;
-  updatedAt: Timestamp;
+  updatedAt: Generated<Timestamp>;
   value: string;
 }
 
@@ -341,7 +341,7 @@ export interface VideoSource {
   label: string;
   mediaId: string | null;
   position: number;
-  updatedAt: Timestamp;
+  updatedAt: Generated<Timestamp>;
   url: string;
 }
 
