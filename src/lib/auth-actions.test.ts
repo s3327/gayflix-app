@@ -30,6 +30,46 @@ vi.mock("next/headers", () => ({
   headers: vi.fn(async () => requestHeaders),
 }));
 
+// Work deferred with after() runs when the test says the response has gone.
+const afterResponse: (() => Promise<void>)[] = [];
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: (task: () => Promise<void>) => afterResponse.push(task),
+}));
+async function finishResponse() {
+  for (const task of afterResponse.splice(0)) await task();
+}
+
+const settings = { registrationOpen: true };
+vi.mock("@/lib/site-settings", () => ({
+  getSiteSettings: async () => settings,
+}));
+
+// Sign-up's minimum duration is tested in auth-timing.test.ts; here it
+// just runs the work.
+vi.mock("@/lib/auth-timing", () => ({
+  atLeast: (_floor: number, work: () => Promise<unknown>) => work(),
+}));
+
+// The limits, counted in memory as the real table counts them
+// (auth-rate-limit.integration.test.ts covers the table).
+const attempts = new Map<string, number>();
+const limitKey = (limit: { name: string }, parts: string[]) => `${limit.name}|${parts.join("|")}`;
+vi.mock("@/lib/auth-rate-limit", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth-rate-limit")>();
+  return {
+    ...actual,
+    overLimit: async (limit: { name: string; max: number }, parts: string[]) => {
+      const key = limitKey(limit, parts);
+      attempts.set(key, (attempts.get(key) ?? 0) + 1);
+      return attempts.get(key)! > limit.max;
+    },
+    resetLimit: async (limit: { name: string }, parts: string[]) => {
+      attempts.delete(limitKey(limit, parts));
+    },
+  };
+});
+
 class RedirectError extends Error {
   constructor(readonly url: string) {
     super(`NEXT_REDIRECT ${url}`);
@@ -87,6 +127,10 @@ beforeEach(() => {
   });
   for (const name of [...requestHeaders.keys()]) requestHeaders.delete(name);
   requestHeaders.set("origin", "https://gayflix.test");
+  requestHeaders.set("x-forwarded-for", "203.0.113.7");
+  attempts.clear();
+  afterResponse.length = 0;
+  settings.registrationOpen = true;
 });
 
 describe("argument checks", () => {
@@ -142,6 +186,18 @@ describe("signUp", () => {
       await expect(signUp(EMAIL, PASSWORD, "Jamie")).resolves.toEqual({ ok: true });
     }
   );
+
+  it.each([
+    ["a taken address", () => auth.signUp.mockResolvedValue(authError("user_already_exists", 422))],
+    ["a new address", () => undefined],
+  ])("says registration is closed for %s without asking Supabase while it's closed", async (_name, arrange) => {
+    arrange();
+    settings.registrationOpen = false;
+    await expect(signUp(EMAIL, PASSWORD, "Jamie")).resolves.toEqual({
+      error: "Public registration is currently closed.",
+    });
+    expect(auth.signUp).not.toHaveBeenCalled();
+  });
 
   it("says registration is closed when the sign-up hook refuses it", async () => {
     auth.signUp.mockResolvedValue(authError("unknown", 403, "Public registration is currently closed."));
@@ -219,6 +275,17 @@ describe("signIn", () => {
     expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 
+  it("ends the session when the two-factor check fails, rather than letting it through", async () => {
+    auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: null,
+      error: { name: "AuthApiError", code: "unexpected_failure", status: 500, message: "boom" },
+    });
+    await expect(signIn(EMAIL, PASSWORD, "/account")).resolves.toEqual({
+      error: "Something went wrong. Please try again.",
+    });
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
   it("asks to wait when Supabase rate-limits", async () => {
     auth.signInWithPassword.mockResolvedValue(authError("over_request_rate_limit", 429));
     await expect(signIn(EMAIL, PASSWORD)).resolves.toEqual({
@@ -235,14 +302,17 @@ describe("signIn", () => {
 });
 
 describe("requestPasswordReset", () => {
-  it("returns ok for an unknown email", async () => {
+  it("returns ok for an unknown email, and asks Supabase only after answering", async () => {
     await expect(requestPasswordReset("nobody-here@example.com")).resolves.toEqual({ ok: true });
+    expect(auth.resetPasswordForEmail).not.toHaveBeenCalled();
+    await finishResponse();
     expect(auth.resetPasswordForEmail).toHaveBeenCalledWith("nobody-here@example.com");
   });
 
   it("returns ok even when Supabase refuses, so the answer never depends on the account", async () => {
     auth.resetPasswordForEmail.mockResolvedValue(authError("over_email_send_rate_limit", 429));
     await expect(requestPasswordReset(EMAIL)).resolves.toEqual({ ok: true });
+    await finishResponse();
   });
 });
 
@@ -268,6 +338,77 @@ describe("resetPassword", () => {
     const result = await resetPassword(EMAIL, "123456", PASSWORD);
     expect(result).toEqual({ error: expect.stringMatching(/password/i) });
     expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+});
+
+describe("attempt limits", () => {
+  const TOO_MANY = { error: "Too many attempts. Try again later." };
+
+  it("allows 10 sign-in attempts per client and email in a window, then refuses without asking Supabase", async () => {
+    auth.signInWithPassword.mockResolvedValue(authError("invalid_credentials"));
+    for (let i = 0; i < 10; i++) {
+      await expect(signIn(EMAIL, "wrong-password")).resolves.toEqual({ error: "That email and password don't match." });
+    }
+    await expect(signIn(EMAIL, "wrong-password")).resolves.toEqual(TOO_MANY);
+    expect(auth.signInWithPassword).toHaveBeenCalledTimes(10);
+
+    // Another client may still try that email, and this client another email.
+    requestHeaders.set("x-forwarded-for", "198.51.100.9");
+    await expect(signIn(EMAIL, "wrong-password")).resolves.toEqual({ error: "That email and password don't match." });
+    requestHeaders.set("x-forwarded-for", "203.0.113.7");
+    await expect(signIn("other@example.com", "wrong-password")).resolves.toEqual({
+      error: "That email and password don't match.",
+    });
+  });
+
+  it("caps sign-in attempts from one client across emails at 50", async () => {
+    auth.signInWithPassword.mockResolvedValue(authError("invalid_credentials"));
+    for (let i = 0; i < 50; i++) await signIn(`person${i}@example.com`, "wrong-password");
+    await expect(signIn("person-new@example.com", "wrong-password")).resolves.toEqual(TOO_MANY);
+  });
+
+  it("allows 5 checks of an emailed sign-up code from anywhere, until a new code is sent", async () => {
+    auth.verifyOtp.mockResolvedValue(authError("otp_expired", 403));
+    for (let i = 0; i < 5; i++) {
+      requestHeaders.set("x-forwarded-for", `192.0.2.${i}`);
+      await verifyEmailCode(EMAIL, "000000");
+    }
+    await expect(verifyEmailCode(EMAIL, "123456")).resolves.toEqual(TOO_MANY);
+    expect(auth.verifyOtp).toHaveBeenCalledTimes(5);
+
+    await expect(resendEmailCode(EMAIL)).resolves.toEqual({ ok: true });
+    auth.verifyOtp.mockResolvedValue(NO_ERROR);
+    await expect(verifyEmailCode(EMAIL, "123456")).resolves.toEqual({ ok: true });
+  });
+
+  it("allows 5 checks of a reset code, until a new one is sent", async () => {
+    auth.verifyOtp.mockResolvedValue(authError("otp_expired", 403));
+    for (let i = 0; i < 5; i++) await resetPassword(EMAIL, "000000", PASSWORD);
+    await expect(resetPassword(EMAIL, "123456", PASSWORD)).resolves.toEqual(TOO_MANY);
+    expect(auth.updateUser).not.toHaveBeenCalled();
+
+    await requestPasswordReset(EMAIL);
+    await finishResponse();
+    auth.verifyOtp.mockResolvedValue(NO_ERROR);
+    await expect(resetPassword(EMAIL, "123456", PASSWORD)).resolves.toEqual({ ok: true });
+  });
+
+  it("counts a sign-up code and a reset code separately", async () => {
+    auth.verifyOtp.mockResolvedValue(authError("otp_expired", 403));
+    for (let i = 0; i < 5; i++) await verifyEmailCode(EMAIL, "000000");
+    await expect(resetPassword(EMAIL, "000000", PASSWORD)).resolves.not.toEqual(TOO_MANY);
+  });
+
+  it("allows 5 code emails per client and email, then refuses", async () => {
+    for (let i = 0; i < 5; i++) await expect(resendEmailCode(EMAIL)).resolves.toEqual({ ok: true });
+    await expect(resendEmailCode(EMAIL)).resolves.toEqual(TOO_MANY);
+    await expect(requestPasswordReset(EMAIL)).resolves.toEqual(TOO_MANY);
+    expect(auth.resend).toHaveBeenCalledTimes(5);
+  });
+
+  it("keys sign-in on the client and the lowercased email", async () => {
+    await signIn("Jamie@Example.com", PASSWORD).catch(() => {});
+    expect([...attempts.keys()]).toEqual(["sign-in|203.0.113.7|jamie@example.com", "sign-in-client|203.0.113.7"]);
   });
 });
 

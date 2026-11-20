@@ -3,6 +3,7 @@ import {
   codeFrom,
   confirmSignUp,
   createVerifiedAccount,
+  expectNoEmail,
   newAccount,
   signUpUnverified,
   waitForEmail,
@@ -148,7 +149,7 @@ test("signing up again with a taken email reveals nothing, and finishes an uncon
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Sign Up" }).click();
   await expect(page).toHaveURL(/\/verify-email\?email=/);
-  await expect(waitForEmail(owner.email, since)).rejects.toThrow(/No email/);
+  await expectNoEmail(owner.email, since);
 
   // Never confirmed: a fresh code, which finishes the first sign-up.
   const account = newAccount("signup-again");

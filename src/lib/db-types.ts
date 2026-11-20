@@ -62,6 +62,12 @@ export interface ActivityLog {
   summary: string;
 }
 
+export interface AuthRateLimit {
+  count: number;
+  key: string;
+  windowStart: Timestamp;
+}
+
 export interface Collection {
   createdAt: Generated<Timestamp>;
   description: Generated<string>;
@@ -371,6 +377,7 @@ export interface WatchlistItem {
 export interface DB {
   account: Account;
   activity_log: ActivityLog;
+  auth_rate_limit: AuthRateLimit;
   collection: Collection;
   collection_item: CollectionItem;
   content_report: ContentReport;

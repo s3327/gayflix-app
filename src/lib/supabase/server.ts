@@ -4,17 +4,6 @@ import { cookies } from "next/headers";
 import { sessionCookieOptions, supabaseConfig } from "@/lib/supabase/config";
 
 /**
- * A Supabase client acting as the signed-in user of this request, from
- * their session cookies. Server code only (server components, server
- * actions, route handlers); make a new one per request.
- *
- * Server components can't set cookies, so when one of them triggers a
- * token refresh the new cookies are dropped here; that's fine because
- * src/proxy.ts has already refreshed the session before the page renders
- * (refreshSessionCookies). Server actions and route handlers can set
- * cookies, and do.
- */
-/**
  * Whether Google sign-in is turned on in Supabase Auth (the provider is
  * set up in the project's dashboard, not here), from Auth's public
  * settings, cached for 5 minutes. False if Auth can't be reached, so the
@@ -36,6 +25,17 @@ export async function googleSignInEnabled(): Promise<boolean> {
   }
 }
 
+/**
+ * A Supabase client acting as the signed-in user of this request, from
+ * their session cookies. Server code only (server components, server
+ * actions, route handlers); make a new one per request.
+ *
+ * Server components can't set cookies, so when one of them triggers a
+ * token refresh the new cookies are dropped here; that's fine because
+ * src/proxy.ts has already refreshed the session before the page renders
+ * (refreshSessionCookies). Server actions and route handlers can set
+ * cookies, and do.
+ */
 export async function createServerSupabase() {
   const { url, publishableKey } = supabaseConfig();
   const cookieStore = await cookies();
@@ -49,7 +49,8 @@ export async function createServerSupabase() {
             cookieStore.set(name, value, options);
           }
         } catch {
-          // Called from a server component, which can't set cookies.
+          // Called from a server component, or after the response has
+          // gone (after()), neither of which can set cookies.
         }
       },
     },

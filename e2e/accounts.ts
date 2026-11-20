@@ -41,24 +41,37 @@ export function accounts(): { user: Account; admin: Account } {
  * after responding.
  */
 export async function waitForEmail(to: string, since: number): Promise<string> {
-  const base = process.env.MAILPIT_URL ?? "http://127.0.0.1:54424";
   for (let attempt = 0; attempt < 50; attempt++) {
-    const search = await fetch(`${base}/api/v1/search?query=${encodeURIComponent(`to:${to}`)}`);
-    if (search.ok) {
-      const { messages } = (await search.json()) as {
-        messages?: { ID: string; Created: string }[];
-      };
-      const fresh = (messages ?? [])
-        .filter((message) => new Date(message.Created).getTime() >= since)
-        .sort((a, b) => new Date(b.Created).getTime() - new Date(a.Created).getTime());
-      if (fresh.length > 0) {
-        const message = await fetch(`${base}/api/v1/message/${fresh[0].ID}`);
-        if (message.ok) return ((await message.json()) as { Text: string }).Text;
-      }
+    const [newest] = await mailpitMessages(to, since);
+    if (newest) {
+      const message = await fetch(`${MAILPIT}/api/v1/message/${newest.ID}`);
+      if (message.ok) return ((await message.json()) as { Text: string }).Text;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`No email to ${to} arrived in Mailpit`);
+}
+
+/**
+ * Fails if any email to `to` sent after `since` has arrived after
+ * `withinMs` (Auth sends inside its own request, so a short wait is
+ * enough; polling waitForEmail to its end would take far longer).
+ */
+export async function expectNoEmail(to: string, since: number, withinMs = 2000) {
+  await new Promise((resolve) => setTimeout(resolve, withinMs));
+  expect(await mailpitMessages(to, since)).toEqual([]);
+}
+
+const MAILPIT = process.env.MAILPIT_URL ?? "http://127.0.0.1:54424";
+
+/** Mailpit's messages to `to` created at or after `since`, newest first. */
+async function mailpitMessages(to: string, since: number) {
+  const search = await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${to}`)}`);
+  if (!search.ok) return [];
+  const { messages } = (await search.json()) as { messages?: { ID: string; Created: string }[] };
+  return (messages ?? [])
+    .filter((message) => new Date(message.Created).getTime() >= since)
+    .sort((a, b) => new Date(b.Created).getTime() - new Date(a.Created).getTime());
 }
 
 export const codeFrom = (text: string) => /\b(\d{6})\b/.exec(text)?.[1] ?? "";

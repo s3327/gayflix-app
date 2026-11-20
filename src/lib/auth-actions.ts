@@ -2,10 +2,15 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { authErrorMessage } from "@/lib/auth-errors";
+import { after } from "next/server";
+import { authErrorMessage, REGISTRATION_CLOSED } from "@/lib/auth-errors";
+import { type AuthLimit, LIMITS, overLimit, resetLimit, TOO_MANY_ATTEMPTS } from "@/lib/auth-rate-limit";
+import { atLeast } from "@/lib/auth-timing";
 import { safeNextPath } from "@/lib/safe-redirect";
+import { getSiteSettings } from "@/lib/site-settings";
 import { siteUrl } from "@/lib/site-url";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { clientIp } from "@/lib/visitor";
 
 /*
  * Sign-up, sign-in, email codes, password reset, Google and sign-out,
@@ -16,6 +21,11 @@ import { createServerSupabase } from "@/lib/supabase/server";
  * Every argument comes from the browser, so each is checked here before
  * Supabase is called. Errors come back as readable messages
  * (src/lib/auth-errors.ts), never Supabase's own wording.
+ *
+ * Nothing here may tell anyone whether an address has an account: not
+ * the answer, and not how long it takes. Password and code attempts are
+ * limited per client and per address (src/lib/auth-rate-limit.ts),
+ * since Supabase's own per-IP limits only see this server.
  */
 
 type Result = { ok: true } | { error: string };
@@ -25,6 +35,12 @@ const CODE_PATTERN = /^\d{6}$/;
 const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 128;
 const MAX_NAME = 100;
+/**
+ * Every sign-up takes at least this long. Supabase sends the email for a
+ * new address inside the request (median 670 ms, up to 1.4 s, on the
+ * local stack) and nothing for a taken one (about 90 ms).
+ */
+const SIGN_UP_FLOOR_MS = 1500;
 
 /** The trimmed email, or null when it isn't one. */
 function emailArg(value: unknown): string | null {
@@ -44,8 +60,30 @@ function newPasswordProblem(value: unknown): string | null {
 
 const INVALID_EMAIL = { error: "Enter a valid email address." } as const;
 const INVALID_CODE = { error: "Enter the 6-digit code from the email." } as const;
+const RATE_LIMITED = { error: TOO_MANY_ATTEMPTS } as const;
 
-/** Creates an account; Supabase emails a 6-digit code to confirm it. */
+/**
+ * Counts this attempt against a per-address limit and a per-client one
+ * (the client's IP; both are stored hashed). True when either is over.
+ */
+async function limited(perAddress: AuthLimit, addressKey: string[], perClient: AuthLimit): Promise<boolean> {
+  const client = await clientIp();
+  const overAddress = await overLimit(perAddress, addressKey.map((part) => part.toLowerCase()));
+  const overClient = await overLimit(perClient, [client]);
+  return overAddress || overClient;
+}
+
+/** A new code went to `address`: its code checks start afresh. */
+async function newCodeSent(type: "signup" | "recovery", address: string) {
+  await resetLimit(LIMITS.codeCheck, [type, address.toLowerCase()]);
+}
+
+/**
+ * Creates an account; Supabase emails a 6-digit code to confirm it.
+ * While an admin has registration closed, every address gets the same
+ * "closed" answer and Supabase isn't asked (it would answer a taken
+ * address differently). Every path takes at least SIGN_UP_FLOOR_MS.
+ */
 export async function signUp(email: unknown, password: unknown, name: unknown): Promise<Result> {
   const address = emailArg(email);
   if (!address) return INVALID_EMAIL;
@@ -55,18 +93,24 @@ export async function signUp(email: unknown, password: unknown, name: unknown): 
   if (!displayName) return { error: "Enter your name." };
   if (displayName.length > MAX_NAME) return { error: `Use at most ${MAX_NAME} characters for your name.` };
 
-  const supabase = await createServerSupabase();
-  // The name goes in the user's metadata, where getSession() reads it.
-  const { error } = await supabase.auth.signUp({
-    email: address,
-    password: password as string,
-    options: { data: { name: displayName } },
+  return atLeast(SIGN_UP_FLOOR_MS, async (): Promise<Result> => {
+    if (!(await getSiteSettings()).registrationOpen) return { error: REGISTRATION_CLOSED };
+
+    const supabase = await createServerSupabase();
+    // The name goes in the user's metadata, where getSession() reads it.
+    const { error } = await supabase.auth.signUp({
+      email: address,
+      password: password as string,
+      options: { data: { name: displayName } },
+    });
+    // An email that already has a confirmed account gets the same answer
+    // as a new one (and Supabase emails nothing), so sign-up can't tell
+    // anyone who has an account. An unconfirmed one gets a fresh code.
+    if (error?.code === "user_already_exists" || error?.code === "email_exists") return { ok: true };
+    if (error) return { error: authErrorMessage(error) };
+    await newCodeSent("signup", address);
+    return { ok: true };
   });
-  // An email that already has a confirmed account gets the same answer
-  // as a new one (and Supabase emails nothing), so sign-up can't tell
-  // anyone who has an account. An unconfirmed one gets a fresh code.
-  if (error?.code === "user_already_exists" || error?.code === "email_exists") return { ok: true };
-  return error ? { error: authErrorMessage(error) } : { ok: true };
 }
 
 /** Confirms the email with the code from sign-up, which signs the user in. */
@@ -74,6 +118,7 @@ export async function verifyEmailCode(email: unknown, code: unknown): Promise<Re
   const address = emailArg(email);
   if (!address) return INVALID_EMAIL;
   if (typeof code !== "string" || !CODE_PATTERN.test(code)) return INVALID_CODE;
+  if (await limited(LIMITS.codeCheck, ["signup", address], LIMITS.codeCheckPerClient)) return RATE_LIMITED;
 
   const supabase = await createServerSupabase();
   const { error } = await supabase.auth.verifyOtp({ email: address, token: code, type: "signup" });
@@ -84,10 +129,14 @@ export async function verifyEmailCode(email: unknown, code: unknown): Promise<Re
 export async function resendEmailCode(email: unknown): Promise<Result> {
   const address = emailArg(email);
   if (!address) return INVALID_EMAIL;
+  const client = await clientIp();
+  if (await limited(LIMITS.emailSend, [client, address], LIMITS.emailSendPerClient)) return RATE_LIMITED;
 
   const supabase = await createServerSupabase();
   const { error } = await supabase.auth.resend({ type: "signup", email: address });
-  return error ? { error: authErrorMessage(error) } : { ok: true };
+  if (error) return { error: authErrorMessage(error) };
+  await newCodeSent("signup", address);
+  return { ok: true };
 }
 
 /**
@@ -100,7 +149,8 @@ export async function resendEmailCode(email: unknown): Promise<Result> {
  *   `needsEmailCode` (Supabase only says so once the password is right).
  * - An account with two-factor gets `needsTwoFactor`. Until the code
  *   step exists (two-factor moves to Supabase next), the password-only
- *   session is ended at once, so two-factor can't be skipped.
+ *   session is ended at once, so two-factor can't be skipped. If the
+ *   two-factor check itself fails, the session is ended too.
  */
 export async function signIn(
   email: unknown,
@@ -111,19 +161,26 @@ export async function signIn(
   if (!address) return INVALID_EMAIL;
   if (typeof password !== "string" || !password) return { error: "Enter your password." };
   if (password.length > MAX_PASSWORD) return { error: "That email and password don't match." };
+  const client = await clientIp();
+  if (await limited(LIMITS.signIn, [client, address], LIMITS.signInPerClient)) return RATE_LIMITED;
 
   const supabase = await createServerSupabase();
   const { error } = await supabase.auth.signInWithPassword({ email: address, password });
   if (error?.code === "email_not_confirmed") {
     // A failed resend (sent too recently, say) still leaves the
     // verify page's own Resend button.
-    await supabase.auth.resend({ type: "signup", email: address });
+    const resent = await supabase.auth.resend({ type: "signup", email: address });
+    if (!resent.error) await newCodeSent("signup", address);
     return { needsEmailCode: true };
   }
   if (error) return { error: authErrorMessage(error) };
 
-  const { data: levels } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (levels?.nextLevel === "aal2" && levels.currentLevel !== "aal2") {
+  const { data: levels, error: levelsError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (levelsError || !levels) {
+    await supabase.auth.signOut({ scope: "local" });
+    return { error: "Something went wrong. Please try again." };
+  }
+  if (levels.nextLevel === "aal2" && levels.currentLevel !== "aal2") {
     await supabase.auth.signOut({ scope: "local" });
     return { needsTwoFactor: true };
   }
@@ -131,16 +188,22 @@ export async function signIn(
 }
 
 /**
- * Emails a password-reset code if the account exists. Always ok, even
- * when Supabase refuses (it rate-limits per account), so the answer
- * never shows whether an account exists.
+ * Emails a password-reset code if the account exists. Always ok, and
+ * Supabase is asked only after the answer has gone (it sends the email
+ * inside the request, so a real account's answer would be slower), so
+ * neither the answer nor its timing shows whether an account exists.
  */
 export async function requestPasswordReset(email: unknown): Promise<Result> {
   const address = emailArg(email);
   if (!address) return INVALID_EMAIL;
+  const client = await clientIp();
+  if (await limited(LIMITS.emailSend, [client, address], LIMITS.emailSendPerClient)) return RATE_LIMITED;
 
-  const supabase = await createServerSupabase();
-  await supabase.auth.resetPasswordForEmail(address);
+  after(async () => {
+    const supabase = await createServerSupabase();
+    const { error } = await supabase.auth.resetPasswordForEmail(address);
+    if (!error) await newCodeSent("recovery", address);
+  });
   return { ok: true };
 }
 
@@ -157,6 +220,7 @@ export async function resetPassword(email: unknown, code: unknown, newPassword: 
   if (typeof code !== "string" || !CODE_PATTERN.test(code)) return INVALID_CODE;
   const passwordProblem = newPasswordProblem(newPassword);
   if (passwordProblem) return { error: passwordProblem };
+  if (await limited(LIMITS.codeCheck, ["recovery", address], LIMITS.codeCheckPerClient)) return RATE_LIMITED;
 
   const supabase = await createServerSupabase();
   const verified = await supabase.auth.verifyOtp({ email: address, token: code, type: "recovery" });
