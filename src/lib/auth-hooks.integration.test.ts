@@ -60,12 +60,9 @@ describe.skipIf(!hasAuthApi)("Supabase Auth hooks", () => {
     return { client, session: data.session };
   }
 
-  // Sets "updatedAt" too: set_updated_at() fails on a trigger with no
-  // arguments (TG_ARGV is null), as site_setting's is.
   async function setRegistrationOpen(open: boolean) {
     await sql`
-      UPDATE public.site_setting SET "registrationOpen" = ${open}, "updatedAt" = (now() AT TIME ZONE 'UTC')
-      WHERE id = 'default'
+      UPDATE public.site_setting SET "registrationOpen" = ${open} WHERE id = 'default'
     `.execute(database);
   }
 

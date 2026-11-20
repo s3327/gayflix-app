@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { googleSignInEnabled } from "@/lib/auth";
-
 import { nextParam } from "@/lib/safe-redirect";
 import { getSession } from "@/lib/session";
+import { googleSignInEnabled } from "@/lib/supabase/server";
 import SignupForm from "./SignupForm";
 
 export const metadata: Metadata = {
@@ -23,5 +22,5 @@ export default async function SignupPage({
 }) {
   const next = nextParam((await searchParams).next);
   if (await getSession()) redirect(next ?? "/home");
-  return <SignupForm next={next} google={googleSignInEnabled} />;
+  return <SignupForm next={next} google={await googleSignInEnabled()} />;
 }

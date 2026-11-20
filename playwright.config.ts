@@ -1,8 +1,13 @@
 import { loadEnvConfig } from "@next/env";
 import { defineConfig, devices } from "@playwright/test";
 
-// The tests and the server share one environment: DATABASE_URL and
-// BETTER_AUTH_SECRET come from the shell (CI) or .env.local (locally).
+// The tests and the server share one environment, from the shell (CI
+// exports the Supabase local stack's `supabase status -o env`) or
+// .env.local (locally): DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL,
+// SUPABASE_PUBLISHABLE_KEY and SUPABASE_SECRET_KEY for the stack, and
+// BETTER_AUTH_SECRET while Better Auth remains. The server inherits it;
+// the tests read the stack's emails from its Mailpit (MAILPIT_URL, or
+// the port in supabase/config.toml).
 loadEnvConfig(process.cwd());
 
 const PORT = 3100;

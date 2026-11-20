@@ -6,15 +6,16 @@ import Image from "next/image";
 import Link from "next/link";
 import FormError from "@/components/FormError";
 import OtpInput from "@/components/OtpInput";
-import { authClient, authErrorMessage } from "@/lib/auth-client";
+import { resendEmailCode, verifyEmailCode } from "@/lib/auth-actions";
 import { authHref, nextParam, safeNextPath } from "@/lib/safe-redirect";
 
-// Matches OTP_LENGTH in src/lib/auth.ts (not imported: that file is server-only).
+// Matches otp_length in supabase/config.toml (and the hosted project's setting).
 const CODE_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 30;
 
 /**
- * Confirms an email address with the 6-digit code Better Auth emailed.
+ * Confirms an email address with the 6-digit code Supabase Auth emailed
+ * (verifyEmailCode in src/lib/auth-actions.ts).
  * /signup routes here after creating the account, and /login does too
  * when an account's email was never confirmed. Reads ?email= and an
  * optional ?next= (where to go once verified).
@@ -46,10 +47,10 @@ function VerifyEmailForm() {
     if (otp.length !== CODE_LENGTH || !email || isSubmitting) return;
     setError("");
     setIsSubmitting(true);
-    const { error } = await authClient.emailOtp.verifyEmail({ email, otp });
+    const result = await verifyEmailCode(email, otp);
     setIsSubmitting(false);
-    if (error) {
-      setError(authErrorMessage(error));
+    if ("error" in result) {
+      setError(result.error);
       return;
     }
     router.push(safeNextPath(searchParams.get("next")));
@@ -64,11 +65,8 @@ function VerifyEmailForm() {
     if (cooldown > 0 || !email) return;
     setError("");
     setCooldown(RESEND_COOLDOWN_SECONDS);
-    const { error } = await authClient.emailOtp.sendVerificationOtp({
-      email,
-      type: "email-verification",
-    });
-    if (error) setError(authErrorMessage(error));
+    const result = await resendEmailCode(email);
+    if ("error" in result) setError(result.error);
   }
 
   return (

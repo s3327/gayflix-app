@@ -14,6 +14,28 @@ import { sessionCookieOptions, supabaseConfig } from "@/lib/supabase/config";
  * (refreshSessionCookies). Server actions and route handlers can set
  * cookies, and do.
  */
+/**
+ * Whether Google sign-in is turned on in Supabase Auth (the provider is
+ * set up in the project's dashboard, not here), from Auth's public
+ * settings, cached for 5 minutes. False if Auth can't be reached, so the
+ * button just doesn't show.
+ */
+export async function googleSignInEnabled(): Promise<boolean> {
+  try {
+    const { url, publishableKey } = supabaseConfig();
+    const response = await fetch(`${url}/auth/v1/settings`, {
+      headers: { apikey: publishableKey },
+      next: { revalidate: 300 },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) return false;
+    const settings = (await response.json()) as { external?: { google?: unknown } };
+    return settings.external?.google === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function createServerSupabase() {
   const { url, publishableKey } = supabaseConfig();
   const cookieStore = await cookies();

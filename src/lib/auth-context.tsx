@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { signOut } from "@/lib/auth-actions";
 import { authClient, authErrorMessage } from "@/lib/auth-client";
+import { isActionRedirect } from "@/lib/auth-redirects";
 
 /** The signed-in user as the root layout passes it down (from getSession()). */
 export type AuthUser = {
@@ -21,7 +23,11 @@ type AuthContextValue = {
   user: AuthUser | null;
   /** True from logout() (or a successful deleteAccount()) until the next sign-in, so pages can tell "logged out on purpose" from "session ended". */
   isLoggingOut: boolean;
-  logout: () => Promise<void>;
+  /**
+   * Signs out on the server, which then sends the browser to /home.
+   * Resolves with "" once signed out, or the error message.
+   */
+  logout: () => Promise<string>;
   /**
    * Deletes the account and ends the session, like logout(). Resolves
    * with an error message, or "" once the account is gone.
@@ -71,10 +77,20 @@ export function AuthProvider({
 
   const logout = useCallback(async () => {
     setIsLoggingOut(true);
-    await authClient.signOut();
-    setSignedOut(true);
-    router.refresh();
-  }, [router]);
+    try {
+      // Returns only if signing out failed: on success it redirects.
+      const { error } = await signOut("/home");
+      setIsLoggingOut(false);
+      return error;
+    } catch (thrown) {
+      if (!isActionRedirect(thrown)) {
+        setIsLoggingOut(false);
+        throw thrown;
+      }
+      setSignedOut(true);
+      return "";
+    }
+  }, []);
 
   const deleteAccount = useCallback(
     async (password?: string) => {
