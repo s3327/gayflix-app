@@ -204,6 +204,12 @@ export interface MemberProfile {
   userId: string;
 }
 
+export interface Profile {
+  createdAt: Generated<Timestamp>;
+  id: string;
+  role: Generated<string>;
+}
+
 export interface RateLimit {
   count: number;
   id: string;
@@ -377,6 +383,7 @@ export interface DB {
   media_rating: MediaRating;
   media_view: MediaView;
   member_profile: MemberProfile;
+  profile: Profile;
   rateLimit: RateLimit;
   report: Report;
   review: Review;

@@ -11,21 +11,11 @@ const OTHER_SESSION = "c3333333-3333-4333-8333-333333333333";
 /**
  * An account with a live session, a profile and a verified TOTP factor,
  * written straight into Supabase Auth's tables (rolled back afterwards).
- * `profile` comes with Task 6's migration; until then the test creates
- * it inside the transaction.
+ * The insert into auth.users creates the profile (role 'user').
  */
 async function seed(trx: Transaction<DB>, role = "admin") {
-  await sql`
-    CREATE TABLE IF NOT EXISTS public.profile (
-      id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-      role text NOT NULL DEFAULT 'user'
-    )
-  `.execute(trx);
   await sql`INSERT INTO auth.users (id, email) VALUES (${USER}::uuid, 'probe@gayflix.test')`.execute(trx);
-  await sql`
-    INSERT INTO public.profile (id, role) VALUES (${USER}::uuid, ${role})
-    ON CONFLICT (id) DO UPDATE SET role = EXCLUDED.role
-  `.execute(trx);
+  await sql`UPDATE public.profile SET role = ${role} WHERE id = ${USER}::uuid`.execute(trx);
   await sql`INSERT INTO auth.sessions (id, user_id) VALUES (${SESSION}::uuid, ${USER}::uuid)`.execute(trx);
   await sql`
     INSERT INTO auth.mfa_factors (id, user_id, factor_type, status, created_at, updated_at)
