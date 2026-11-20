@@ -108,7 +108,8 @@ Supabase's client libraries or its Data API.
    mismatch fails with "tenant/user … not found".
 3. Open **Project Settings → Database → SSL Configuration** and download
    the certificate. That's `DATABASE_CA_CERT`: the site checks it's
-   really talking to your database (src/lib/database-config.mjs).
+   really talking to your database (src/lib/database-config.mjs), and
+   without it the site won't connect to Supabase at all.
 4. Turn off the Data API, which the site never uses: **Project Settings →
    Data API**, switch it off. (A migration also turns on row-level
    security for every table, so the API couldn't read them anyway.)

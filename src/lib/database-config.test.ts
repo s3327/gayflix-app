@@ -3,40 +3,51 @@ import { postgresConfig } from "@/lib/database-config.mjs";
 
 const POOLER =
   "postgresql://postgres.abcdefghijklmnop:secret@aws-1-us-east-1.pooler.supabase.com:6543/postgres";
+const CA = "-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----";
+const CA_PEM = "-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----";
 
 describe("postgresConfig", () => {
   it("leaves a local database alone", () => {
     const url = "postgresql://gayflix:gayflix@localhost:5432/gayflix";
-    expect(postgresConfig(url, undefined)).toEqual({ connectionString: url });
+    expect(postgresConfig(url, undefined, {})).toEqual({ connectionString: url });
   });
 
   it("passes no connection string through", () => {
-    expect(postgresConfig(undefined, undefined)).toEqual({ connectionString: undefined });
-  });
-
-  it("encrypts a Supabase connection, unverified without a CA", () => {
-    expect(postgresConfig(POOLER, undefined)).toEqual({
-      connectionString: POOLER,
-      ssl: { rejectUnauthorized: false },
-    });
+    expect(postgresConfig(undefined, undefined, {})).toEqual({ connectionString: undefined });
   });
 
   it("verifies a Supabase connection against DATABASE_CA_CERT", () => {
-    const config = postgresConfig(POOLER, "-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----");
-    expect(config.ssl).toEqual({
-      ca: "-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----",
-      rejectUnauthorized: true,
+    expect(postgresConfig(POOLER, CA, {})).toEqual({
+      connectionString: POOLER,
+      ssl: { ca: CA_PEM, rejectUnauthorized: true },
     });
   });
 
+  it("refuses a Supabase connection without a certificate", () => {
+    expect(() => postgresConfig(POOLER, undefined, {})).toThrow(/DATABASE_CA_CERT is required/);
+    expect(() => postgresConfig(POOLER, "   \n", {})).toThrow(/DATABASE_CA_CERT is required/);
+  });
+
+  it("connects unverified only with DATABASE_TLS_INSECURE=1, off Vercel", () => {
+    expect(postgresConfig(POOLER, undefined, { DATABASE_TLS_INSECURE: "1" })).toEqual({
+      connectionString: POOLER,
+      ssl: { rejectUnauthorized: false },
+    });
+    for (const VERCEL_ENV of ["production", "preview", "development"]) {
+      expect(() =>
+        postgresConfig(POOLER, undefined, { DATABASE_TLS_INSECURE: "1", VERCEL_ENV })
+      ).toThrow(/DATABASE_CA_CERT is required/);
+    }
+  });
+
   it("drops sslmode and pgbouncer from the URL, which would override the TLS settings", () => {
-    const config = postgresConfig(`${POOLER}?sslmode=require&pgbouncer=true&application_name=gayflix`, "");
+    const config = postgresConfig(`${POOLER}?sslmode=require&pgbouncer=true&application_name=gayflix`, CA, {});
     expect(config.connectionString).toBe(`${POOLER}?application_name=gayflix`);
-    expect(config.ssl).toEqual({ rejectUnauthorized: false });
+    expect(config.ssl?.rejectUnauthorized).toBe(true);
   });
 
   it("treats the direct db.<ref>.supabase.co host as Supabase too", () => {
     const direct = "postgresql://postgres:secret@db.abcdefghijklmnop.supabase.co:5432/postgres";
-    expect(postgresConfig(direct, undefined).ssl).toEqual({ rejectUnauthorized: false });
+    expect(() => postgresConfig(direct, undefined, {})).toThrow(/DATABASE_CA_CERT is required/);
   });
 });

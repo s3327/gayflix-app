@@ -17,7 +17,8 @@ if [ "$VERCEL_ENV" = "production" ]; then
     *.supabase.com* | *.supabase.co*) required="$required DIRECT_URL DATABASE_CA_CERT" ;;
   esac
   for name in $required; do
-    if [ -z "$(printenv "$name")" ]; then
+    # Whitespace alone counts as not set.
+    if [ -z "$(printenv "$name" | tr -d '[:space:]')" ]; then
       echo "$name is not set. Add it in Vercel under Settings → Environment Variables (Production), then redeploy. See docs/DEPLOYMENT.md, Part 3." >&2
       exit 1
     fi
