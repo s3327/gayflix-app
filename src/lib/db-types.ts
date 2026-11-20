@@ -58,7 +58,7 @@ export interface ActivityLog {
   details: Json | null;
   entityId: string | null;
   entityType: string;
-  id: string;
+  id: Generated<string>;
   summary: string;
 }
 
@@ -84,7 +84,7 @@ export interface CollectionItem {
 
 export interface ContentReport {
   createdAt: Generated<Timestamp>;
-  id: string;
+  id: Generated<string>;
   listId: string | null;
   reason: string;
   resolvedAt: Timestamp | null;
@@ -107,7 +107,7 @@ export interface Episode {
 
 export interface EpisodeRedirect {
   createdAt: Generated<Timestamp>;
-  id: string;
+  id: Generated<string>;
   mediaId: string;
   newEpisodeNumber: number;
   newSeasonNumber: number;
@@ -175,7 +175,7 @@ export interface Media {
 export interface MediaList {
   communityBlocked: Generated<boolean>;
   createdAt: Generated<Timestamp>;
-  id: string;
+  id: Generated<string>;
   inCommunity: Generated<boolean>;
   isPublic: Generated<boolean>;
   name: string;
@@ -214,7 +214,7 @@ export interface RateLimit {
 export interface Report {
   createdAt: Generated<Timestamp>;
   details: string | null;
-  id: string;
+  id: Generated<string>;
   ipHash: string | null;
   mediaId: string;
   mediaTitle: string;
@@ -231,7 +231,7 @@ export interface Review {
   createdAt: Generated<Timestamp>;
   hiddenAt: Timestamp | null;
   hiddenBy: string | null;
-  id: string;
+  id: Generated<string>;
   mediaId: string;
   updatedAt: Timestamp;
   userId: string;
@@ -241,7 +241,7 @@ export interface ScheduledJobRun {
   details: string | null;
   durationMs: Generated<number>;
   finishedAt: Timestamp | null;
-  id: string;
+  id: Generated<string>;
   itemsCount: Generated<number>;
   jobName: string;
   startedAt: Generated<Timestamp>;
@@ -283,7 +283,7 @@ export interface Subtitle {
   createdAt: Generated<Timestamp>;
   episodeId: string | null;
   fileName: string;
-  id: string;
+  id: Generated<string>;
   language: string;
   mediaId: string | null;
 }
@@ -292,7 +292,7 @@ export interface TitleRevision {
   actorEmail: string;
   actorId: string | null;
   createdAt: Generated<Timestamp>;
-  id: string;
+  id: Generated<string>;
   mediaId: string;
   snapshot: Json;
   summary: string | null;
@@ -336,7 +336,7 @@ export interface VideoSource {
   createdAt: Generated<Timestamp>;
   enabled: Generated<boolean>;
   episodeId: string | null;
-  id: string;
+  id: Generated<string>;
   kind: VideoSourceKind;
   label: string;
   mediaId: string | null;
