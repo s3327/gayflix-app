@@ -24,10 +24,13 @@ export const getVerifiedSession = cache(async () =>
 
 /**
  * For account pages: sends guests to /login, which brings them back to
- * `returnTo` afterwards.
+ * `returnTo` afterwards. Reads the session from the database, not the
+ * cookie cache, so these pages show a change at once (two-factor turned
+ * on or off, a new email) and a signed-out or banned account is sent to
+ * /login right away. They're visited rarely, so the extra lookup is cheap.
  */
 export async function requireUser(returnTo: string) {
-  const session = await getSession();
+  const session = await getVerifiedSession();
   if (!session) redirect(`/login?next=${encodeURIComponent(returnTo)}`);
   return session;
 }
