@@ -16,7 +16,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "node scripts/migrate.mjs",
     "make-admin": "node scripts/make-admin.mjs",
-    "db:types": "kysely-codegen --dialect postgres --out-file src/lib/db-types.ts --exclude-pattern \"{supabase_migrations.*,auth.*,_prisma_migrations}\""
+    "db:types": "kysely-codegen --dialect postgres --out-file src/lib/db-types.ts --include-pattern \"public.*\" --exclude-pattern \"{supabase_migrations.*,auth.*,_prisma_migrations}\""
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",

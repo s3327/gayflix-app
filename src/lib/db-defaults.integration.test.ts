@@ -81,4 +81,30 @@ describe("database-side defaults", () => {
       expect((await updatedAt(trx)).toISOString()).toBe("2010-05-05T05:05:05.000Z");
     });
   });
+
+  describe("on a table whose trigger has no arguments", () => {
+    async function insertSetting(trx: Transaction<DB>) {
+      await sql`insert into site_setting (id, "updatedAt") values ('db-defaults-setting', ${PAST})`.execute(trx);
+    }
+    async function settingUpdatedAt(trx: Transaction<DB>) {
+      const { rows } = await sql<{ at: Date }>`select "updatedAt" as at from site_setting where id = 'db-defaults-setting'`.execute(trx);
+      return rows[0].at;
+    }
+
+    it("bumps updatedAt when a field changes", async () => {
+      await withRollback(async (trx) => {
+        await insertSetting(trx);
+        await sql`update site_setting set "registrationOpen" = false where id = 'db-defaults-setting'`.execute(trx);
+        expect((await settingUpdatedAt(trx)).getUTCFullYear()).toBeGreaterThan(2000);
+      });
+    });
+
+    it("keeps an updatedAt the statement sets itself", async () => {
+      await withRollback(async (trx) => {
+        await insertSetting(trx);
+        await sql`update site_setting set "registrationOpen" = false, "updatedAt" = '2010-05-05T05:05:05' where id = 'db-defaults-setting'`.execute(trx);
+        expect((await settingUpdatedAt(trx)).toISOString()).toBe("2010-05-05T05:05:05.000Z");
+      });
+    });
+  });
 });
