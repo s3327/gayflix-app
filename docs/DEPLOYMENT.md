@@ -9,7 +9,7 @@ before you move on.
 
 - The site on Vercel, first at a `.vercel.app` address and later on your
   own domain.
-- A Prisma Postgres database for accounts, favorites, lists, watch history
+- A Supabase Postgres database for accounts, favorites, lists, watch history
   and reports.
 - Sign-up codes and password-reset emails sent through Resend.
 - Your own admin account, protected by a password and an authenticator
@@ -82,16 +82,40 @@ every pull request gets its own preview address.
 
 ## Part 3: Add the database
 
-1. In your Vercel project, open the **Storage** tab.
-2. Click **Create Database** and choose **Prisma Postgres**.
-3. Follow the prompts:
+The database is [Supabase](https://supabase.com) Postgres. The site talks
+to it through Prisma ORM over a plain Postgres connection; it doesn't use
+Supabase's client libraries or its Data API.
+
+1. At [supabase.com/dashboard](https://supabase.com/dashboard), click
+   **New project**:
    - **Region:** the one closest to where Vercel runs the site's server
-     code. Vercel's default is Washington, D.C. (`iad1`), so choose US East
-     (N. Virginia) unless you changed it under **Settings → Functions**.
+     code. Vercel's default is Washington, D.C. (`iad1`), so choose East US
+     (North Virginia) unless you changed it under **Settings → Functions**
+     in Vercel.
+   - **Database password:** generate one and keep it in a password
+     manager; it goes into both connection strings below.
    - **Plan:** the free plan is fine to start.
-   - **Name:** for example `gayflix`.
-4. When Vercel asks which environments to connect the database to, choose
-   **Production** only:
+2. When the project is ready, click **Connect** at the top of its
+   dashboard. Under **Connection String** (type **URI**), copy two of them,
+   replacing `[YOUR-PASSWORD]` with the database password each time:
+   - **Transaction pooler** (port `6543`): this is `DATABASE_URL`, the
+     site's connection. It suits Vercel's short-lived functions.
+   - **Session pooler** (port `5432`): this is `DIRECT_URL`, used only
+     to apply migrations, which the transaction pooler can't run.
+
+   Copy them exactly. The host (`aws-0-…` or `aws-1-…`, then the region)
+   and the user (`postgres.<project ref>`) must match this project; a
+   mismatch fails with "tenant/user … not found".
+3. Open **Project Settings → Database → SSL Configuration** and download
+   the certificate. That's `DATABASE_CA_CERT`: the site checks it's
+   really talking to your database (src/lib/database-config.mjs).
+4. Turn off the Data API, which the site never uses: **Project Settings →
+   Data API**, switch it off. (A migration also turns on row-level
+   security for every table, so the API couldn't read them anyway.)
+5. In Vercel, open **Settings → Environment Variables** and add all three
+   for **Production** only, each marked **Sensitive**. For
+   `DATABASE_CA_CERT`, paste the certificate file's whole text, from
+   `-----BEGIN CERTIFICATE-----` to `-----END CERTIFICATE-----`.
    - **Not Development:** tools such as `vercel env pull` would copy the
      production database's address onto your computer, where a single
      `npm run db:migrate` could wipe it.
@@ -99,19 +123,11 @@ every pull request gets its own preview address.
      unmerged code against your real data. Without the database, a
      preview shows only the pages that don't need it (see
      [How deploys work](#how-deploys-work)).
-5. Open **Settings → Environment Variables**.
 
-**You should see** `DATABASE_URL` listed for Production, with a value that
-starts with `postgres://`. If it's also listed for Preview or Development,
-change the connection's environments in the Storage tab so it only applies
-to Production.
+**You should see** `DATABASE_URL`, `DIRECT_URL` and `DATABASE_CA_CERT`
+listed for Production only.
 
 You don't create any tables yourself. The deploy in Part 5 does that.
-
-*If you'd rather create the database at [console.prisma.io](https://console.prisma.io):*
-create a Prisma Postgres database there, copy its direct connection string
-(the one starting with `postgres://`, not `prisma+postgres://`), and add
-it in Vercel as `DATABASE_URL` for Production, marked **Sensitive**.
 
 ## Part 4: Add the secret and the email key
 
@@ -166,6 +182,8 @@ turned off and says so.
 | Variable | Production | Preview | Development |
 |---|---|---|---|
 | `DATABASE_URL` | ✅ added in Part 3 | | |
+| `DIRECT_URL` | ✅ added in Part 3 | | |
+| `DATABASE_CA_CERT` | ✅ added in Part 3 | | |
 | `BETTER_AUTH_SECRET` | ✅ | ✅ a different value | |
 | `RESEND_API_KEY` | ✅ | | |
 | `EMAIL_FROM` | Part 7 | | |
@@ -234,15 +252,12 @@ change one, redeploy.
 
 **Option A, in the browser (no tools needed):**
 
-1. In Vercel's **Storage** tab, open the database and follow its link to
-   Prisma Console (or sign in at
-   [console.prisma.io](https://console.prisma.io)).
-2. Open the database's **Studio**.
-3. Open the `user` table and find the row with your email.
-4. Change its `role` from `user` to `admin` (lowercase, exactly) and save.
+1. Open your project at [supabase.com/dashboard](https://supabase.com/dashboard).
+2. Open the **Table Editor**, then the `user` table, and find the row with
+   your email.
+3. Change its `role` from `user` to `admin` (lowercase, exactly) and save.
 
-If your database page has a SQL editor instead (such as the data editor
-in Vercel's Storage tab), run this with your own email:
+Or open the **SQL Editor** and run this with your own email:
 
 ```sql
 UPDATE "user" SET "role" = 'admin' WHERE "email" = 'you@example.com';
@@ -264,9 +279,10 @@ On Windows PowerShell, run
 `$env:DATABASE_URL='<production connection string>'` on its own line
 first, then `npm run make-admin -- you@example.com`.
 
-Copy the connection string from the database's page (Vercel's Storage tab
-or Prisma Console). Both can keep it hidden once it's created; if you
-can't see it, use Option A, which doesn't need it. Don't save it in a
+Copy the transaction pooler connection string from Supabase (**Connect**
+on the project's dashboard, as in Part 3), with the database password in
+place of `[YOUR-PASSWORD]`. If you don't have the password, use Option A,
+which doesn't need it. Don't save it in a
 `.env` file in the project: `npm run dev` and `npm run db:migrate` would
 then work on the production database.
 
@@ -700,13 +716,13 @@ arrive without episodes for now; add them as usual.
 
 ### Backups
 
-Check which backups your Prisma Postgres plan includes, on the database's
-page in Prisma Console. To keep your own copy, use `pg_dump` with the
-connection string. Its version must be at least the database's Postgres
-version:
+Supabase takes daily backups on paid plans (**Database → Backups**); the
+free plan has none. To keep your own copy, use `pg_dump` with the session
+pooler connection string (`DIRECT_URL`). Its version must be at least the
+database's Postgres version:
 
 ```bash
-pg_dump '<production connection string>' --format=custom --file=gayflix-backup.dump
+pg_dump '<session pooler connection string>' --format=custom --no-owner --file=gayflix-backup.dump
 ```
 
 Keep backups private: they hold everyone's account data.
@@ -760,7 +776,9 @@ Only change the production `BETTER_AUTH_SECRET` if it leaked. Afterwards:
 | What you see | Likely cause | Fix |
 |---|---|---|
 | The build stops with "`DATABASE_URL` is not set" (or another name) | That variable is missing for Production | Add it (Parts 3 and 4), then redeploy |
-| The build fails at the migrations with `P1001` or "Can't reach database server" | Wrong or outdated connection string | Copy the connection string from the database's page again, update `DATABASE_URL`, redeploy |
+| The build fails at the migrations with `P1001` or "Can't reach database server" | Wrong or outdated connection string | Copy both connection strings from Supabase again (Part 3), update `DATABASE_URL` and `DIRECT_URL`, redeploy |
+| The build fails at the migrations with "tenant/user postgres.… not found" | The pooler host doesn't match the project (wrong region, or `aws-0` instead of `aws-1`), or the project is paused | Copy both strings from **Connect** in Supabase exactly as shown, update `DATABASE_URL` and `DIRECT_URL`, redeploy. Restore a paused free project first |
+| The site's logs show "self-signed certificate in certificate chain" | `DATABASE_CA_CERT` is missing a line or isn't this project's certificate | Paste the whole certificate file again (Part 3, step 3), redeploy |
 | Most pages show an error page | `BETTER_AUTH_SECRET` is missing for that environment | Add it (4.1), redeploy |
 | The sign-up code never arrives | Wrong `RESEND_API_KEY`; or no verified domain and the address isn't your Resend email; or `EMAIL_FROM` isn't on the verified domain | Check Resend → Emails and Vercel → Logs; fix the key or finish 7.3 |
 | Sign-in fails on one address but works on another | Only the `SITE_URL` address can sign in (`.vercel.app` and `www` count as other addresses) | Use the main address, redirect the others in **Settings → Domains**, check `SITE_URL` |
@@ -801,5 +819,5 @@ what the screen or the build log says. Never paste a secret.
   browsers. Turn them on with
   [Part 10](#part-10-optional-turn-on-crash-reports).
 - **Plans and limits.** Check Vercel (Hobby is non-commercial only),
-  Prisma Postgres, Resend and, with uploads on, Vercel Blob's storage and
+  Supabase, Resend and, with uploads on, Vercel Blob's storage and
   transfer against the traffic you expect.

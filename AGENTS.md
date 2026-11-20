@@ -16,8 +16,14 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   (`src/lib/session.ts`): it checks the "admin" role and that the session
   passed two-factor in the last 12 hours (`src/lib/admin-access.ts`).
   `src/proxy.ts` can also put an optional password gate in front.
-- **Database:** Prisma Postgres with Prisma ORM 7.x (decided 2026-10-10),
-  through `@prisma/adapter-pg`. Pin Prisma versions exactly (npm's `latest`
+- **Database:** Supabase Postgres with Prisma ORM 7.x (moved from Prisma
+  Postgres 2026-11-20), through `@prisma/adapter-pg`. The site uses only
+  the Postgres connection, never supabase-js or Supabase's Data API:
+  `DATABASE_URL` is the transaction pooler (runtime), `DIRECT_URL` the
+  session pooler (migrations, `prisma.config.ts`), and TLS settings come
+  from `src/lib/database-config.mjs`. Every table has row-level security
+  on with no policies, which locks the Data API out; a migration that
+  adds a table must also `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`. Pin Prisma versions exactly (npm's `latest`
   tag has pointed at pre-releases). Prisma 7 doesn't generate the client on
   `migrate`; run `npx prisma generate` after schema changes.
 - **Accounts:** Better Auth (`src/lib/auth.ts`). Server code reads the

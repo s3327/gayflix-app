@@ -3,7 +3,7 @@
 LGBTQ+ films and series, picked by the community. This is the web app:
 the public site and the admin panel, deployed as one Next.js app.
 
-**Status:** accounts are real (Better Auth on Prisma Postgres: sign-up
+**Status:** accounts are real (Better Auth on Supabase Postgres: sign-up
 with an emailed code, login, password reset, Google sign-in, signing
 out other devices, deleting the account, admin roles), and favorites, lists, watch history and reports are stored in
 the database. So is the catalog, which starts out as a sample catalog of
@@ -17,7 +17,7 @@ has to change before launch.
 - **Next.js 16** (App Router, Turbopack) + **React 19** + TypeScript (strict)
 - **Tailwind CSS 4** with the approved design tokens in `src/app/globals.css` (`@theme`)
 - Fonts self-hosted with `next/font`: **Baloo 2** (display) and **Inter** (body)
-- **Prisma ORM 7** on **Prisma Postgres** (any Postgres locally), through
+- **Prisma ORM 7** on **Supabase** Postgres (any Postgres locally), through
   the `pg` driver adapter
 - **Better Auth** for accounts, sessions and roles
 - **Vitest** for unit tests, **Playwright** + axe for end-to-end and
@@ -84,7 +84,9 @@ dependency update PRs.
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | **Required.** Postgres connection string. In production, Prisma Postgres's direct connection string. |
+| `DATABASE_URL` | **Required.** Postgres connection string. In production, Supabase's transaction pooler (port 6543). |
+| `DIRECT_URL` | Production, for migrations: Supabase's session pooler (port 5432). Locally, leave it empty and `DATABASE_URL` is used. |
+| `DATABASE_CA_CERT` | Production: Supabase's SSL certificate (PEM text), so the database's identity is verified. |
 | `BETTER_AUTH_SECRET` | **Required.** Signs session cookies (`openssl rand -base64 32`). |
 | `BETTER_AUTH_URL` | The site's public URL. Defaults to `SITE_URL` / Vercel's production domain. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in. Redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`. |
@@ -103,9 +105,9 @@ day-to-day operations and troubleshooting, is in
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). In short:
 
 1. Import the repository at [vercel.com/new](https://vercel.com/new).
-2. In the project's **Storage** tab, add a Prisma Postgres database. That
-   sets `DATABASE_URL` for you. (Or create one at console.prisma.io and
-   add its direct `postgres://` connection string yourself.)
+2. Create a Supabase project and add its transaction pooler string as
+   `DATABASE_URL`, its session pooler string as `DIRECT_URL` and its SSL
+   certificate as `DATABASE_CA_CERT` (Part 3 of the walkthrough).
 3. Under **Settings → Environment Variables**, add `BETTER_AUTH_SECRET`
    and `RESEND_API_KEY`, plus `EMAIL_FROM` with an address on a domain
    you've verified in Resend. Without `EMAIL_FROM`, emails come from
@@ -113,14 +115,15 @@ day-to-day operations and troubleshooting, is in
    email. Add any of the optional variables above too.
 4. Deploy. `vercel.json` runs `scripts/vercel-build.sh`, which stops a
    production build if `DATABASE_URL`, `BETTER_AUTH_SECRET` or
-   `RESEND_API_KEY` is missing, then applies pending migrations before
+   `RESEND_API_KEY` is missing (and, on Supabase, `DIRECT_URL` or
+   `DATABASE_CA_CERT`), then applies pending migrations before
    building. Preview deploys skip both steps, since they usually share the
    production database, so a pull request that changes the schema only
    works on its preview once it's merged.
 5. Sign up on the live site, then make that account an admin: run
    `npm run make-admin -- you@example.com` with `DATABASE_URL` set to the
    production connection string, or set its `role` to `admin` in the
-   `user` table with Prisma Console's Studio.
+   `user` table with Supabase's Table Editor.
 6. Log in at `/admin/login` and set up two-factor.
 
 ## Architecture
