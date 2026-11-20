@@ -29,7 +29,8 @@ export default defineConfig({
                 environment: "node" as const,
                 include: ["src/**/*.integration.test.ts"],
                 testTimeout: 30_000,
-                env: { DATABASE_URL: testDatabaseUrl },
+                // TZ makes the timestamp test meaningful on a UTC runner too.
+                env: { DATABASE_URL: testDatabaseUrl, TZ: "Asia/Bangkok" },
               },
             },
           ]
