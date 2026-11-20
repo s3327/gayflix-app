@@ -59,8 +59,9 @@ describe("disableTwoFactorAction", () => {
     vi.clearAllMocks();
     delete process.env.ADMIN_REQUIRE_2FA;
     mockGetSession.mockResolvedValue({
-      user: { id: "user_1", role: "user", twoFactorEnabled: true },
-      session: { id: "session_1" },
+      user: { id: "user_1", email: "user_1@gayflix.test", role: "user", name: null },
+      sessionId: "session_1",
+      hasVerifiedTotp: true,
     });
     mockAccountFindFirst.mockResolvedValue({ password: "hashed_password" });
     mockVerifyPassword.mockResolvedValue(true);
@@ -82,8 +83,9 @@ describe("disableTwoFactorAction", () => {
   it("returns an error if staff account attempts to turn off 2FA when ADMIN_REQUIRE_2FA is true", async () => {
     process.env.ADMIN_REQUIRE_2FA = "true";
     mockGetSession.mockResolvedValue({
-      user: { id: "admin_1", role: "admin", twoFactorEnabled: true },
-      session: { id: "session_1" },
+      user: { id: "admin_1", email: "admin_1@gayflix.test", role: "admin", name: null },
+      sessionId: "session_1",
+      hasVerifiedTotp: true,
     });
 
     const result = await disableTwoFactorAction("my_password");
@@ -93,8 +95,9 @@ describe("disableTwoFactorAction", () => {
 
   it("allows staff to turn off 2FA when ADMIN_REQUIRE_2FA is not set", async () => {
     mockGetSession.mockResolvedValue({
-      user: { id: "admin_1", role: "admin", twoFactorEnabled: true },
-      session: { id: "session_1" },
+      user: { id: "admin_1", email: "admin_1@gayflix.test", role: "admin", name: null },
+      sessionId: "session_1",
+      hasVerifiedTotp: true,
     });
 
     const result = await disableTwoFactorAction("my_password");

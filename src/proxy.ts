@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_AUTH_REALM, checkAdminAccess } from "@/lib/admin-auth";
 import { buildContentSecurityPolicy, createNonce } from "@/lib/csp";
 import { errorReportingOrigin } from "@/lib/error-reporting";
+import { refreshSessionCookies } from "@/lib/supabase/proxy-session";
 import { videoHostSources, videoHosts } from "@/lib/video-hosts";
 
 function isAdminPath(pathname: string) {
@@ -25,7 +26,7 @@ function adminDenied(access: "unauthorized" | "disabled") {
 }
 
 /**
- * Runs before every page request (see `config.matcher`) and does two
+ * Runs before every page request (see `config.matcher`) and does three
  * things:
  *
  * 1. Guards the admin panel at /admin. When the optional admin password
@@ -37,18 +38,28 @@ function adminDenied(access: "unauthorized" | "disabled") {
  *    (src/lib/csp.ts). Next.js picks the nonce up from the request
  *    header and applies it to its scripts — which is why the root layout
  *    opts every page into dynamic rendering.
+ * 3. Refreshes the signed-in user's Supabase session when its access
+ *    token has expired (src/lib/supabase/proxy-session.ts), so the page
+ *    renders signed in and the browser gets the new cookies. Server
+ *    components can't set cookies, so this has to happen here.
  *
  * It also passes the requested path on as `x-pathname`, so server
  * layouts (which don't receive the URL) can send a guest to
  * /login?next=<this page>.
  */
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const admin = isAdminPath(request.nextUrl.pathname);
 
   if (admin) {
     const access = checkAdminAccess(request.headers.get("authorization"));
     if (access !== "allowed") return adminDenied(access);
   }
+
+  // First, so the request headers forwarded below carry the refreshed
+  // session cookies. `session` collects the cookies (and no-cache
+  // headers) for the browser.
+  const session = NextResponse.next();
+  await refreshSessionCookies(request, session);
 
   const nonce = createNonce();
   const csp = buildContentSecurityPolicy(nonce, {
@@ -62,7 +73,10 @@ export function proxy(request: NextRequest) {
   requestHeaders.set("Content-Security-Policy", csp);
   requestHeaders.set("x-pathname", request.nextUrl.pathname + request.nextUrl.search);
 
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  const response = NextResponse.next({
+    headers: session.headers,
+    request: { headers: requestHeaders },
+  });
   response.headers.set("Content-Security-Policy", csp);
   if (admin) {
     response.headers.set("X-Robots-Tag", "noindex, nofollow");

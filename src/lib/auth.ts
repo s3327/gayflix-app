@@ -7,6 +7,7 @@ import { adminAc, userAc } from "better-auth/plugins/admin/access";
 import { after } from "next/server";
 import { accountDeletionProblem } from "@/lib/account-deletion";
 import { adminAccess } from "@/lib/admin-access";
+import type { AppSession } from "@/lib/session";
 import { canManageUsers, isStaffRole, roleChangeProblem, staffTargetProblem } from "@/lib/admin-roles";
 import { db } from "@/lib/db";
 import { sendEmail, type Email } from "@/lib/email";
@@ -76,6 +77,34 @@ export const googleSignInEnabled = Boolean(googleClientId && googleClientSecret)
  * - Rate limits are stored in the database so they hold across
  *   serverless instances.
  */
+/**
+ * A Better Auth session (read from the database, disableCookieCache) in
+ * the shape adminAccess() takes, with the same meaning it had here:
+ * two-factor passed at sign-in counts as passed at the session's start.
+ * Only for the guard on Better Auth's own admin endpoints below, which
+ * go away with Better Auth (Task 11 of the Supabase Auth plan).
+ */
+function legacyAdminSession(session: {
+  user: { id: string; email: string; name: string; role?: string | null; twoFactorEnabled?: boolean | null };
+  session: { id: string; createdAt: Date; twoFactorVerified?: boolean | null };
+}): AppSession {
+  const createdAt = new Date(session.session.createdAt).getTime();
+  const verified = Boolean(session.user.twoFactorEnabled && session.session.twoFactorVerified);
+  return {
+    user: {
+      id: session.user.id,
+      email: session.user.email,
+      role: session.user.role ?? "user",
+      name: session.user.name,
+    },
+    sessionId: session.session.id,
+    aal: verified ? "aal2" : "aal1",
+    totpVerifiedAt: verified ? createdAt : null,
+    createdAt,
+    hasVerifiedTotp: Boolean(session.user.twoFactorEnabled),
+  };
+}
+
 export const auth = betterAuth({
   appName: "Gayflix",
   baseURL: authOrigin,
@@ -216,7 +245,7 @@ export const auth = betterAuth({
       // (src/lib/user-admin.ts).
       if (!ctx.path.startsWith("/admin/")) return;
       const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
-      if (!session || adminAccess(session) !== "ok" || !canManageUsers(session.user.role)) {
+      if (!session || adminAccess(legacyAdminSession(session)) !== "ok" || !canManageUsers(session.user.role)) {
         throw new APIError("FORBIDDEN", { message: "Admin access required." });
       }
       const action = ADMIN_ENDPOINT_ACTIONS[ctx.path];

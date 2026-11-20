@@ -11,6 +11,6 @@ export default async function SetupTwoFactorPage() {
   const session = await getVerifiedSession();
   const access = adminAccess(session);
   if (access === "not-admin") redirect("/admin/login");
-  if (session?.user.twoFactorEnabled) redirect("/admin/dashboard");
+  if (session?.hasVerifiedTotp) redirect("/admin/dashboard");
   return <SetupTwoFactor />;
 }
