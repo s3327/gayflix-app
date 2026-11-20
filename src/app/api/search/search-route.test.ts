@@ -45,7 +45,6 @@ describe("GET /api/search", () => {
       ...DEFAULT_SETTINGS,
       maintenanceMode: false,
     });
-    mockSession.mockResolvedValueOnce(null);
     mockSuggest.mockResolvedValueOnce({
       items: [
         { id: "m1", title: "Heartstopper", year: 2022, type: "series", posterUrl: "/poster1.jpg" },
@@ -59,7 +58,11 @@ describe("GET /api/search", () => {
     const res = await GET(req);
 
     expect(res.status).toBe(200);
-    expect(res.headers.get("Cache-Control")).toBe("public, max-age=60");
+    expect(res.headers.get("Cache-Control")).toBe(
+      "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
+    );
+    // The answer is the same for everyone, so the session isn't read.
+    expect(mockSession).not.toHaveBeenCalled();
     const body = await res.json();
     expect(body.results).toHaveLength(1);
     expect(body.results[0].title).toBe("Heartstopper");
@@ -126,6 +129,8 @@ describe("GET /api/search", () => {
     const res = await GET(req);
 
     expect(res.status).toBe(200);
+    // Staff-only answers must never land in the shared CDN cache.
+    expect(res.headers.get("Cache-Control")).toBe("private, no-store");
     const body = await res.json();
     expect(body.results).toHaveLength(1);
     expect(body.results[0].title).toBe("Fellow Travelers");

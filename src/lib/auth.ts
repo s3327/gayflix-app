@@ -114,6 +114,12 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 30, // 30 days
     updateAge: 60 * 60 * 24, // refresh the expiry at most once a day
+    // A signed copy of the session rides in a cookie for 5 minutes, so
+    // most requests read it without a database lookup. The cost: signing
+    // out elsewhere, a ban or a role change can take up to 5 minutes to
+    // reach a member's pages. Admin checks never use the copy
+    // (getVerifiedSession in src/lib/session.ts, and the hook below).
+    cookieCache: { enabled: true, maxAge: 5 * 60 },
     additionalFields: {
       twoFactorVerified: { type: "boolean", required: false, defaultValue: false, input: false },
     },
@@ -166,7 +172,7 @@ export const auth = betterAuth({
       // Changing the email asks for the password too, when the account
       // has one (not for Google-only accounts). The page sends it.
       if (ctx.path === "/email-otp/request-email-change") {
-        const session = await getSessionFromCtx(ctx);
+        const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
         if (!session) return; // the endpoint turns it away itself
         const credential = await ctx.context.internalAdapter.findCredentialAccount(session.user.id);
         if (!credential?.password) return;
@@ -182,7 +188,7 @@ export const auth = betterAuth({
       // Two-factor is optional for members and staff, unless ADMIN_REQUIRE_2FA is enabled.
       if (ctx.path === "/two-factor/disable") {
         if (process.env.ADMIN_REQUIRE_2FA === "true" || process.env.ADMIN_REQUIRE_2FA === "1") {
-          const session = await getSessionFromCtx(ctx);
+          const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
           if (session && isStaffRole(session.user.role)) {
             throw new APIError("FORBIDDEN", { message: "Staff accounts keep two-factor on." });
           }
@@ -190,7 +196,7 @@ export const auth = betterAuth({
         return;
       }
       if (ctx.path === "/delete-user") {
-        const session = await getSessionFromCtx(ctx);
+        const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
         if (!session) return; // the endpoint turns it away itself
         const credential = await ctx.context.internalAdapter.findCredentialAccount(session.user.id);
         const problem = accountDeletionProblem({
@@ -209,7 +215,7 @@ export const auth = betterAuth({
       // account (src/lib/admin-roles.ts), and the panel's rules
       // (src/lib/user-admin.ts).
       if (!ctx.path.startsWith("/admin/")) return;
-      const session = await getSessionFromCtx(ctx);
+      const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
       if (!session || adminAccess(session) !== "ok" || !canManageUsers(session.user.role)) {
         throw new APIError("FORBIDDEN", { message: "Admin access required." });
       }
