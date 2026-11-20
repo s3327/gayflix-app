@@ -49,7 +49,7 @@ const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 export const googleSignInEnabled = Boolean(googleClientId && googleClientSecret);
 
 /**
- * Accounts, sessions and roles (Better Auth on Prisma Postgres).
+ * Accounts, sessions and roles (Better Auth on Supabase Postgres).
  *
  * - Email + password, with the email confirmed by a 6-digit code before
  *   the first session. Passwords are hashed with scrypt.

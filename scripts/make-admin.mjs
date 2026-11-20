@@ -7,6 +7,7 @@
 // DATABASE_URL from the environment or .env / .env.local.
 import nextEnv from "@next/env";
 import pg from "pg";
+import { postgresConfig } from "../src/lib/database-config.mjs";
 
 nextEnv.loadEnvConfig(process.cwd());
 
@@ -21,7 +22,7 @@ if (!process.env.DATABASE_URL) {
 }
 
 const role = flag === "--revoke" ? "user" : "admin";
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+const client = new pg.Client(postgresConfig());
 await client.connect();
 try {
   const result = await client.query(
