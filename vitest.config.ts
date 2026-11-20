@@ -1,12 +1,39 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
+const alias = { "@": fileURLToPath(new URL("./src", import.meta.url)) };
+const testDatabaseUrl = process.env.TEST_DATABASE_URL;
+
+// Two projects: fast unit tests, and integration tests that need a real
+// Postgres. The integration project exists only when TEST_DATABASE_URL is
+// set (CI sets it); it points DATABASE_URL at that database so `database`
+// and `withRollback` use the same one.
 export default defineConfig({
-  resolve: {
-    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
-  },
   test: {
-    environment: "node",
-    include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
+    projects: [
+      {
+        resolve: { alias },
+        test: {
+          name: "unit",
+          environment: "node",
+          include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
+          exclude: ["**/node_modules/**", "**/*.integration.test.ts"],
+        },
+      },
+      ...(testDatabaseUrl
+        ? [
+            {
+              resolve: { alias },
+              test: {
+                name: "integration",
+                environment: "node" as const,
+                include: ["src/**/*.integration.test.ts"],
+                testTimeout: 30_000,
+                env: { DATABASE_URL: testDatabaseUrl },
+              },
+            },
+          ]
+        : []),
+    ],
   },
 });
