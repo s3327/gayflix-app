@@ -88,10 +88,11 @@ Supabase's client libraries or its Data API.
 
 1. At [supabase.com/dashboard](https://supabase.com/dashboard), click
    **New project**:
-   - **Region:** the one closest to where Vercel runs the site's server
-     code. Vercel's default is Washington, D.C. (`iad1`), so choose East US
-     (North Virginia) unless you changed it under **Settings → Functions**
-     in Vercel.
+   - **Region:** West US (North California). The site's server code runs
+     next to it in San Francisco (`"regions": ["sfo1"]` in `vercel.json`);
+     every page makes several database queries, so the two must be close.
+     If you choose another region, change `regions` to the Vercel region
+     nearest to it.
    - **Database password:** generate one and keep it in a password
      manager; it goes into both connection strings below.
    - **Plan:** the free plan is fine to start.
