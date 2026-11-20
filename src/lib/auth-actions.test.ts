@@ -70,6 +70,12 @@ vi.mock("@/lib/auth-rate-limit", async (importOriginal) => {
   };
 });
 
+// The admin log-in's role check reads profile.role.
+const profileRole = vi.fn();
+vi.mock("@/lib/auth-profile", () => ({
+  profileRole: (userId: string) => profileRole(userId),
+}));
+
 class RedirectError extends Error {
   constructor(readonly url: string) {
     super(`NEXT_REDIRECT ${url}`);
@@ -86,6 +92,7 @@ import {
   resendEmailCode,
   resetPassword,
   signIn,
+  signInToAdmin,
   signInWithGoogle,
   signOut,
   signUp,
@@ -266,13 +273,15 @@ describe("signIn", () => {
     await expect(signIn(EMAIL, PASSWORD)).resolves.toEqual({ error: "This account has been banned." });
   });
 
-  it("asks for two-factor when the account has a verified TOTP factor, without keeping the session", async () => {
+  it("asks for two-factor when the account has a verified TOTP factor, keeping the session for the code step", async () => {
     auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
       data: { currentLevel: "aal1", nextLevel: "aal2" },
       error: null,
     });
-    await expect(signIn(EMAIL, PASSWORD)).resolves.toEqual({ needsTwoFactor: true });
-    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+    await expect(signIn(EMAIL, PASSWORD, "/account")).resolves.toEqual({ needsTwoFactor: true });
+    // getSession() treats it as signed out until the code is entered
+    // (src/lib/session.test.ts).
+    expect(auth.signOut).not.toHaveBeenCalled();
   });
 
   it("ends the session when the two-factor check fails, rather than letting it through", async () => {
@@ -298,6 +307,48 @@ describe("signIn", () => {
     await expect(signIn(EMAIL, PASSWORD)).resolves.toEqual({
       error: "Something went wrong. Please try again.",
     });
+  });
+});
+
+describe("signInToAdmin", () => {
+  beforeEach(() => profileRole.mockResolvedValue("admin"));
+
+  it("signs staff in and goes to the admin page in next", async () => {
+    await expect(signInToAdmin(EMAIL, PASSWORD, "/admin/reports")).rejects.toMatchObject({ url: "/admin/reports" });
+    expect(profileRole).toHaveBeenCalledWith("u1");
+  });
+
+  it("keeps next inside the admin panel", async () => {
+    await expect(signInToAdmin(EMAIL, PASSWORD, "/account")).rejects.toMatchObject({ url: "/admin/dashboard" });
+    await expect(signInToAdmin(EMAIL, PASSWORD, "https://evil.example/admin")).rejects.toMatchObject({
+      url: "/admin/dashboard",
+    });
+  });
+
+  it("signs a member straight out again and says the account isn't an admin", async () => {
+    profileRole.mockResolvedValue("user");
+    await expect(signInToAdmin(EMAIL, PASSWORD, "/admin/dashboard")).resolves.toEqual({
+      error: "This account doesn't have admin access.",
+    });
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
+  it("asks staff with two-factor for the code, before anything else", async () => {
+    auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: { currentLevel: "aal1", nextLevel: "aal2" },
+      error: null,
+    });
+    await expect(signInToAdmin(EMAIL, PASSWORD, "/admin/dashboard")).resolves.toEqual({ needsTwoFactor: true });
+    expect(auth.signOut).not.toHaveBeenCalled();
+  });
+
+  it("checks the arguments and the password like signIn", async () => {
+    expect(await signInToAdmin("nope", PASSWORD, "/admin/dashboard")).toEqual({ error: "Enter a valid email address." });
+    auth.signInWithPassword.mockResolvedValue(authError("invalid_credentials"));
+    expect(await signInToAdmin(EMAIL, PASSWORD, "/admin/dashboard")).toEqual({
+      error: "That email and password don't match.",
+    });
+    expect(profileRole).not.toHaveBeenCalled();
   });
 });
 

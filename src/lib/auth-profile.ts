@@ -56,3 +56,28 @@ export async function hasVerifiedTotpFactor(userId: string): Promise<boolean> {
   `.execute(database);
   return rows[0]?.found ?? false;
 }
+
+/**
+ * The account's site role (`profile.role`), or null when it has no
+ * profile. For the admin log-in, before it keeps a session.
+ */
+export async function profileRole(userId: string, executor: Kysely<DB> = database): Promise<string | null> {
+  if (!UUID.test(userId)) return null;
+  const row = await executor.selectFrom("profile").select("role").where("id", "=", userId).executeTakeFirst();
+  return row?.role ?? null;
+}
+
+/**
+ * Whether the account can sign in with a password (it has an `email`
+ * identity in Supabase Auth); a Google-only account can't, so it can't
+ * turn on two-factor here.
+ */
+export async function hasPasswordSignIn(userId: string, executor: Kysely<DB> = database): Promise<boolean> {
+  if (!UUID.test(userId)) return false;
+  const { rows } = await sql<{ found: boolean }>`
+    SELECT EXISTS (
+      SELECT 1 FROM auth.identities WHERE user_id = ${userId}::uuid AND provider = 'email'
+    ) AS found
+  `.execute(executor);
+  return rows[0]?.found ?? false;
+}

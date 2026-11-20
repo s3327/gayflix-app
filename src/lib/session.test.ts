@@ -20,7 +20,13 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-import { getSession, getVerifiedSession, requireAdmin, requireUser } from "@/lib/session";
+import {
+  getPendingTwoFactorSession,
+  getSession,
+  getVerifiedSession,
+  requireAdmin,
+  requireUser,
+} from "@/lib/session";
 
 const USER_ID = "11111111-1111-1111-1111-111111111111";
 const SESSION_ID = "22222222-2222-2222-2222-222222222222";
@@ -144,6 +150,57 @@ describe("getVerifiedSession", () => {
     getClaims.mockResolvedValue({ data: { claims: adminClaims({ session_id: undefined }) }, error: null });
     expect(await getVerifiedSession()).toBeNull();
     expect(readAuthProfile).not.toHaveBeenCalled();
+  });
+});
+
+// A password-only (aal1) session of an account with two-factor is
+// waiting for its code (signIn keeps it for that step): until then it
+// counts as signed out everywhere but verifyTwoFactor.
+describe("a sign-in waiting for its two-factor code", () => {
+  const pending = () => claims({ has_totp: true });
+
+  it("is signed out for getSession and requireUser", async () => {
+    getClaims.mockResolvedValue({ data: { claims: pending() }, error: null });
+    expect(await getSession()).toBeNull();
+    await expect(requireUser("/account")).rejects.toThrow("NEXT_REDIRECT /login?next=%2Faccount");
+  });
+
+  it("is signed in once it passed two-factor (aal2)", async () => {
+    getClaims.mockResolvedValue({ data: { claims: adminClaims({ has_totp: true }) }, error: null });
+    expect((await getSession())?.aal).toBe("aal2");
+    expect((await requireUser("/account")).user.id).toBe(USER_ID);
+  });
+
+  it("is signed in when the account has no two-factor", async () => {
+    getClaims.mockResolvedValue({ data: { claims: claims({ has_totp: false }) }, error: null });
+    expect(await getSession()).not.toBeNull();
+  });
+
+  it("is what getPendingTwoFactorSession returns, and nothing else is", async () => {
+    getClaims.mockResolvedValue({ data: { claims: pending() }, error: null });
+    expect(await getPendingTwoFactorSession()).toMatchObject({ user: { id: USER_ID }, aal: "aal1" });
+  });
+
+  for (const [what, tokenClaims] of [
+    ["an aal2 session", () => adminClaims({ has_totp: true })],
+    ["a session without two-factor", () => claims({ has_totp: false })],
+  ] as const) {
+    it(`isn't ${what}`, async () => {
+      getClaims.mockResolvedValue({ data: { claims: tokenClaims() }, error: null });
+      expect(await getPendingTwoFactorSession()).toBeNull();
+    });
+  }
+
+  it("is refused by getVerifiedSession from the database's word, even when the token predates the factor", async () => {
+    getClaims.mockResolvedValue({ data: { claims: claims({ user_role: "admin" }) }, error: null });
+    readAuthProfile.mockResolvedValue({ role: "admin", hasVerifiedTotp: true });
+    expect(await getVerifiedSession()).toBeNull();
+  });
+
+  it("doesn't stop getVerifiedSession when the database says the factor is gone", async () => {
+    getClaims.mockResolvedValue({ data: { claims: pending() }, error: null });
+    readAuthProfile.mockResolvedValue({ role: "user", hasVerifiedTotp: false });
+    expect(await getVerifiedSession()).not.toBeNull();
   });
 });
 

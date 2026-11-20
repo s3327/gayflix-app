@@ -7,8 +7,9 @@ import TwoFactorEnrollment from "@/components/TwoFactorEnrollment";
 /**
  * Where an admin turns on two-factor sign-in.
  * The steps are TwoFactorEnrollment's, shared with members' Setting page.
+ * "Skip for now" shows only while two-factor isn't `required` for staff.
  */
-export default function SetupTwoFactor() {
+export default function SetupTwoFactor({ required }: { required: boolean }) {
   const router = useRouter();
 
   return (
@@ -16,18 +17,21 @@ export default function SetupTwoFactor() {
       <div className="w-full max-w-md rounded-card border border-border-subtle bg-bg-surface p-8">
         <h1 className="font-display text-2xl font-bold">Set up two-factor sign-in</h1>
         <p className="mt-2 text-sm text-ink-secondary">
-          Admin accounts can sign in with a password and an optional code from an authenticator app (such as
-          1Password, Google Authenticator or Authy).
+          {required
+            ? "Admin accounts sign in with a password and a code from an authenticator app (such as 1Password, Google Authenticator or Authy)."
+            : "Admin accounts can sign in with a password and an optional code from an authenticator app (such as 1Password, Google Authenticator or Authy)."}
         </p>
         <TwoFactorEnrollment onEnabled={() => router.push("/admin/dashboard")} />
-        <div className="mt-6 text-center">
-          <Link
-            href="/admin/dashboard"
-            className="text-xs font-medium text-ink-muted transition-colors hover:text-ink-primary"
-          >
-            Skip for now →
-          </Link>
-        </div>
+        {!required && (
+          <div className="mt-6 text-center">
+            <Link
+              href="/admin/dashboard"
+              className="text-xs font-medium text-ink-muted transition-colors hover:text-ink-primary"
+            >
+              Skip for now →
+            </Link>
+          </div>
+        )}
       </div>
     </main>
   );

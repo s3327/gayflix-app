@@ -68,7 +68,7 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong className="font-semibold text-ink-primary">Two-step sign-in</strong>, if you turn
-            it on: its secret and backup codes.
+            it on: its secret key.
           </li>
         </ul>
       </LegalSection>

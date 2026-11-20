@@ -7,6 +7,7 @@ import Link from "next/link";
 import FormError from "@/components/FormError";
 import GoogleAuthButton from "@/components/GoogleAuthButton";
 import PasswordInput from "@/components/PasswordInput";
+import TwoFactorForm from "@/components/TwoFactorForm";
 import { signIn } from "@/lib/auth-actions";
 import { isActionRedirect, startGoogleSignIn } from "@/lib/auth-redirects";
 import { authHref } from "@/lib/safe-redirect";
@@ -24,8 +25,7 @@ import { authHref } from "@/lib/safe-redirect";
  * sends the browser on to `next` (the validated ?next= page that sent
  * the visitor here), or /account. An account whose email was never confirmed gets a fresh code
  * and is sent to /verify-email instead. Accounts with two-factor turned
- * on can't finish here yet: the code step comes with two-factor's move
- * to Supabase, and until then signIn ends their session. Google shows
+ * on get the code step next (TwoFactorForm). Google shows
  * only where Supabase Auth has it turned on (`google`); `googleFailed`
  * is a Google sign-in that came back without a session.
  */
@@ -45,6 +45,7 @@ export default function LoginForm({
     googleFailed ? "Google sign-in didn't finish. Please try again." : ""
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
 
   const destination = next ?? "/account";
 
@@ -69,9 +70,8 @@ export default function LoginForm({
       return;
     }
     if ("needsTwoFactor" in result) {
-      setError(
-        "This account uses two-factor sign-in, which is being moved and can't be finished here just now. Please try again later."
-      );
+      setPassword("");
+      setNeedsTwoFactor(true);
       return;
     }
     setError(result.error);
@@ -100,64 +100,72 @@ export default function LoginForm({
           <p className="mt-1 text-sm text-ink-muted">Log in to Gayflix</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="email"
-              className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
-            >
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
+        {needsTwoFactor ? (
+          <TwoFactorForm
+            next={destination}
+            startOverPath={authHref("/login", next)}
+            onStartOver={() => setNeedsTwoFactor(false)}
+          />
+        ) : (
+          <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
+            <div className="flex flex-col gap-1.5">
               <label
-                htmlFor="password"
+                htmlFor="email"
                 className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
               >
-                Password
+                Email
               </label>
-              <Link
-                href="/forgot-password"
-                className="text-xs font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
-              >
-                Forgot password?
-              </Link>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.com"
+                className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary placeholder:text-ink-muted transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+              />
             </div>
-            <PasswordInput
-              id="password"
-              name="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </div>
 
-          <FormError message={error} />
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="password"
+                  className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
+                >
+                  Password
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-ink-brand transition-colors hover:text-brand-pink-light"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <PasswordInput
+                id="password"
+                name="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-wait disabled:opacity-70"
-          >
-            {isSubmitting ? "Logging In…" : "Log In"}
-          </button>
-        </form>
+            <FormError message={error} />
 
-        {google && (
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="mt-2 w-full rounded-card bg-brand-pink px-6 py-3 font-body text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-wait disabled:opacity-70"
+            >
+              {isSubmitting ? "Logging In…" : "Log In"}
+            </button>
+          </form>
+        )}
+
+        {google && !needsTwoFactor && (
           <>
             <div className="mt-6 flex items-center gap-3">
               <div className="h-px flex-1 bg-border-subtle" />

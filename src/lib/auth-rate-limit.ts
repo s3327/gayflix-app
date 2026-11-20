@@ -6,7 +6,8 @@ import { keyedHash } from "@/lib/visitor";
 
 /*
  * The site's own limits on signing in and on emailed codes (used by
- * src/lib/auth-actions.ts). Every Auth call now comes from this server,
+ * src/lib/auth-actions.ts, src/lib/two-factor-actions.ts and the password
+ * re-check in src/lib/account-actions.ts). Every Auth call now comes from this server,
  * so Supabase's per-IP limits see the host's addresses, not the
  * visitor's; without these, nothing would stop password guessing or
  * trying all million 6-digit codes.
@@ -39,6 +40,17 @@ export const LIMITS = {
   emailSend: { name: "email-send", max: 5, windowSeconds: 15 * MINUTE },
   /** Code emails from one client, whatever the email. */
   emailSendPerClient: { name: "email-send-client", max: 20, windowSeconds: 60 * MINUTE },
+  /**
+   * Authenticator (TOTP) codes for one account: at sign-in and when
+   * turning two-factor on. Starts again after a right code.
+   */
+  totpCheck: { name: "totp-check", max: 5, windowSeconds: 15 * MINUTE },
+  /** Authenticator codes from one client, whatever the account. */
+  totpCheckPerClient: { name: "totp-check-client", max: 30, windowSeconds: 15 * MINUTE },
+  /** Password re-checks for one account (turning two-factor off). */
+  passwordRecheck: { name: "password-recheck", max: 5, windowSeconds: 15 * MINUTE },
+  /** Password re-checks from one client, whatever the account. */
+  passwordRecheckPerClient: { name: "password-recheck-client", max: 30, windowSeconds: 15 * MINUTE },
 } satisfies Record<string, AuthLimit>;
 
 export const TOO_MANY_ATTEMPTS = "Too many attempts. Try again later.";

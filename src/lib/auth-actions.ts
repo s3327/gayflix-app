@@ -3,10 +3,12 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
+import { isStaffRole } from "@/lib/admin-roles";
 import { authErrorMessage, REGISTRATION_CLOSED } from "@/lib/auth-errors";
+import { profileRole } from "@/lib/auth-profile";
 import { type AuthLimit, LIMITS, overLimit, resetLimit, TOO_MANY_ATTEMPTS } from "@/lib/auth-rate-limit";
 import { atLeast } from "@/lib/auth-timing";
-import { safeNextPath } from "@/lib/safe-redirect";
+import { safeAdminNextPath, safeNextPath } from "@/lib/safe-redirect";
 import { getSiteSettings } from "@/lib/site-settings";
 import { siteUrl } from "@/lib/site-url";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -139,52 +141,89 @@ export async function resendEmailCode(email: unknown): Promise<Result> {
   return { ok: true };
 }
 
+type SignInResult = { error: string } | { needsEmailCode: true } | { needsTwoFactor: true };
+
 /**
- * Signs in with email and password, then sends the browser to `next` (a
- * path on this site, else /account). The redirect happens here rather
- * than in the browser: setting the session cookie re-renders the page
- * the form is on, and /login sends signed-in visitors on by itself, so a
- * navigation started in the browser afterwards would race it.
+ * The password step both log-in forms share. Either something to tell
+ * the form, or a password session for the account (`userId`), and
+ * whether it still needs its two-factor code.
  * - An account whose email was never confirmed gets a fresh code and
  *   `needsEmailCode` (Supabase only says so once the password is right).
- * - An account with two-factor gets `needsTwoFactor`. Until the code
- *   step exists (two-factor moves to Supabase next), the password-only
- *   session is ended at once, so two-factor can't be skipped. If the
- *   two-factor check itself fails, the session is ended too.
+ * - An account with two-factor keeps its password-only (aal1) session
+ *   for the code step (verifyTwoFactor in src/lib/two-factor-actions.ts).
+ *   Until the code is entered, every session read treats it as signed
+ *   out (src/lib/session.ts). If the two-factor check itself fails, the
+ *   session is ended, rather than let through.
  */
-export async function signIn(
+async function passwordStep(
   email: unknown,
-  password: unknown,
-  next?: unknown
-): Promise<{ error: string } | { needsEmailCode: true } | { needsTwoFactor: true }> {
+  password: unknown
+): Promise<
+  | { result: SignInResult }
+  | { userId: string; needsTwoFactor: boolean; supabase: Awaited<ReturnType<typeof createServerSupabase>> }
+> {
   const address = emailArg(email);
-  if (!address) return INVALID_EMAIL;
-  if (typeof password !== "string" || !password) return { error: "Enter your password." };
-  if (password.length > MAX_PASSWORD) return { error: "That email and password don't match." };
+  if (!address) return { result: INVALID_EMAIL };
+  if (typeof password !== "string" || !password) return { result: { error: "Enter your password." } };
+  if (password.length > MAX_PASSWORD) return { result: { error: "That email and password don't match." } };
   const client = await clientIp();
-  if (await limited(LIMITS.signIn, [client, address], LIMITS.signInPerClient)) return RATE_LIMITED;
+  if (await limited(LIMITS.signIn, [client, address], LIMITS.signInPerClient)) return { result: RATE_LIMITED };
 
   const supabase = await createServerSupabase();
-  const { error } = await supabase.auth.signInWithPassword({ email: address, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email: address, password });
   if (error?.code === "email_not_confirmed") {
     // A failed resend (sent too recently, say) still leaves the
     // verify page's own Resend button.
     const resent = await supabase.auth.resend({ type: "signup", email: address });
     if (!resent.error) await newCodeSent("signup", address);
-    return { needsEmailCode: true };
+    return { result: { needsEmailCode: true } };
   }
-  if (error) return { error: authErrorMessage(error) };
+  if (error || !data.user) return { result: { error: authErrorMessage(error) || "Something went wrong. Please try again." } };
 
   const { data: levels, error: levelsError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   if (levelsError || !levels) {
     await supabase.auth.signOut({ scope: "local" });
-    return { error: "Something went wrong. Please try again." };
+    return { result: { error: "Something went wrong. Please try again." } };
   }
-  if (levels.nextLevel === "aal2" && levels.currentLevel !== "aal2") {
-    await supabase.auth.signOut({ scope: "local" });
-    return { needsTwoFactor: true };
-  }
+  return {
+    userId: data.user.id,
+    needsTwoFactor: levels.nextLevel === "aal2" && levels.currentLevel !== "aal2",
+    supabase,
+  };
+}
+
+/**
+ * Signs in with email and password, then sends the browser to `next` (a
+ * path on this site, else /account). The redirect happens here rather
+ * than in the browser: setting the session cookie re-renders the page
+ * the form is on, and /login sends signed-in visitors on by itself, so a
+ * navigation started in the browser afterwards would race it. An
+ * unconfirmed email gets `needsEmailCode`, an account with two-factor
+ * `needsTwoFactor` (see passwordStep).
+ */
+export async function signIn(email: unknown, password: unknown, next?: unknown): Promise<SignInResult> {
+  const step = await passwordStep(email, password);
+  if ("result" in step) return step.result;
+  if (step.needsTwoFactor) return { needsTwoFactor: true };
   redirect(safeNextPath(typeof next === "string" ? next : null, "/account"));
+}
+
+/**
+ * The admin log-in: like signIn, but only for staff (the role in
+ * `profile`, not the token), and `next` must be an admin page (else the
+ * dashboard). A member's session is ended at once. Staff with two-factor
+ * get `needsTwoFactor`; staff without it go on to the panel, which sends
+ * them to set it up when it's required.
+ */
+export async function signInToAdmin(email: unknown, password: unknown, next?: unknown): Promise<SignInResult> {
+  const step = await passwordStep(email, password);
+  if ("result" in step) return step.result;
+  if (!isStaffRole(await profileRole(step.userId))) {
+    await step.supabase.auth.signOut({ scope: "local" });
+    return { error: "This account doesn't have admin access." };
+  }
+  if (step.needsTwoFactor) return { needsTwoFactor: true };
+  redirect(safeAdminNextPath(typeof next === "string" ? next : null));
 }
 
 /**

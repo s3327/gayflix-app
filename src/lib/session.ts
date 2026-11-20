@@ -27,7 +27,8 @@ export type AppSession = {
   createdAt: number;
   /**
    * Whether the account has a verified TOTP factor. Only
-   * getVerifiedSession() looks it up; getSession() always says false.
+   * getVerifiedSession() looks it up (getPendingTwoFactorSession() knows
+   * it from the token); getSession() always says false.
    */
   hasVerifiedTotp: boolean;
 };
@@ -79,18 +80,45 @@ async function readClaims(): Promise<JwtPayload | null> {
 }
 
 /**
+ * Whether the token is a sign-in still waiting for its two-factor code:
+ * password only (aal1), on an account with a verified TOTP factor (the
+ * `has_totp` claim, from custom_access_token_hook). signIn keeps such a
+ * session so verifyTwoFactor can raise it to aal2; until then it counts
+ * as signed out.
+ */
+function awaitingTwoFactor(claims: JwtPayload): boolean {
+  return claims.aal !== "aal2" && claims.has_totp === true;
+}
+
+function claimedRole(claims: JwtPayload): string {
+  return typeof claims.user_role === "string" ? claims.user_role : "user";
+}
+
+/**
  * The signed-in session for this request, or null. Server code only.
  * Read from the session cookie's verified token, without a database
  * read, and cached per request. The role is the token's `user_role`
  * claim, which can be up to an hour stale: fine for showing things,
- * never for admin access (that's getVerifiedSession()).
+ * never for admin access (that's getVerifiedSession()). A sign-in still
+ * waiting for its two-factor code is null here.
  */
 export const getSession = cache(async (): Promise<AppSession | null> => {
   const claims = await readClaims();
-  if (!claims) return null;
-  const role = typeof claims.user_role === "string" ? claims.user_role : "user";
-  return sessionFromClaims(claims, role, false);
+  if (!claims || awaitingTwoFactor(claims)) return null;
+  return sessionFromClaims(claims, claimedRole(claims), false);
 });
+
+/**
+ * The sign-in waiting for its two-factor code, or null when there's no
+ * such session (a guest, or a session that is fully signed in). Only
+ * verifyTwoFactor (src/lib/two-factor-actions.ts) may use it: everything
+ * else must treat that session as signed out.
+ */
+export async function getPendingTwoFactorSession(): Promise<AppSession | null> {
+  const claims = await readClaims();
+  if (!claims || !awaitingTwoFactor(claims)) return null;
+  return sessionFromClaims(claims, claimedRole(claims), true);
+}
 
 /**
  * Like getSession(), but checked against the database, so admin access
@@ -98,13 +126,17 @@ export const getSession = cache(async (): Promise<AppSession | null> => {
  * token expires (up to an hour later). Null unless the token's session
  * still exists in Supabase Auth, the account isn't banned, and it has a
  * profile row; the role (and whether the account has two-factor) comes
- * from the database (src/lib/auth-profile.ts).
+ * from the database (src/lib/auth-profile.ts). Like getSession(), null
+ * for a sign-in waiting for its two-factor code, judged by the database
+ * (a password-only session of an account that has a verified factor),
+ * not by the token's possibly stale `has_totp`.
  */
 export const getVerifiedSession = cache(async (): Promise<AppSession | null> => {
   const claims = await readClaims();
   if (!claims || typeof claims.session_id !== "string") return null;
   const profile = await readAuthProfile(claims.sub, claims.session_id);
   if (!profile) return null;
+  if (profile.hasVerifiedTotp && claims.aal !== "aal2") return null;
   return sessionFromClaims(claims, profile.role, profile.hasVerifiedTotp);
 });
 

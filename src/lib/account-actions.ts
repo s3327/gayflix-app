@@ -3,14 +3,20 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { connection } from "next/server";
-import { verifyPassword } from "better-auth/crypto";
 import { isStaffRole } from "@/lib/admin-roles";
 import { auth } from "@/lib/auth";
+import { LIMITS, overLimit, TOO_MANY_ATTEMPTS } from "@/lib/auth-rate-limit";
 import { db } from "@/lib/db";
 import { getSession, getVerifiedSession } from "@/lib/session";
+import { checkPassword } from "@/lib/supabase/password-check";
+import { createServerSupabase } from "@/lib/supabase/server";
+import { clientIp } from "@/lib/visitor";
+
+const SOMETHING_WENT_WRONG = "Something went wrong. Please try again.";
 
 /*
- * Server functions behind the signed-in devices on /account/setting.
+ * Server functions behind the signed-in devices and turning two-factor
+ * off on /account/setting.
  * Each checks the session itself and only touches the signed-in
  * account's own sessions. Session tokens never leave the server: the
  * page names devices by session id, and the token is looked up here.
@@ -59,9 +65,12 @@ export async function signOutOtherDevices(): Promise<void> {
 }
 
 /**
- * Turns off two-factor authentication for the signed-in user.
- * Requires their password to prevent unauthorized changes.
- * Avoids session destruction to keep the current session active and avoid cookie desync.
+ * Turns off two-factor sign-in for the signed-in user: removes their
+ * TOTP factors from Supabase Auth. Needs their password, re-checked
+ * with a throwaway sign-in that leaves this session alone (checkPassword)
+ * and limited per account and per client. Staff can't while
+ * ADMIN_REQUIRE_2FA is on. The session is refreshed afterwards, so its
+ * token stops saying the account has two-factor (`has_totp`).
  */
 export async function disableTwoFactorAction(
   password: unknown
@@ -82,32 +91,24 @@ export async function disableTwoFactorAction(
     return { error: "Staff accounts keep two-factor on." };
   }
 
-  await connection();
-  const credential = await db.account.findFirst({
-    where: { userId: session.user.id, providerId: "credential" },
-    select: { password: true },
-  });
+  const overAccount = await overLimit(LIMITS.passwordRecheck, [session.user.id]);
+  const overClient = await overLimit(LIMITS.passwordRecheckPerClient, [await clientIp()]);
+  if (overAccount || overClient) return { error: TOO_MANY_ATTEMPTS };
 
-  if (!credential?.password) {
-    return { error: "This account signs in with Google, so it has no password." };
+  const checked = await checkPassword(session.user.email, password);
+  if (checked === "wrong") return { error: "That password isn't right." };
+  if (checked === "error") return { error: SOMETHING_WENT_WRONG };
+
+  // Removing a verified factor needs an aal2 session, which
+  // getVerifiedSession() guarantees for an account with two-factor.
+  const supabase = await createServerSupabase();
+  const { data: factors, error: listError } = await supabase.auth.mfa.listFactors();
+  if (listError || !factors) return { error: SOMETHING_WENT_WRONG };
+  for (const factor of factors.totp) {
+    const { error } = await supabase.auth.mfa.unenroll({ factorId: factor.id });
+    if (error) return { error: SOMETHING_WENT_WRONG };
   }
-
-  const isValid = await verifyPassword({
-    hash: credential.password,
-    password,
-  });
-
-  if (!isValid) {
-    return { error: "That password isn't right." };
-  }
-
-  await db.$transaction([
-    db.twoFactor.deleteMany({ where: { userId: session.user.id } }),
-    db.user.update({
-      where: { id: session.user.id },
-      data: { twoFactorEnabled: false },
-    }),
-  ]);
+  await supabase.auth.refreshSession();
 
   revalidatePath("/account/setting");
   return { success: true };

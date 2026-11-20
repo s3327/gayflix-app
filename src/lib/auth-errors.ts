@@ -19,6 +19,9 @@ const MESSAGES: Record<string, string> = {
   same_password: "Choose a password different from your current one.",
   user_banned: "This account has been banned.",
   signup_disabled: REGISTRATION_CLOSED,
+  // Two-factor (TOTP) codes, from src/lib/two-factor-actions.ts.
+  mfa_verification_failed: "That code isn't right. Check your authenticator app and try again.",
+  mfa_challenge_expired: "That took too long. Enter the code your authenticator app shows now.",
 };
 
 type AuthError = { code?: string; message?: string; status?: number };

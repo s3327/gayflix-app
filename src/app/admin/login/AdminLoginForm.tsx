@@ -3,54 +3,50 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import FormError from "@/components/FormError";
 import TwoFactorForm from "@/components/TwoFactorForm";
-import { isStaffRole } from "@/lib/admin-roles";
-import { authClient, authErrorMessage } from "@/lib/auth-client";
+import { signInToAdmin } from "@/lib/auth-actions";
+import { isActionRedirect } from "@/lib/auth-redirects";
 import { safeAdminNextPath } from "@/lib/safe-redirect";
 
+/**
+ * The admin log-in form. Signs in on the server (signInToAdmin in
+ * src/lib/auth-actions.ts), which refuses accounts without a staff role
+ * and sends staff on to `nextUrl` (an admin page) or the dashboard;
+ * staff without two-factor are sent from there to set it up when it's
+ * required. Staff with two-factor get the code step (TwoFactorForm).
+ */
 export default function AdminLoginForm({ nextUrl }: { nextUrl?: string }) {
-  const router = useRouter();
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
-
-  async function enter(user: { role?: string | null } | undefined) {
-    if (!isStaffRole(user?.role)) {
-      setNeedsTwoFactor(false);
-      await authClient.signOut().catch(() => {});
-      setError("This account doesn't have admin access.");
-      return;
-    }
-    router.push(safeAdminNextPath(nextUrl));
-    router.refresh();
-  }
+  const destination = safeAdminNextPath(nextUrl);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setError("");
     setIsSubmitting(true);
-    const { data, error } = await authClient.signIn.email({
-      email: String(form.get("email")),
-      password: String(form.get("password")),
-    });
+    let result: Awaited<ReturnType<typeof signInToAdmin>>;
+    try {
+      result = await signInToAdmin(String(form.get("email")), String(form.get("password")), destination);
+    } catch (thrown) {
+      // Signed in: the server is sending the browser to `destination`.
+      if (isActionRedirect(thrown)) return;
+      setIsSubmitting(false);
+      throw thrown;
+    }
     setIsSubmitting(false);
 
-    if (error?.code === "EMAIL_NOT_VERIFIED") {
+    if ("needsEmailCode" in result) {
       setError("Confirm this account's email first: log in on the main site to get a code.");
       return;
     }
-    if (error) {
-      setError(authErrorMessage(error));
-      return;
-    }
-    if ("twoFactorRedirect" in data && data.twoFactorRedirect) {
+    if ("needsTwoFactor" in result) {
       setNeedsTwoFactor(true);
       return;
     }
-    await enter("user" in data ? (data.user as { role?: string | null }) : undefined);
+    setError(result.error);
   }
 
   return (
@@ -74,7 +70,11 @@ export default function AdminLoginForm({ nextUrl }: { nextUrl?: string }) {
         </div>
 
         {needsTwoFactor ? (
-          <TwoFactorForm onVerified={enter} onStartOver={() => setNeedsTwoFactor(false)} />
+          <TwoFactorForm
+            next={destination}
+            startOverPath={`/admin/login?${new URLSearchParams({ next: destination })}`}
+            onStartOver={() => setNeedsTwoFactor(false)}
+          />
         ) : (
           <form method="post" onSubmit={handleSubmit} noValidate className="mt-8 flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">

@@ -8,7 +8,7 @@ import { signOutDevice, signOutOtherDevices } from "@/lib/account-actions";
 import { accountDeletionProblem } from "@/lib/account-deletion";
 import { isStaffRole } from "@/lib/admin-roles";
 import { auth } from "@/lib/auth";
-import { hasVerifiedTotpFactor } from "@/lib/auth-profile";
+import { hasPasswordSignIn, hasVerifiedTotpFactor } from "@/lib/auth-profile";
 import { getMyNickname } from "@/lib/community";
 import { db } from "@/lib/db";
 import { deviceName, isMobileDevice } from "@/lib/device-name";
@@ -53,19 +53,10 @@ export default async function AccountSettingPage() {
     sessions = dbSessions;
   }
 
-  let accounts: Array<{ providerId: string }> = [];
-  try {
-    accounts = await auth.api.listUserAccounts({ headers: requestHeaders });
-  } catch {
-    accounts = await db.account.findMany({
-      where: { userId: session.user.id },
-      select: { providerId: true },
-    });
-  }
-
-  const [nickname, twoFactorEnabled] = await Promise.all([
+  const [nickname, twoFactorEnabled, hasPassword] = await Promise.all([
     getMyNickname(),
     hasVerifiedTotpFactor(session.user.id),
+    hasPasswordSignIn(session.user.id),
   ]);
 
   const devices = sessions
@@ -81,7 +72,6 @@ export default async function AccountSettingPage() {
     .sort((a, b) => Number(b.current) - Number(a.current) || +b.updatedAt - +a.updatedAt);
   const hasOtherDevices = devices.some((device) => !device.current);
 
-  const hasPassword = accounts.some((account) => account.providerId === "credential");
   // Anything that stops deletion besides the password, which the dialog asks for.
   const deletionProblem = accountDeletionProblem({
     role: session.user.role,

@@ -1,6 +1,6 @@
 import { sql, type Transaction } from "kysely";
 import { describe, expect, it } from "vitest";
-import { readAuthProfile } from "@/lib/auth-profile";
+import { hasPasswordSignIn, profileRole, readAuthProfile } from "@/lib/auth-profile";
 import type { DB } from "@/lib/db-types";
 import { withRollback } from "@/test/database";
 
@@ -82,6 +82,33 @@ describe("readAuthProfile", () => {
       await seed(trx);
       await sql`UPDATE auth.mfa_factors SET status = 'unverified' WHERE user_id = ${USER}::uuid`.execute(trx);
       expect((await readAuthProfile(USER, SESSION, trx))?.hasVerifiedTotp).toBe(false);
+    });
+  });
+});
+
+describe("profileRole", () => {
+  it("is the profile's role, or null without a profile", async () => {
+    await withRollback(async (trx) => {
+      await seed(trx, "moderator");
+      expect(await profileRole(USER, trx)).toBe("moderator");
+      expect(await profileRole(OTHER_SESSION, trx)).toBeNull();
+      expect(await profileRole("not-a-uuid", trx)).toBeNull();
+    });
+  });
+});
+
+describe("hasPasswordSignIn", () => {
+  it("is true only with an email identity (a Google-only account has none)", async () => {
+    await withRollback(async (trx) => {
+      await seed(trx);
+      const identity = (provider: string) => sql`
+        INSERT INTO auth.identities (provider_id, user_id, identity_data, provider, created_at, updated_at)
+        VALUES (${USER}, ${USER}::uuid, '{}'::jsonb, ${provider}, now(), now())
+      `;
+      await identity("google").execute(trx);
+      expect(await hasPasswordSignIn(USER, trx)).toBe(false);
+      await identity("email").execute(trx);
+      expect(await hasPasswordSignIn(USER, trx)).toBe(true);
     });
   });
 });
