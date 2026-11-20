@@ -11,6 +11,11 @@ export const authClient = createAuthClient({
   // Sign-in forms handle the two-factor step themselves (TwoFactorForm),
   // so the client doesn't redirect anywhere on its own.
   plugins: [emailOTPClient(), adminClient(), twoFactorClient({ onTwoFactorRedirect: () => {} })],
+  // The session is read once per page load, not again on every return to
+  // the tab: each read is a server call, and visitors switch tabs a lot
+  // while watching. Signing in or out in another tab still updates this
+  // one (Better Auth tells other tabs through a broadcast channel).
+  sessionOptions: { refetchOnWindowFocus: false },
 });
 
 const MESSAGES: Record<string, string> = {

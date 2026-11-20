@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { adminAccess } from "@/lib/admin-access";
 import { safeAdminNextPath } from "@/lib/safe-redirect";
-import { getSession } from "@/lib/session";
+import { getVerifiedSession } from "@/lib/session";
 import AdminLoginForm from "./AdminLoginForm";
 
 /**
@@ -15,7 +15,7 @@ export default async function AdminLoginPage({
 }: {
   searchParams: Promise<{ next?: string }>;
 }) {
-  const session = await getSession();
+  const session = await getVerifiedSession();
   const access = adminAccess(session);
   const { next } = await searchParams;
 

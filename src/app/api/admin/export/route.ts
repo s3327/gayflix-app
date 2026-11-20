@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { getVerifiedSession } from "@/lib/session";
 import { adminAccess } from "@/lib/admin-access";
 import { canManageCatalog, canManageSettings, canManageUsers } from "@/lib/admin-roles";
 import { escapeLike, normalizeQuery } from "@/lib/catalog";
@@ -9,7 +9,7 @@ import { toCsvRow } from "@/lib/csv";
 
 export async function GET(request: Request) {
   try {
-    const session = await getSession();
+    const session = await getVerifiedSession();
     if (!session || adminAccess(session) !== "ok") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

@@ -4,6 +4,7 @@ import { disableTwoFactorAction } from "@/lib/account-actions";
 const mockGetSession = vi.fn();
 vi.mock("@/lib/session", () => ({
   getSession: () => mockGetSession(),
+  getVerifiedSession: () => mockGetSession(),
 }));
 
 const mockRevalidatePath = vi.fn();

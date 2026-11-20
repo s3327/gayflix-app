@@ -7,7 +7,7 @@ import { verifyPassword } from "better-auth/crypto";
 import { isStaffRole } from "@/lib/admin-roles";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { getSession, getVerifiedSession } from "@/lib/session";
 
 /*
  * Server functions behind the signed-in devices on /account/setting.
@@ -66,7 +66,7 @@ export async function signOutOtherDevices(): Promise<void> {
 export async function disableTwoFactorAction(
   password: unknown
 ): Promise<{ success?: boolean; error?: string }> {
-  const session = await getSession();
+  const session = await getVerifiedSession(); // the staff check needs the current role
   if (!session) {
     return { error: "For your security, log out and log in again, then try once more." };
   }

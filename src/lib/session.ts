@@ -14,6 +14,15 @@ export const getSession = cache(async () =>
 );
 
 /**
+ * Like getSession(), but always read from the database, never from the
+ * session cookie cache (src/lib/auth.ts): admin access decisions see a
+ * sign-out, ban or role change at once, not up to 5 minutes later.
+ */
+export const getVerifiedSession = cache(async () =>
+  auth.api.getSession({ headers: await headers(), query: { disableCookieCache: true } })
+);
+
+/**
  * For account pages: sends guests to /login, which brings them back to
  * `returnTo` afterwards.
  */
@@ -30,7 +39,7 @@ export async function requireUser(returnTo: string) {
  * else goes to the admin login page.
  */
 export async function requireAdmin() {
-  const session = await getSession();
+  const session = await getVerifiedSession();
   const access = adminAccess(session);
   if (access === "setup-2fa") redirect("/admin/setup-2fa");
   if (access !== "ok") {

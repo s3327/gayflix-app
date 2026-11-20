@@ -185,8 +185,12 @@ function CastButton({ videoRef, sourceUrl }: { videoRef: React.RefObject<HTMLVid
   );
 }
 
-/** How often a playing video reports how far it got, in seconds of video. */
-const PROGRESS_EVERY_SECONDS = 15;
+/**
+ * How often a playing video reports how far it got, in seconds of video.
+ * Each report is a server call, so not too often: pausing, ending, hiding
+ * the tab and leaving the player report too, so little is ever lost.
+ */
+const PROGRESS_EVERY_SECONDS = 60;
 
 function VideoPlayer({
   source,
