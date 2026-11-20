@@ -6,7 +6,10 @@
 -- which row-level security keeps out of profile and site_setting (RLS is
 -- on with no policies, see 20261120000000). So they're SECURITY DEFINER,
 -- owned by the role running this migration, with an empty search_path
--- and every name schema-qualified. Only Auth may call the hooks.
+-- and every name schema-qualified. Only Auth may call the hooks, and
+-- nobody may call the trigger functions directly (Supabase's default
+-- privileges on public would otherwise let anon, authenticated and
+-- service_role execute all four).
 
 CREATE TABLE public.profile (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -89,7 +92,7 @@ REVOKE EXECUTE ON FUNCTION
   public.custom_access_token_hook(jsonb),
   public.before_user_created_hook(jsonb),
   public.forget_session_ip()
-FROM PUBLIC, anon, authenticated;
+FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION
   public.custom_access_token_hook(jsonb),
   public.before_user_created_hook(jsonb)

@@ -129,12 +129,20 @@ describe.skipIf(!hasAuthApi)("Supabase Auth hooks", () => {
     expect(rows.every((row) => row.ip === null)).toBe(true);
   });
 
-  it("lets only Auth run the hooks", async () => {
+  // Only Auth may call the hooks; nobody may call the trigger functions
+  // directly (triggers fire without an EXECUTE check). `anon` covers PUBLIC.
+  it("lets only Auth run the hooks, and nobody call the trigger functions", async () => {
+    const hooks = ["public.custom_access_token_hook(jsonb)", "public.before_user_created_hook(jsonb)"];
     const { rows } = await sql<{ role: string; fn: string; allowed: boolean }>`
       SELECT r.role, f.fn, has_function_privilege(r.role, f.fn, 'EXECUTE') AS allowed
-      FROM (VALUES ('anon'), ('authenticated'), ('supabase_auth_admin')) AS r(role),
-           (VALUES ('public.custom_access_token_hook(jsonb)'), ('public.before_user_created_hook(jsonb)')) AS f(fn)
+      FROM (VALUES ('anon'), ('authenticated'), ('service_role'), ('supabase_auth_admin')) AS r(role),
+           (VALUES ('public.custom_access_token_hook(jsonb)'), ('public.before_user_created_hook(jsonb)'),
+                   ('public.create_profile_for_new_user()'), ('public.forget_session_ip()')) AS f(fn)
     `.execute(database);
-    for (const row of rows) expect(row, `${row.role} on ${row.fn}`).toMatchObject({ allowed: row.role === "supabase_auth_admin" });
+    expect(rows).toHaveLength(16);
+    for (const row of rows) {
+      const allowed = row.role === "supabase_auth_admin" && hooks.includes(row.fn);
+      expect(row, `${row.role} on ${row.fn}`).toMatchObject({ allowed });
+    }
   });
 });
