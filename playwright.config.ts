@@ -5,7 +5,7 @@ import { defineConfig, devices } from "@playwright/test";
 // exports the Supabase local stack's `supabase status -o env`) or
 // .env.local (locally): DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL,
 // SUPABASE_PUBLISHABLE_KEY and SUPABASE_SECRET_KEY for the stack, and
-// BETTER_AUTH_SECRET while Better Auth remains. The server inherits it;
+// HASH_SECRET (src/lib/visitor.ts). The server inherits it;
 // the tests read the stack's emails from its Mailpit (MAILPIT_URL, or
 // the port in supabase/config.toml).
 loadEnvConfig(process.cwd());
@@ -23,8 +23,6 @@ const SOURCE_STUB = "http://127.0.0.1:3101";
 export const REPORT_STUB = "http://127.0.0.1:3102";
 /** e2e/blob-stub.mjs: Vercel Blob, keeping uploaded posters. */
 export const BLOB_STUB = "http://127.0.0.1:3103";
-/** Emails the server "sends" during the run; the tests read codes from it. */
-export const OUTBOX_FILE = ".playwright/outbox.jsonl";
 
 /**
  * End-to-end tests against a production build (`npm run build` first)
@@ -85,8 +83,8 @@ export default defineConfig({
         ADMIN_BASIC_AUTH_PASSWORD: "e2e-password",
         ADMIN_REQUIRE_2FA: "true",
         CRON_SECRET: "e2e-cron-secret",
-        BETTER_AUTH_URL: BASE_URL,
-        EMAIL_OUTBOX_FILE: OUTBOX_FILE,
+        // Keys hashed IPs and limits; any value works for a test server.
+        HASH_SECRET: process.env.HASH_SECRET || "e2e-hash-secret",
         // Every test signs in from 127.0.0.1; rate limits would trip.
         AUTH_RATE_LIMIT: "off",
         TMDB_API_BASE: `${SOURCE_STUB}/tmdb/3`,

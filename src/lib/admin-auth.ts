@@ -3,7 +3,7 @@
  * shared credential pair from the environment, checked in src/proxy.ts
  * for /admin pages and again in the admin root layout. API routes
  * (/api/...) are outside it: each one checks the session itself
- * (requireAdmin, or the admin hook in src/lib/auth.ts).
+ * (requireAdmin).
  *
  * The real lock is the admin account itself: the "admin" role plus a
  * two-factor sign-in (requireAdmin in src/lib/session.ts). This gate was

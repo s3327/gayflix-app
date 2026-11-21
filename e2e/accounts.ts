@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 import { totp } from "../src/test/totp";
 
@@ -122,6 +123,26 @@ export async function sql<Row = Record<string, unknown>>(query: string, params: 
   } finally {
     await client.end();
   }
+}
+
+/** Supabase Auth's admin API, with the stack's secret key from the environment. */
+function authAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const secretKey = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !secretKey) throw new Error("Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY for e2e.");
+  return createClient(url, secretKey, { auth: { persistSession: false, autoRefreshToken: false } }).auth.admin;
+}
+
+/** Makes a confirmed account with no password (it never signs in); returns its id. */
+export async function createAuthUser(email: string, name: string): Promise<string> {
+  const { data, error } = await authAdmin().createUser({ email, email_confirm: true, user_metadata: { name } });
+  if (error) throw error;
+  return data.user.id;
+}
+
+/** Deletes accounts made with createAuthUser; their member data goes with them. */
+export async function deleteAuthUsers(ids: string[]) {
+  for (const id of ids) await authAdmin().deleteUser(id);
 }
 
 /** Makes the account an admin (its role lives in `profile`). */

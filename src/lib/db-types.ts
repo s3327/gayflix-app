@@ -9,8 +9,6 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S, I | undefined, U>
   : ColumnType<T, T | undefined, T>;
 
-export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
-
 export type Json = JsonValue;
 
 export type JsonArray = JsonValue[];
@@ -32,22 +30,6 @@ export type RatingValue = "like" | "love" | "not_for_me";
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export type VideoSourceKind = "embed" | "file" | "hls";
-
-export interface Account {
-  accessToken: string | null;
-  accessTokenExpiresAt: Timestamp | null;
-  accountId: string;
-  createdAt: Generated<Timestamp>;
-  id: string;
-  idToken: string | null;
-  password: string | null;
-  providerId: string;
-  refreshToken: string | null;
-  refreshTokenExpiresAt: Timestamp | null;
-  scope: string | null;
-  updatedAt: Generated<Timestamp>;
-  userId: string;
-}
 
 export interface ActivityLog {
   action: string;
@@ -211,17 +193,10 @@ export interface MemberProfile {
 }
 
 export interface Profile {
-  ban_reason: string | null;
+  banReason: string | null;
   createdAt: Generated<Timestamp>;
   id: string;
   role: Generated<string>;
-}
-
-export interface RateLimit {
-  count: number;
-  id: string;
-  key: string;
-  lastRequest: Int8;
 }
 
 export interface Report {
@@ -262,19 +237,6 @@ export interface ScheduledJobRun {
   triggeredBy: Generated<string>;
 }
 
-export interface Session {
-  createdAt: Generated<Timestamp>;
-  expiresAt: Timestamp;
-  id: string;
-  impersonatedBy: string | null;
-  ipAddress: string | null;
-  token: string;
-  twoFactorVerified: Generated<boolean | null>;
-  updatedAt: Generated<Timestamp>;
-  userAgent: string | null;
-  userId: string;
-}
-
 export interface SiteSetting {
   allowedEmbedHosts: Generated<string[]>;
   contactEmail: Generated<string | null>;
@@ -311,40 +273,6 @@ export interface TitleRevision {
   summary: string | null;
 }
 
-export interface TwoFactor {
-  backupCodes: string;
-  failedVerificationCount: Generated<number | null>;
-  id: string;
-  lockedUntil: Timestamp | null;
-  secret: string;
-  userId: string;
-  verified: Generated<boolean | null>;
-}
-
-export interface User {
-  banExpires: Timestamp | null;
-  banned: Generated<boolean | null>;
-  banReason: string | null;
-  createdAt: Generated<Timestamp>;
-  email: string;
-  emailVerified: Generated<boolean>;
-  id: string;
-  image: string | null;
-  name: string;
-  role: string | null;
-  twoFactorEnabled: Generated<boolean | null>;
-  updatedAt: Generated<Timestamp>;
-}
-
-export interface Verification {
-  createdAt: Generated<Timestamp>;
-  expiresAt: Timestamp;
-  id: string;
-  identifier: string;
-  updatedAt: Generated<Timestamp>;
-  value: string;
-}
-
 export interface VideoSource {
   createdAt: Generated<Timestamp>;
   enabled: Generated<boolean>;
@@ -376,7 +304,6 @@ export interface WatchlistItem {
 }
 
 export interface DB {
-  account: Account;
   activity_log: ActivityLog;
   auth_rate_limit: AuthRateLimit;
   collection: Collection;
@@ -392,17 +319,12 @@ export interface DB {
   media_view: MediaView;
   member_profile: MemberProfile;
   profile: Profile;
-  rateLimit: RateLimit;
   report: Report;
   review: Review;
   scheduled_job_run: ScheduledJobRun;
-  session: Session;
   site_setting: SiteSetting;
   subtitle: Subtitle;
   title_revision: TitleRevision;
-  twoFactor: TwoFactor;
-  user: User;
-  verification: Verification;
   video_source: VideoSource;
   watch_history: WatchHistory;
   watchlist_item: WatchlistItem;

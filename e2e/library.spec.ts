@@ -88,7 +88,7 @@ test("favorites list newest first, a removal can be undone, and drafts stay hidd
   // Saved before the title went back to being a draft.
   await sql(
     `INSERT INTO favorite ("userId", "mediaId", entry)
-     SELECT id, 'cabin-fever', $2::jsonb FROM "user" WHERE email = $1`,
+     SELECT id, 'cabin-fever', $2::jsonb FROM auth.users WHERE email = $1`,
     [
       account.email,
       JSON.stringify({ id: "cabin-fever", title: "Cabin Fever", year: 2024, duration: "1h", type: "movie", genre: "Drama" }),
@@ -319,7 +319,7 @@ test("a card's quick actions play, favorite and add to a list", async ({ browser
     `SELECT (SELECT count(*)::int FROM favorite f WHERE f."userId" = u.id AND f."mediaId" = 'chosen-family') AS favorites,
             (SELECT count(*)::int FROM list_item i JOIN media_list l ON l.id = i."listId"
              WHERE l."userId" = u.id AND i."mediaId" = 'chosen-family') AS items
-     FROM "user" u WHERE u.email = $1`,
+     FROM auth.users u WHERE u.email = $1`,
     [account.email]
   );
   expect(rows[0]).toEqual({ favorites: 1, items: 1 });

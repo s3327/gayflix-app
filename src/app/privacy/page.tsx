@@ -9,7 +9,10 @@ export const metadata: Metadata = {
 };
 
 /**
- * What the site keeps, written from the code: accounts (src/lib/auth.ts),
+ * What the site keeps, written from the code: accounts (Supabase Auth,
+ * src/lib/auth-actions.ts and src/lib/session.ts; IP addresses blanked by
+ * the triggers in supabase/migrations, Decision D3; emails sent by
+ * Supabase through Resend, Decision D5),
  * favorites, Watchlist, lists and history (src/lib/library-actions.ts),
  * ratings (src/lib/rating-actions.ts), nicknames, reviews and reports on
  * them (src/lib/community-actions.ts), views
@@ -52,8 +55,8 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong className="font-semibold text-ink-primary">Sign-in sessions</strong>: one per
-            device, kept for up to 30 days. Each keeps the browser&apos;s name so you can tell your
-            devices apart in Setting, but never your IP address.
+            device, kept until you log out there or sign it out in Setting. Each keeps the
+            browser&apos;s name so you can tell your devices apart, but never your IP address.
           </li>
           <li>
             <strong className="font-semibold text-ink-primary">
@@ -93,8 +96,8 @@ export default function PrivacyPage() {
 
       <LegalSection id="cookies" title="Cookies and storage">
         <p>
-          When you log in we set one cookie that keeps you signed in. It can only be read by our
-          server, and it ends when you log out. Your browser&apos;s local storage holds a
+          When you log in we set one cookie that keeps you signed in (split in parts when it&apos;s
+          long). It can only be read by our server, and it ends when you log out. Your browser&apos;s local storage holds a
           guest&apos;s watch history, your last few searches (clear them from the search box) and
           small preferences. We use no advertising or tracking
           cookies.
@@ -107,8 +110,11 @@ export default function PrivacyPage() {
 
       <LegalSection title="Services we use">
         <ul className="list-disc pl-5">
-          <li>Hosting and a database, where the site and your account data live.</li>
-          <li>An email service, which sends our codes and notices.</li>
+          <li>Hosting for the site.</li>
+          <li>
+            Supabase, which holds our database and runs sign-in. It sends our codes and notices
+            through an email service.
+          </li>
           <li>Google, only if you choose to sign in with it.</li>
           <li>
             A crash reporting service, which gets a description of an error. It never gets IP
@@ -116,6 +122,12 @@ export default function PrivacyPage() {
           </li>
         </ul>
         <p>They handle data only to provide their service to us.</p>
+        <p>
+          Our own records never hold your IP address, but Supabase&apos;s service logs record the
+          address of each request to its sign-in service, and keep it for a few days for security
+          and troubleshooting. A two-step sign-in that isn&apos;t finished (a wrong or missing code)
+          also keeps the address it started from until Supabase clears it.
+        </p>
       </LegalSection>
 
       <LegalSection title="Your choices">

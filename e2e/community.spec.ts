@@ -57,7 +57,7 @@ test("members review a title under a nickname, report one, and a moderator hides
   await expect(reviews.getByText(`${body} Edited.`)).toBeVisible();
   const saved = () =>
     sql<{ body: string }>(
-      `SELECT r.body FROM review r JOIN "user" u ON u.id = r."userId" WHERE u.email = $1`,
+      `SELECT r.body FROM review r JOIN auth.users u ON u.id = r."userId" WHERE u.email = $1`,
       [author.email]
     );
   await expect.poll(saved).toEqual([{ body: `${body} Edited.` }]);
@@ -106,7 +106,7 @@ test("a shared list goes on Community Lists under a nickname, until a moderator 
   const listName = `E2E Community ${listId.slice(0, 8)}`;
   await sql(
     `INSERT INTO media_list (id, "userId", name, "isPublic", "updatedAt")
-     SELECT $2, id, $3, true, now() FROM "user" WHERE email = $1`,
+     SELECT $2, id, $3, true, now() FROM auth.users WHERE email = $1`,
     [owner.email, listId, listName]
   );
   await sql(

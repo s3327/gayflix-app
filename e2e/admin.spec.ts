@@ -120,25 +120,16 @@ test.describe("with the admin password", () => {
       await expect(resolved).toBeHidden();
     });
 
-    test("can use the admin API", async ({ page }) => {
-      const response = await page.request.get("/api/auth/admin/list-users");
-      expect(response.status()).toBe(200);
-    });
-
-    test("can't use the admin endpoints that skip the panel's rules", async ({ page }) => {
-      // Changing another account's email or role, or making an account,
-      // goes around src/lib/user-admin.ts, so these are switched off.
+    test("Better Auth's old endpoints are gone", async ({ page }) => {
+      // Accounts are Supabase Auth's; staff change them only through the
+      // panel's server functions (src/lib/admin-user-actions.ts).
       const { user } = accounts();
-      const [found] = await sql<{ id: string }>(`SELECT id FROM "user" WHERE email = $1`, [user.email]);
+      expect((await page.request.get("/api/auth/admin/list-users")).status()).toBe(404);
       const update = await page.request.post("/api/auth/admin/update-user", {
-        data: { userId: found.id, data: { email: "taken-over@e2e.example" } },
+        data: { userId: "x", data: { email: "taken-over@e2e.example" } },
       });
       expect(update.status()).toBe(404);
-      const create = await page.request.post("/api/auth/admin/create-user", {
-        data: { email: `e2e-created-${Date.now()}@e2e.example`, password: "e2e-password-1", name: "x", role: "admin" },
-      });
-      expect(create.status()).toBe(404);
-      expect(await sql(`SELECT email FROM "user" WHERE id = $1`, [found.id])).toEqual([{ email: user.email }]);
+      expect(await sql(`SELECT email FROM auth.users WHERE email = $1`, [user.email])).toEqual([{ email: user.email }]);
     });
   });
 

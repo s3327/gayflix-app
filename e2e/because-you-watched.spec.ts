@@ -29,7 +29,7 @@ async function addTitle(id: string, title: string, genres: string[], type = "mov
 async function addHistory(email: string, id: string, title: string, minutesAgo: number) {
   await sql(
     `INSERT INTO watch_history ("userId", "mediaId", entry, "watchedAt")
-     SELECT id, $2, $3::jsonb, now() - make_interval(mins => $4) FROM "user" WHERE email = $1`,
+     SELECT id, $2, $3::jsonb, now() - make_interval(mins => $4) FROM auth.users WHERE email = $1`,
     [
       email,
       id,

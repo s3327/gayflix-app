@@ -76,7 +76,7 @@ test("Clear All asks before emptying the history", async ({ browser, request }) 
   await createVerifiedAccount(request, account);
   await sql(
     `INSERT INTO watch_history ("userId", "mediaId", entry, "watchedAt")
-     SELECT id, 'chosen-family', $2::jsonb, now() FROM "user" WHERE email = $1`,
+     SELECT id, 'chosen-family', $2::jsonb, now() FROM auth.users WHERE email = $1`,
     [
       account.email,
       JSON.stringify({

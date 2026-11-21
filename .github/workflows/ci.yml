@@ -64,8 +64,8 @@ jobs:
     # Each shard runs its own Supabase local stack (the catalog, accounts,
     # roles), and has its own copy of the setup project's accounts.
     env:
-      # Only signs sessions in this CI database; not used anywhere else.
-      BETTER_AUTH_SECRET: ci-only-secret-for-the-throwaway-test-database
+      # Keys the hashed IPs and limits in this CI database only.
+      HASH_SECRET: ci-only-secret-for-the-throwaway-test-database
       # Imported posters' host, built into next/image's allowed hosts. The
       # e2e tests import from a stand-in TMDB (playwright.config.ts).
       IMAGE_HOSTS: image.tmdb.org

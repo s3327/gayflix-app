@@ -1,6 +1,10 @@
+import type { ExpressionBuilder } from "kysely";
 import { connection } from "next/server";
 import { findPublishedIds } from "@/lib/catalog";
+import { database } from "@/lib/database";
+import type { DB } from "@/lib/db-types";
 import { db } from "@/lib/db";
+import { countOf } from "@/lib/sql-helpers";
 import type { FavoriteEntry } from "@/lib/library-types";
 import { getSession } from "@/lib/session";
 
@@ -35,14 +39,30 @@ export type TitleReviews = {
   nickname: string | null;
 };
 
+/**
+ * Members' nicknames (member_profile) by account id. Accounts aren't in
+ * the Prisma schema (they're Supabase Auth's), so this is its own read.
+ */
+export async function memberNicknames(userIds: readonly string[]): Promise<Map<string, string>> {
+  const ids = [...new Set(userIds)];
+  if (ids.length === 0) return new Map();
+  const rows = await database
+    .selectFrom("member_profile")
+    .select(["userId", "nickname"])
+    .where("userId", "in", ids)
+    .execute();
+  return new Map(rows.map((row) => [row.userId, row.nickname]));
+}
+
 function toView(
-  row: { id: string; body: string; createdAt: Date; updatedAt: Date; userId: string; user: { profile: { nickname: string } | null } },
+  row: { id: string; body: string; createdAt: Date; updatedAt: Date; userId: string },
+  nicknames: Map<string, string>,
   viewerId: string | null
 ): ReviewView {
   return {
     id: row.id,
     // A review is only saved with a nickname, but one could be left from a removed profile.
-    nickname: row.user.profile?.nickname ?? "A member",
+    nickname: nicknames.get(row.userId) ?? "A member",
     body: row.body,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -57,7 +77,6 @@ const REVIEW_SELECT = {
   updatedAt: true,
   userId: true,
   hiddenAt: true,
-  user: { select: { profile: { select: { nickname: true } } } },
 } as const;
 
 /** The reviews on a (published) title's page, and the viewer's own. */
@@ -79,10 +98,11 @@ export async function listTitleReviews(mediaId: string): Promise<TitleReviews> {
       : null,
     viewerId ? db.memberProfile.findUnique({ where: { userId: viewerId }, select: { nickname: true } }) : null,
   ]);
+  const nicknames = await memberNicknames([...rows, ...(mine ? [mine] : [])].map((row) => row.userId));
   return {
-    reviews: rows.map((row) => toView(row, viewerId)),
+    reviews: rows.map((row) => toView(row, nicknames, viewerId)),
     total,
-    mine: mine ? { ...toView(mine, viewerId), hidden: mine.hiddenAt !== null } : null,
+    mine: mine ? { ...toView(mine, nicknames, viewerId), hidden: mine.hiddenAt !== null } : null,
     nickname: profile?.nickname ?? null,
   };
 }
@@ -112,13 +132,22 @@ export type CommunityList = {
 
 export const COMMUNITY_PAGE_SIZE = 24;
 
-/** Which lists Community Lists may show: shared, put there by their owner, not taken off. */
-export const COMMUNITY_WHERE = {
-  isPublic: true,
-  inCommunity: true,
-  communityBlocked: false,
-  user: { profile: { isNot: null } },
-} as const;
+/**
+ * Which lists Community Lists may show: shared, put there by their owner,
+ * not taken off, and owned by a member with a nickname (the join).
+ */
+function communityLists() {
+  return database
+    .selectFrom("media_list as l")
+    .innerJoin("member_profile as p", "p.userId", "l.userId")
+    .where("l.isPublic", "=", true)
+    .where("l.inCommunity", "=", true)
+    .where("l.communityBlocked", "=", false);
+}
+
+/** The list has at least one title. */
+const hasItems = (eb: ExpressionBuilder<DB & { l: DB["media_list"] }, "l">) =>
+  eb.exists(eb.selectFrom("list_item as i").select("i.listId").whereRef("i.listId", "=", "l.id"));
 
 /**
  * One page of Community Lists, most recently changed first. Titles that
@@ -126,31 +155,41 @@ export const COMMUNITY_WHERE = {
  */
 export async function listCommunityLists(requestedPage: number) {
   await connection();
-  const total = await db.mediaList.count({ where: { ...COMMUNITY_WHERE, items: { some: {} } } });
+  const total = countOf(
+    await communityLists()
+      .where(hasItems)
+      .select((eb) => eb.fn.countAll().as("count"))
+      .executeTakeFirstOrThrow()
+  );
   const totalPages = Math.max(1, Math.ceil(total / COMMUNITY_PAGE_SIZE));
   const page = Math.min(Math.max(1, requestedPage), totalPages);
-  const rows = await db.mediaList.findMany({
-    where: { ...COMMUNITY_WHERE, items: { some: {} } },
-    orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-    skip: (page - 1) * COMMUNITY_PAGE_SIZE,
-    take: COMMUNITY_PAGE_SIZE,
-    select: {
-      id: true,
-      name: true,
-      user: { select: { profile: { select: { nickname: true } } } },
-      items: { orderBy: { addedAt: "asc" }, select: { mediaId: true, entry: true } },
-    },
-  });
-  const published = await findPublishedIds(rows.flatMap((row) => row.items.map((item) => item.mediaId)));
+  const rows = await communityLists()
+    .where(hasItems)
+    .select(["l.id", "l.name", "p.nickname"])
+    .orderBy("l.updatedAt", "desc")
+    .orderBy("l.id", "asc")
+    .offset((page - 1) * COMMUNITY_PAGE_SIZE)
+    .limit(COMMUNITY_PAGE_SIZE)
+    .execute();
+  const items =
+    rows.length === 0
+      ? []
+      : await database
+          .selectFrom("list_item")
+          .select(["listId", "mediaId", "entry"])
+          .where("listId", "in", rows.map((row) => row.id))
+          .orderBy("addedAt", "asc")
+          .execute();
+  const published = await findPublishedIds(items.map((item) => item.mediaId));
   const lists: CommunityList[] = rows
     .map((row) => {
-      const items = row.items.filter((item) => published.has(item.mediaId));
+      const shown = items.filter((item) => item.listId === row.id && published.has(item.mediaId));
       return {
         id: row.id,
         name: row.name,
-        nickname: row.user.profile?.nickname ?? "A member",
-        count: items.length,
-        covers: items.slice(0, 4).map((item) => item.entry as FavoriteEntry),
+        nickname: row.nickname,
+        count: shown.length,
+        covers: shown.slice(0, 4).map((item) => item.entry as FavoriteEntry),
       };
     })
     .filter((list) => list.count > 0);
@@ -160,9 +199,6 @@ export async function listCommunityLists(requestedPage: number) {
 /** Who made a list, by nickname, when it's on Community Lists; else null. */
 export async function getCommunityOwner(listId: string): Promise<string | null> {
   await connection();
-  const list = await db.mediaList.findFirst({
-    where: { id: listId, ...COMMUNITY_WHERE },
-    select: { user: { select: { profile: { select: { nickname: true } } } } },
-  });
-  return list?.user.profile?.nickname ?? null;
+  const list = await communityLists().select("p.nickname").where("l.id", "=", listId).executeTakeFirst();
+  return list?.nickname ?? null;
 }

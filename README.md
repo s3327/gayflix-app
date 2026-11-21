@@ -3,7 +3,7 @@
 LGBTQ+ films and series, picked by the community. This is the web app:
 the public site and the admin panel, deployed as one Next.js app.
 
-**Status:** accounts are real (Better Auth on Supabase Postgres: sign-up
+**Status:** accounts are real (Supabase Auth: sign-up
 with an emailed code, login, password reset, Google sign-in, signing
 out other devices, deleting the account, admin roles), and favorites, lists, watch history and reports are stored in
 the database. So is the catalog, which starts out as a sample catalog of
@@ -19,7 +19,8 @@ has to change before launch.
 - Fonts self-hosted with `next/font`: **Baloo 2** (display) and **Inter** (body)
 - **Prisma ORM 7** on **Supabase** Postgres (any Postgres locally), through
   the `pg` driver adapter
-- **Better Auth** for accounts, sessions and roles
+- **Supabase Auth** for accounts and sessions (called only from the
+  server); roles in the site's own `profile` table
 - **Vitest** for unit tests, **Playwright** + axe for end-to-end and
   accessibility tests, **ESLint 9** (flat config) with `eslint-config-next`
 
@@ -36,14 +37,13 @@ npm install                  # also generates the Prisma client
 cp .env.example .env.local   # set DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL,
                              # SUPABASE_PUBLISHABLE_KEY and SUPABASE_SECRET_KEY
                              # from the status output (the secret key stays
-                             # server-only), and BETTER_AUTH_SECRET
-                             # (openssl rand -base64 32)
+                             # server-only)
 npm run db:deploy            # "No pending migrations." (start applied them)
 npm run dev
 ```
 
-Sign up at http://localhost:3000/signup. Without an email provider, the
-verification code is printed in the `npm run dev` terminal. To make that
+Sign up at http://localhost:3000/signup. The verification code arrives
+in the local stack's Mailpit, http://127.0.0.1:54424. To make that
 account an admin:
 
 ```bash
@@ -90,10 +90,8 @@ dependency update PRs.
 | `DATABASE_URL` | **Required.** Postgres connection string. In production, Supabase's transaction pooler (port 6543). |
 | `DIRECT_URL` | Production, for migrations: Supabase's session pooler (port 5432). Locally, leave it empty and `DATABASE_URL` is used. |
 | `DATABASE_CA_CERT` | Production: Supabase's SSL certificate (PEM text), so the database's identity is verified. |
-| `BETTER_AUTH_SECRET` | **Required.** Signs session cookies (`openssl rand -base64 32`). |
-| `BETTER_AUTH_URL` | The site's public URL. Defaults to `SITE_URL` / Vercel's production domain. |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in. Redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`. |
-| `RESEND_API_KEY`, `EMAIL_FROM` | **Required in production.** Sends verification codes and reset links through Resend. In development, emails print to the server console. |
+| `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` | **Required.** The Supabase project's API URL and keys, for Supabase Auth. The keys are server-only. Google sign-in, SMTP (Resend) and the email templates are set in Supabase itself (docs/DEPLOYMENT.md, Parts 4 and 8). |
+| `HASH_SECRET` | **Required in production.** Keys the one-way hashes of IP addresses (views, report and sign-in limits; `openssl rand -base64 32`). |
 | `ADMIN_BASIC_AUTH_USER`, `ADMIN_BASIC_AUTH_PASSWORD` | Optional extra password in front of `/admin`. Admin pages always need an admin account with two-factor; set both of these for a second lock, or neither. Setting only one disables the panel (503). |
 | `SITE_URL` | Public origin for `sitemap.xml`, `robots.txt` and metadata URLs, read at build time. Optional on Vercel, which defaults to the production domain. |
 | `IMAGE_HOSTS` | Optional. Hosts that posters and backdrops may come from besides `picsum.photos`, comma-separated (`images.example.com,cdn.example.org`). Read at build time, so redeploy after changing it. |
@@ -111,14 +109,15 @@ day-to-day operations and troubleshooting, is in
 2. Create a Supabase project and add its transaction pooler string as
    `DATABASE_URL`, its session pooler string as `DIRECT_URL` and its SSL
    certificate as `DATABASE_CA_CERT` (Part 3 of the walkthrough).
-3. Under **Settings → Environment Variables**, add `BETTER_AUTH_SECRET`
-   and `RESEND_API_KEY`, plus `EMAIL_FROM` with an address on a domain
-   you've verified in Resend. Without `EMAIL_FROM`, emails come from
-   Resend's test address, which only delivers to your own Resend account's
-   email. Add any of the optional variables above too.
+3. Under **Settings → Environment Variables**, add `HASH_SECRET` and
+   Supabase's `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` and
+   `SUPABASE_SECRET_KEY`. Set up Supabase Auth in its dashboard: SMTP
+   through Resend, the templates in `supabase/templates`, the two hooks,
+   the redirect URL `https://<site>/auth/callback` (Part 4 of the
+   walkthrough). Add any of the optional variables above too.
 4. Deploy. `vercel.json` runs `scripts/vercel-build.sh`, which stops a
-   production build if `DATABASE_URL`, `BETTER_AUTH_SECRET` or
-   `RESEND_API_KEY` is missing (and, on Supabase, `DIRECT_URL` or
+   production build if `DATABASE_URL`, `HASH_SECRET` or a Supabase
+   variable is missing (and, on Supabase, `DIRECT_URL` or
    `DATABASE_CA_CERT`), then applies pending migrations before
    building. Preview deploys skip both steps, since they usually share the
    production database, so a pull request that changes the schema only
@@ -126,7 +125,7 @@ day-to-day operations and troubleshooting, is in
 5. Sign up on the live site, then make that account an admin: run
    `npm run make-admin -- you@example.com` with `DATABASE_URL` set to the
    production connection string, or set its `role` to `admin` in the
-   `user` table with Supabase's Table Editor.
+   `profile` table with Supabase's SQL Editor.
 6. Log in at `/admin/login` and set up two-factor.
 
 ## Architecture
@@ -153,7 +152,7 @@ src/
                            reports/ is the queue of "Report an issue" submissions;
                            users/ finds accounts, sets admins, bans and signs out)
       setup-2fa/         → where a new admin turns on two-factor
-    api/auth/            → Better Auth (sign-up, sign-in, codes, reset, sessions)
+    auth/callback/       → where Google sign-in comes back (Supabase Auth)
     api/search/          → header search suggestions (catalog stays server-side)
     login/, signup/, verify-email/, forgot-password/, reset-password/
     robots.ts, sitemap.ts, icon.png, not-found.tsx, error.tsx
@@ -166,20 +165,21 @@ src/
     admin-user*.ts       → the Users page's reads (admin-users.ts) and server
                            functions (admin-user-actions.ts); user-admin.ts
                            holds the rules (nobody changes their own account)
-    auth.ts              → Better Auth config (server only)
-    auth-client.ts       → browser auth calls
+    auth-actions.ts      → sign-up, sign-in and reset (Supabase Auth, server only)
     session.ts           → getSession / requireUser / requireAdmin (server only)
     db.ts                → the Prisma client (server only)
-    email.ts             → transactional email (Resend, or console in dev)
     library*.ts          → favorites, lists and history: loading (library.ts),
                            server functions (library-actions.ts), input checks
     report*.ts           → reports and their daily limits
     view*.ts             → counting views for Trending (once per person per
                            title per day); visitor.ts hashes IPs and accounts
   generated/prisma/      → Prisma client (generated on npm install; not committed)
-prisma/                  → schema.prisma and migrations (one of them loads
-                           the sample catalog)
+prisma/                  → schema.prisma (the Prisma client's view of the tables)
+supabase/                → migrations (one of them loads the sample catalog),
+                           the local stack's config.toml, email templates
 scripts/make-admin.mjs   → grant or revoke the admin role
+scripts/move-accounts-to-supabase.mjs → one-off move from Better Auth
+                           (docs/SUPABASE_CUTOVER.md)
 scripts/vercel-build.sh  → Vercel's build command: migrations, then the build
 vercel.json              → points Vercel at that build command
 e2e/                     → Playwright end-to-end, keyboard and axe accessibility tests
@@ -218,11 +218,10 @@ docs/                    → design notes (build log) and the audit plan
   server actions or `/api`, so each of those checks for itself, and
   validates its input, since anyone can call it with any arguments.
   `useAuth()` in client components is for display only.
-- **Schema changes:** edit `prisma/schema.prisma`, run `npm run db:migrate
-  -- --name <change>`, commit the migration, then `npx prisma generate`
-  (Prisma 7 no longer generates on migrate). After changing Better Auth
-  plugins, regenerate its models first:
-  `npx auth@1.7.7 generate --config src/lib/auth.ts`.
+- **Schema changes:** write a new SQL file in `supabase/migrations/`
+  (a new table also enables row-level security), apply it with
+  `npm run db:deploy`, then `npm run db:types`; while Prisma remains,
+  mirror it in `prisma/schema.prisma` and run `npx prisma generate`.
 - **Third-party origins.** Images load through `next/image`, so a new
   image host only needs adding to `IMAGE_HOSTS` (`src/lib/image-hosts.mjs`).
   Anything the browser loads directly, such as a video embed, needs adding

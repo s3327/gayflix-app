@@ -25,7 +25,7 @@ export type AdminUser = {
   banned: boolean;
   /** When the ban ends, or null for none or a ban until unbanned. */
   banExpires: Date | null;
-  /** Why it was banned (`profile.ban_reason`, only admins see it), or null. */
+  /** Why it was banned (`profile."banReason"`, only admins see it), or null. */
   banReason: string | null;
   createdAt: Date;
   lastSignInAt: Date | null;
@@ -46,7 +46,7 @@ type UserRow = {
 const USER_COLUMNS = sql`
   u.id, COALESCE(u.email, '') AS email, NULLIF(btrim(u.raw_user_meta_data->>'name'), '') AS name, p.role,
   u.email_confirmed_at IS NOT NULL AS "emailVerified", u.banned_until AS "bannedUntil",
-  p.ban_reason AS "banReason", u.created_at AS "createdAt", u.last_sign_in_at AS "lastSignInAt"
+  p."banReason", u.created_at AS "createdAt", u.last_sign_in_at AS "lastSignInAt"
 `;
 
 function toUser(row: UserRow, now = Date.now()): AdminUser {
@@ -146,7 +146,7 @@ export async function findAccountByEmail(email: string, executor: Kysely<DB> = d
 
 /** Keeps why an account was banned, for admins only (null clears it). Never in the user's metadata. */
 export async function setBanReason(id: string, reason: string | null, executor: Kysely<DB> = database) {
-  await executor.updateTable("profile").set({ ban_reason: reason }).where("id", "=", id).execute();
+  await executor.updateTable("profile").set({ banReason: reason }).where("id", "=", id).execute();
 }
 
 /** The two roles that can change roles; the panel always keeps one of them. */
@@ -210,4 +210,21 @@ async function changeRoleIn(
 
   await trx.updateTable("profile").set({ role: newRole }).where("id", "=", targetId).execute();
   return { ok: true, previousRole: target.role };
+}
+
+/**
+ * Each account's email (auth.users) by id, for staff pages that name the
+ * account behind a report or a review. Ids that aren't accounts are left
+ * out. Callers have called requireAdmin().
+ */
+export async function accountEmails(
+  ids: readonly (string | null)[],
+  executor: Kysely<DB> | Transaction<DB> = database
+): Promise<Map<string, string>> {
+  const wanted = [...new Set(ids)].filter(isUserId);
+  if (wanted.length === 0) return new Map();
+  const { rows } = await sql<{ id: string; email: string }>`
+    SELECT id, COALESCE(email, '') AS email FROM auth.users WHERE id = ANY(${wanted}::uuid[])
+  `.execute(executor);
+  return new Map(rows.map((row) => [row.id, row.email]));
 }

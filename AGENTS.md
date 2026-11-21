@@ -18,7 +18,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   `src/proxy.ts` can also put an optional password gate in front.
 - **Database:** Supabase Postgres with Prisma ORM 7.x (moved from Prisma
   Postgres 2026-11-20), through `@prisma/adapter-pg`. The site uses only
-  the Postgres connection, never supabase-js or Supabase's Data API:
+  the Postgres connection for data, never Supabase's Data API (supabase-js
+  only calls Auth, from the server):
   `DATABASE_URL` is the transaction pooler (runtime), `DIRECT_URL` the
   session pooler (migrations, `prisma.config.ts`), and TLS settings come
   from `src/lib/database-config.mjs`. Every table has row-level security
@@ -33,10 +34,19 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   `supabase/migrations/`, applied with `npm run db:deploy`. Integration
   tests (`*.integration.test.ts`) run when `TEST_DATABASE_URL` is set, and
   wrap their work in `withRollback()` (`src/test/database.ts`).
-- **Accounts:** Better Auth (`src/lib/auth.ts`). Server code reads the
-  session with `getSession()` / `requireUser()`; never trust client state
-  for access decisions. Two-factor sign-in is optional for members (Account
-  → Setting) and for staff (by default; enforce with ADMIN_REQUIRE_2FA=true).
+- **Accounts:** Supabase Auth (`auth.users`), called only from the server
+  (server actions and route handlers in `src/lib/auth-actions.ts`,
+  `two-factor-actions.ts`, `account-actions.ts`, `admin-user-actions.ts`);
+  the browser never talks to Supabase, and `SUPABASE_SECRET_KEY` is
+  server-only. Each account's role lives in `profile.role` (read from the
+  database for admin checks, never from the token). Server code reads the
+  session with `getSession()` / `requireUser()` (`src/lib/session.ts`);
+  never trust client state for access decisions. Member data references
+  `auth.users(id)` and goes with the account; reports and audit columns
+  keep their rows with the id set to NULL. IPs are hashed with
+  `keyedHash()` (`src/lib/visitor.ts`, `HASH_SECRET`). Two-factor sign-in
+  is optional for members (Account → Setting) and for staff (by default;
+  enforce with ADMIN_REQUIRE_2FA=true).
 - **Server functions** (`"use server"` files such as
   `src/lib/library-actions.ts` and `src/lib/report-actions.ts`) check the
   session and validate every argument themselves; list functions also

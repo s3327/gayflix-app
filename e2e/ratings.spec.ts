@@ -1,4 +1,4 @@
-import { createVerifiedAccount, newAccount, sql } from "./accounts";
+import { createAuthUser, createVerifiedAccount, deleteAuthUsers, newAccount, sql } from "./accounts";
 import { expect, guestPage, seriousViolations, signedInPage, test } from "./fixtures";
 
 /*
@@ -27,7 +27,7 @@ async function addTitle(id: string, title: string, genres: string[]) {
 async function ratingsOf(email: string) {
   return sql<{ mediaId: string; value: string }>(
     `SELECT r."mediaId", r.value::text AS value FROM media_rating r
-     JOIN "user" u ON u.id = r."userId" WHERE u.email = $1 ORDER BY r."mediaId"`,
+     JOIN auth.users u ON u.id = r."userId" WHERE u.email = $1 ORDER BY r."mediaId"`,
     [email]
   );
 }
@@ -87,13 +87,9 @@ test("a title most members like is marked Most liked", async ({ browser }) => {
   const uid = uniqueId();
   const id = `e2e-ratings-liked-${uid}`;
   await addTitle(id, `E2E Liked ${uid}`, ["Drama"]);
-  const users = [1, 2, 3, 4, 5, 6].map((n) => `e2e-ratings-${n}-${uid}`);
-  for (const user of users) {
-    await sql(
-      `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
-       VALUES ($1, 'E2E Rater', $1 || '@example.test', true, now(), now())`,
-      [user]
-    );
+  const users: string[] = [];
+  for (const n of [1, 2, 3, 4, 5, 6]) {
+    users.push(await createAuthUser(`e2e-ratings-${n}-${uid}@example.test`, "E2E Rater"));
   }
   const rateAs = (user: string, value: string) =>
     sql(
@@ -123,7 +119,7 @@ test("a title most members like is marked Most liked", async ({ browser }) => {
     await expect(badge).toHaveCount(0);
   } finally {
     await sql(`DELETE FROM media WHERE id = $1`, [id]);
-    await sql(`DELETE FROM "user" WHERE id = ANY($1)`, [users]);
+    await deleteAuthUsers(users);
   }
 });
 
@@ -164,7 +160,7 @@ test("Because You Watched follows what a member loved, never what was not for th
     await rate(disliked, "Not for me");
     await sql(
       `INSERT INTO watch_history ("userId", "mediaId", entry, "watchedAt")
-       SELECT id, $2, $3::jsonb, now() FROM "user" WHERE email = $1`,
+       SELECT id, $2, $3::jsonb, now() FROM auth.users WHERE email = $1`,
       [
         account.email,
         disliked.id,

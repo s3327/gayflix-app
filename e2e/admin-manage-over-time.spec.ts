@@ -1,4 +1,4 @@
-import { ADMIN_STATE, sql } from "./accounts";
+import { ADMIN_STATE, createAuthUser, deleteAuthUsers, sql } from "./accounts";
 import { ADMIN_CREDENTIALS, expect, test } from "./fixtures";
 
 /*
@@ -256,20 +256,11 @@ test.describe("Phase 4: Manage Over Time", () => {
 
   test("user management RBAC role assignment and profile update", async ({ page }) => {
     const uid = uniqueId();
-    const cleanId = `e2eu${uid.replace(/[^a-zA-Z0-9]/g, "")}`.padEnd(24, "0").slice(0, 32);
-    const testUser = {
-      id: cleanId,
-      name: `E2E Test User ${uid}`,
-      email: `testuser-${uid}@example.com`,
-    };
+    const name = `E2E Test User ${uid}`;
+    // 1. A confirmed account with role 'user'
+    const testUser = { id: await createAuthUser(`testuser-${uid}@example.com`, name), name };
 
     try {
-      // 1. Insert test user with role 'user'
-      await sql(
-        `INSERT INTO "user" (id, name, email, "emailVerified", role, "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, true, 'user', now(), now())`,
-        [testUser.id, testUser.name, testUser.email]
-      );
 
       // 2. Visit user page
       await page.goto(`/admin/users/${testUser.id}`);
@@ -296,13 +287,13 @@ test.describe("Phase 4: Manage Over Time", () => {
 
       // Verify DB updated
       const [dbUser] = await sql<{ role: string }>(
-        `SELECT role FROM "user" WHERE id = $1`,
+        `SELECT role FROM profile WHERE id = $1`,
         [testUser.id]
       );
       expect(dbUser.role).toBe("editor");
     } finally {
       await sql(`DELETE FROM activity_log WHERE "entityId" = $1`, [testUser.id]);
-      await sql(`DELETE FROM "user" WHERE id = $1`, [testUser.id]);
+      await deleteAuthUsers([testUser.id]);
     }
   });
 });
