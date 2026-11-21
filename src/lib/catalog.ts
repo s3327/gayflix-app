@@ -1,12 +1,12 @@
 import { stripHtmlAndEntities } from "@/lib/sanitize-text";
 import { connection } from "next/server";
 import { cache } from "react";
-import type { Kysely } from "kysely";
+import type { Kysely, SelectQueryBuilder } from "kysely";
+import { sql } from "kysely";
 import { jsonArrayFrom, jsonObjectFrom } from "kysely/helpers/postgres";
-import { Prisma } from "@/generated/prisma/client";
 import { database } from "@/lib/database";
-import { db } from "@/lib/db";
 import type { DB } from "@/lib/db-types";
+import { countOf } from "@/lib/sql-helpers";
 import { isMediaId } from "@/lib/library-types";
 import type {
   Episode,
@@ -52,7 +52,6 @@ import { isFinished } from "@/lib/watch-progress";
  *   migrated, and preview deploys may have no database at all.
  */
 
-const PUBLISHED = { status: "published" } as const;
 
 /** Home rows and "You Might Also Like" (listRecommendations). */
 const ROW_SIZE = 12;
@@ -63,50 +62,24 @@ const CONTINUE_WATCHING_SIZE = 6;
 export const TRENDING_SIZE = 100;
 export const LIBRARY_PAGE_SIZE = 50;
 
-const ORDER = {
-  /**
-   * Newest on the site first: Recently Added, /movie, /series, their home
-   * rows and Browse. Editing a title doesn't move it.
-   */
-  added: [{ publishedAt: "desc" }, { id: "desc" }],
-  /** Browse's other sorts: most viewed of all time, newest release, A to Z. */
-  popular: [{ viewCount: "desc" }, { publishedAt: "desc" }, { id: "desc" }],
-  released: [{ year: "desc" }, { releaseDate: { sort: "desc", nulls: "last" } }, { id: "desc" }],
-  title: [{ title: "asc" }, { id: "asc" }],
-} satisfies Record<string, Prisma.MediaOrderByWithRelationInput[]>;
+export type TitleSort = "added" | "popular" | "released" | "title";
 
-export type TitleSort = keyof typeof ORDER;
-
-const EPISODE_ORDER = [
-  { seasonNumber: "asc" },
-  { episodeNumber: "asc" },
-] satisfies Prisma.EpisodeOrderByWithRelationInput[];
-
-/** A movie's or an episode's video sources: the player's tab order. */
-const VIDEO_ORDER = [
-  { position: "asc" },
-  { id: "asc" },
-] satisfies Prisma.VideoSourceOrderByWithRelationInput[];
-
-/** What a card needs (see Media). */
-const CARD = {
-  id: true,
-  type: true,
-  title: true,
-  year: true,
-  duration: true,
-  genres: true,
-  posterUrl: true,
-  gradient: true,
-  category: true,
-  createdAt: true,
-  publishedAt: true,
-} satisfies Prisma.MediaSelect;
-
-type CardRow = Prisma.MediaGetPayload<{ select: typeof CARD }>;
+type CardRow = {
+  id: string;
+  type: MediaType;
+  title: string;
+  year: number;
+  duration: string;
+  genres: string[] | null;
+  posterUrl: string;
+  gradient: string | null;
+  category: string | null;
+  createdAt: Date | string;
+  publishedAt: Date | string | null;
+};
 
 /** CARD for raw queries, which get the same row shape back. */
-const CARD_COLUMNS = Prisma.sql`id, type::text AS type, title, year, duration, genres, "posterUrl", gradient, "createdAt", "publishedAt", category`;
+const CARD_COLUMNS_SQL = sql`id, type::text AS type, title, year, duration, genres, "posterUrl", gradient, "createdAt", "publishedAt", category`;
 
 // Dates are stored as calendar days (UTC midnight), so they're shown in UTC.
 const longDate = new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeZone: "UTC" });
@@ -122,8 +95,8 @@ function toMedia(
         duration: string;
         genres: string[] | null;
         posterUrl: string;
-        gradient: string | null;
-        category: string | null;
+        gradient?: string | null;
+        category?: string | null;
         createdAt: Date | string;
         publishedAt?: Date | string | null;
       }
@@ -147,35 +120,80 @@ function toMedia(
   };
 }
 
-function toEpisode(row: Prisma.EpisodeModel): Episode {
+function toEpisode(row: {
+  id: string;
+  title: string;
+  seasonNumber: number;
+  episodeNumber: number;
+  duration: string;
+  airDate?: Date | string | null;
+  stillUrl?: string | null;
+  synopsis?: string | null;
+}): Episode {
+  const airDate = row.airDate
+    ? row.airDate instanceof Date
+      ? row.airDate
+      : new Date(row.airDate)
+    : undefined;
   return {
     id: row.id,
     title: row.title,
     seasonNumber: row.seasonNumber,
     episodeNumber: row.episodeNumber,
     duration: row.duration,
-    airDate: row.airDate ? longDate.format(row.airDate) : undefined,
+    airDate: airDate ? longDate.format(airDate) : undefined,
     stillUrl: row.stillUrl ?? undefined,
     synopsis: row.synopsis ? stripHtmlAndEntities(row.synopsis) : undefined,
   };
 }
 
-type DetailRow = Prisma.MediaGetPayload<{ include: { episodes: true } }>;
-
-function toDetail(row: DetailRow): MediaDetail {
+function toDetail(row: {
+  id: string;
+  type: MediaType;
+  title: string;
+  year: number;
+  duration: string;
+  genres: string[] | null;
+  country?: string | null;
+  language?: string | null;
+  synopsis?: string | null;
+  tagline?: string | null;
+  rating?: number | null;
+  director?: string | null;
+  creator?: string | null;
+  cast?: string[] | null;
+  tags?: string[] | null;
+  releaseDate?: Date | string | null;
+  runtimeMinutes?: number | null;
+  posterUrl: string;
+  backdropUrl?: string | null;
+  trailerUrl?: string | null;
+  gradient?: string | null;
+  category?: string | null;
+  maturityRating?: string | null;
+  contentNotes?: string[] | null;
+  createdAt: Date | string;
+  publishedAt?: Date | string | null;
+  episodes?: Parameters<typeof toEpisode>[0][];
+}): MediaDetail {
+  const releaseDate = row.releaseDate
+    ? row.releaseDate instanceof Date
+      ? row.releaseDate
+      : new Date(row.releaseDate)
+    : undefined;
   return {
     ...toMedia(row),
     genres: row.genres ?? [],
-    country: row.country,
-    language: row.language,
-    synopsis: stripHtmlAndEntities(row.synopsis),
+    country: row.country ?? "",
+    language: row.language ?? "",
+    synopsis: stripHtmlAndEntities(row.synopsis ?? ""),
     tagline: row.tagline ?? undefined,
     rating: row.rating ?? undefined,
     director: row.director ?? undefined,
     creator: row.creator ?? undefined,
     cast: row.cast ?? [],
     tags: row.tags ?? [],
-    releaseDate: row.releaseDate ? longDate.format(row.releaseDate) : undefined,
+    releaseDate: releaseDate ? longDate.format(releaseDate) : undefined,
     runtimeMinutes: row.runtimeMinutes ?? undefined,
     backdropUrl: row.backdropUrl ?? undefined,
     trailerUrl: row.trailerUrl ?? undefined,
@@ -185,13 +203,55 @@ function toDetail(row: DetailRow): MediaDetail {
   };
 }
 
+function applyOrder<O>(
+  query: SelectQueryBuilder<DB, "media", O>,
+  sort: TitleSort
+): SelectQueryBuilder<DB, "media", O> {
+  switch (sort) {
+    case "added":
+      return query.orderBy("publishedAt", "desc").orderBy("id", "desc");
+    case "popular":
+      return query.orderBy("viewCount", "desc").orderBy("publishedAt", "desc").orderBy("id", "desc");
+    case "released":
+      return query
+        .orderBy("year", "desc")
+        .orderBy(sql`"releaseDate" DESC NULLS LAST`)
+        .orderBy("id", "desc");
+    case "title":
+      return query.orderBy("title", "asc").orderBy("id", "asc");
+  }
+}
+
 async function cards(
-  where: Prisma.MediaWhereInput,
-  orderBy: Prisma.MediaOrderByWithRelationInput[],
-  take: number
+  filter: { status?: MediaStatus; type?: MediaType },
+  order: TitleSort,
+  take: number,
+  executor: Kysely<DB> = database
 ): Promise<Media[]> {
-  const rows = await db.media.findMany({ where, orderBy, take, select: CARD });
-  return rows.map(toMedia);
+  let query = executor
+    .selectFrom("media")
+    .select([
+      "id",
+      "type",
+      "title",
+      "year",
+      "duration",
+      "genres",
+      "posterUrl",
+      "gradient",
+      "category",
+      "createdAt",
+      "publishedAt",
+    ])
+    .where("status", "=", filter.status ?? "published")
+    .where("trashedAt", "is", null);
+
+  if (filter.type) {
+    query = query.where("type", "=", filter.type);
+  }
+
+  const rows = await applyOrder(query, order).limit(take).execute();
+  return rows.map((r) => toMedia(r as CardRow));
 }
 
 /**
@@ -199,17 +259,19 @@ async function cards(
  * days (src/lib/views.ts), most first; ties go to the most viewed of all
  * time. Titles nobody played in that time aren't trending.
  */
-async function trendingRows(limit: number) {
-  return db.$queryRaw<(CardRow & { views: number })[]>`
-    SELECT ${CARD_COLUMNS}, views FROM media
+async function trendingRows(limit: number, executor: Kysely<DB> = database) {
+  const sinceDate = trendingSince(new Date());
+  const { rows } = await sql<CardRow & { views: number }>`
+    SELECT ${CARD_COLUMNS_SQL}, views FROM media
     JOIN (
       SELECT "mediaId" AS id, count(*)::int AS views FROM media_view
-      WHERE day >= ${trendingSince(new Date())}::date
+      WHERE day >= ${sinceDate}::date
       GROUP BY "mediaId"
     ) recent USING (id)
     WHERE status = 'published' AND "trashedAt" IS NULL
     ORDER BY views DESC, "viewCount" DESC, id
-    LIMIT ${limit}`;
+    LIMIT ${limit}`.execute(executor);
+  return rows;
 }
 
 // --- Home ------------------------------------------------------------------
@@ -218,16 +280,31 @@ async function trendingRows(limit: number) {
 export type Featured = Media & { synopsis: string; backdropUrl?: string };
 
 /** The currently active home page hero (the featured published title or fallback newest). */
-export async function getLiveHero(): Promise<{ id: string; title: string; type: MediaType } | null> {
+export async function getLiveHero(
+  executor: Kysely<DB> = database
+): Promise<{ id: string; title: string; type: MediaType } | null> {
   await connection();
-  const heroSelect = { id: true, title: true, type: true } satisfies Prisma.MediaSelect;
-  const featured = await db.media.findFirst({
-    where: { ...PUBLISHED, featured: true },
-    orderBy: ORDER.added,
-    select: heroSelect,
-  });
+  const featured = await executor
+    .selectFrom("media")
+    .select(["id", "title", "type"])
+    .where("status", "=", "published")
+    .where("trashedAt", "is", null)
+    .where("featured", "=", true)
+    .orderBy("publishedAt", "desc")
+    .orderBy("id", "desc")
+    .executeTakeFirst();
   if (featured) return featured;
-  return db.media.findFirst({ where: PUBLISHED, orderBy: ORDER.added, select: heroSelect });
+
+  const fallback = await executor
+    .selectFrom("media")
+    .select(["id", "title", "type"])
+    .where("status", "=", "published")
+    .where("trashedAt", "is", null)
+    .orderBy("publishedAt", "desc")
+    .orderBy("id", "desc")
+    .executeTakeFirst();
+
+  return fallback ?? null;
 }
 
 /** How many titles the home page hero turns through. */
@@ -241,40 +318,69 @@ const HERO_SIZE = 5;
  * else the newest), then turns through up to four more that have a
  * backdrop: this week's most watched first, then the newest.
  */
-export async function getHome() {
+export async function getHome(executor: Kysely<DB> = database) {
   await connection();
-  const heroSelect = { ...CARD, synopsis: true, backdropUrl: true } satisfies Prisma.MediaSelect;
+  const heroSelect = [
+    "id",
+    "type",
+    "title",
+    "year",
+    "duration",
+    "genres",
+    "posterUrl",
+    "gradient",
+    "category",
+    "createdAt",
+    "publishedAt",
+    "synopsis",
+    "backdropUrl",
+  ] as const;
+
   const [featured, topTen, newReleases, movies, series] = await Promise.all([
-    db.media.findFirst({
-      where: { ...PUBLISHED, featured: true },
-      orderBy: ORDER.added,
-      select: heroSelect,
-    }),
-    trendingRows(TOP_TEN_SIZE),
-    cards(PUBLISHED, ORDER.added, ROW_SIZE),
-    cards({ ...PUBLISHED, type: "movie" }, ORDER.added, ROW_SIZE),
-    cards({ ...PUBLISHED, type: "series" }, ORDER.added, ROW_SIZE),
+    executor
+      .selectFrom("media")
+      .select(heroSelect)
+      .where("status", "=", "published")
+      .where("trashedAt", "is", null)
+      .where("featured", "=", true)
+      .orderBy("publishedAt", "desc")
+      .orderBy("id", "desc")
+      .executeTakeFirst(),
+    trendingRows(TOP_TEN_SIZE, executor),
+    cards({ status: "published" }, "added", ROW_SIZE, executor),
+    cards({ status: "published", type: "movie" }, "added", ROW_SIZE, executor),
+    cards({ status: "published", type: "series" }, "added", ROW_SIZE, executor),
   ]);
+
   const hero =
     featured ??
-    (await db.media.findFirst({ where: PUBLISHED, orderBy: ORDER.added, select: heroSelect }));
+    (await executor
+      .selectFrom("media")
+      .select(heroSelect)
+      .where("status", "=", "published")
+      .where("trashedAt", "is", null)
+      .orderBy("publishedAt", "desc")
+      .orderBy("id", "desc")
+      .executeTakeFirst());
 
-  // The rest of the hero, in order: this week's most watched, then the
-  // newest, each once, and only those with a backdrop to show.
   const candidates = [...new Set([...topTen, ...newReleases].map((row) => row.id))].filter(
     (id) => id !== hero?.id
   );
   const withBackdrops = candidates.length
-    ? await db.media.findMany({
-        where: { ...PUBLISHED, id: { in: candidates }, backdropUrl: { not: null } },
-        select: heroSelect,
-      })
+    ? await executor
+        .selectFrom("media")
+        .select(heroSelect)
+        .where("status", "=", "published")
+        .where("trashedAt", "is", null)
+        .where("id", "in", candidates)
+        .where("backdropUrl", "is not", null)
+        .execute()
     : [];
   const rest = withBackdrops
     .sort((a, b) => candidates.indexOf(a.id) - candidates.indexOf(b.id))
     .slice(0, HERO_SIZE - 1);
   const toFeatured = (row: NonNullable<typeof hero>): Featured => ({
-    ...toMedia(row),
+    ...toMedia(row as CardRow),
     synopsis: stripHtmlAndEntities(row.synopsis),
     backdropUrl: row.backdropUrl ?? undefined,
   });
@@ -292,12 +398,12 @@ export async function getHome() {
  * New & Popular: this week's ten most watched, the newest titles, and the
  * most watched of all time.
  */
-export async function getNewAndPopular() {
+export async function getNewAndPopular(executor: Kysely<DB> = database) {
   await connection();
   const [topTen, recentlyAdded, mostWatched] = await Promise.all([
-    trendingRows(TOP_TEN_SIZE),
-    cards(PUBLISHED, ORDER.added, ROW_SIZE),
-    cards(PUBLISHED, ORDER.popular, ROW_SIZE),
+    trendingRows(TOP_TEN_SIZE, executor),
+    cards({ status: "published" }, "added", ROW_SIZE, executor),
+    cards({ status: "published" }, "popular", ROW_SIZE, executor),
   ]);
   return { topTen: topTen.map(toMedia), recentlyAdded, mostWatched };
 }
@@ -310,15 +416,15 @@ export async function getNewAndPopular() {
  * off the row stay off until they watch them again. Empty for guests,
  * whose history stays in their browser until they sign in.
  */
-export async function listContinueWatching(): Promise<RecentlyWatched[]> {
+export async function listContinueWatching(
+  executor: Kysely<DB> = database
+): Promise<RecentlyWatched[]> {
   await connection();
   const session = await getSession();
   if (!session) return [];
-  // History holds movie and episode ids; an episode stands for its
-  // series. Some of these drop off below (watched to the end), so it
-  // reads more than the row shows.
-  const rows = await db.$queryRaw<
-    (CardRow & {
+
+  const { rows } = await sql<
+    CardRow & {
       backdropUrl: string | null;
       historyId: string;
       progressSeconds: number;
@@ -331,9 +437,9 @@ export async function listContinueWatching(): Promise<RecentlyWatched[]> {
       nextSeasonNumber: number | null;
       nextEpisodeNumber: number | null;
       nextTitle: string | null;
-    })[]
+    }
   >`
-    SELECT ${CARD_COLUMNS}, "backdropUrl", "historyId", "progressSeconds", "durationSeconds",
+    SELECT ${CARD_COLUMNS_SQL}, "backdropUrl", "historyId", "progressSeconds", "durationSeconds",
       "episodeId", "seasonNumber", "episodeNumber", "episodeTitle",
       "nextId", "nextSeasonNumber", "nextEpisodeNumber", "nextTitle"
     FROM (
@@ -364,9 +470,9 @@ export async function listContinueWatching(): Promise<RecentlyWatched[]> {
       ORDER BY n."seasonNumber", n."episodeNumber"
       LIMIT 1
     ) next ON latest."episodeId" IS NOT NULL
-    WHERE status = 'published' AND NOT latest."hiddenFromContinue"
+    WHERE status = 'published' AND "trashedAt" IS NULL AND NOT latest."hiddenFromContinue"
     ORDER BY "watchedAt" DESC, id
-    LIMIT ${CONTINUE_WATCHING_SIZE * 4}`;
+    LIMIT ${CONTINUE_WATCHING_SIZE * 4}`.execute(executor);
 
   const items: RecentlyWatched[] = [];
   for (const row of rows) {
@@ -387,7 +493,6 @@ export async function listContinueWatching(): Promise<RecentlyWatched[]> {
               },
       });
     } else if (row.nextId !== null) {
-      // Only an episode has a next one.
       items.push({
         ...base,
         episode: {
@@ -427,34 +532,71 @@ export type TitlePage = {
 };
 
 /** One page of published titles, filtered and sorted. */
-export async function listTitles({
-  sort,
-  page: requestedPage,
-  ...filter
-}: TitleFilter & { sort: TitleSort; page: number }): Promise<TitlePage> {
+export async function listTitles(
+  {
+    sort,
+    page: requestedPage,
+    ...filter
+  }: TitleFilter & { sort: TitleSort; page: number },
+  executor: Kysely<DB> = database
+): Promise<TitlePage> {
   await connection();
-  // Prisma skips conditions that are undefined.
-  const where: Prisma.MediaWhereInput = {
-    ...PUBLISHED,
-    type: filter.type,
-    category: filter.category ? filter.category : undefined,
-    genres: filter.genre ? { has: filter.genre } : undefined,
-    country: filter.country,
-    language: filter.language,
-    year: filter.year ? { gte: filter.year.from, lte: filter.year.to } : undefined,
-  };
+  let baseQuery = executor
+    .selectFrom("media")
+    .where("status", "=", "published")
+    .where("trashedAt", "is", null);
+
+  if (filter.type) {
+    baseQuery = baseQuery.where("type", "=", filter.type);
+  }
+  if (filter.category) {
+    baseQuery = baseQuery.where("category", "=", filter.category);
+  }
+  if (filter.genre) {
+    baseQuery = baseQuery.where(sql<boolean>`${filter.genre} = ANY(genres)`);
+  }
+  if (filter.country) {
+    baseQuery = baseQuery.where("country", "=", filter.country);
+  }
+  if (filter.language) {
+    baseQuery = baseQuery.where("language", "=", filter.language);
+  }
+  if (filter.year) {
+    baseQuery = baseQuery
+      .where("year", ">=", filter.year.from)
+      .where("year", "<=", filter.year.to);
+  }
+
   const settings = await getSiteSettings();
   const perPage = settings.defaultPageSize || PAGE_SIZE;
-  const total = await db.media.count({ where });
+
+  const countRow = await baseQuery
+    .select((eb) => eb.fn.countAll().as("count"))
+    .executeTakeFirst();
+  const total = countRow ? countOf(countRow) : 0;
   const { page, totalPages, skip } = pageWindow(total, requestedPage, perPage);
-  const rows = await db.media.findMany({
-    where,
-    orderBy: ORDER[sort],
-    skip,
-    take: perPage,
-    select: CARD,
-  });
-  return { items: rows.map(toMedia), page, totalPages, total };
+
+  const rows = await applyOrder(
+    baseQuery.select([
+      "id",
+      "type",
+      "title",
+      "year",
+      "duration",
+      "genres",
+      "posterUrl",
+      "gradient",
+      "category",
+      "createdAt",
+      "publishedAt",
+    ]),
+    sort
+  )
+    .offset(skip)
+    .limit(perPage)
+    .execute();
+
+  return { items: rows.map((r) => toMedia(r as CardRow)), page, totalPages, total };
 }
 
 export type FilterField = "genre" | "country" | "language" | "year";
@@ -463,37 +605,52 @@ export type FilterField = "genre" | "country" | "language" | "year";
  * Browse's choices: every value at least one published title has. Years
  * newest first, the rest A to Z.
  */
-export async function listFilterValues(field: FilterField): Promise<string[]> {
+export async function listFilterValues(
+  field: FilterField,
+  executor: Kysely<DB> = database
+): Promise<string[]> {
   await connection();
   switch (field) {
     case "genre": {
-      const rows = await db.$queryRaw<{ value: string }[]>`
+      const { rows } = await sql<{ value: string }>`
         SELECT DISTINCT unnest(genres) AS value FROM media
-        WHERE status = 'published' ORDER BY value`;
+        WHERE status = 'published' AND "trashedAt" IS NULL ORDER BY value`.execute(executor);
       return rows.map((row) => row.value);
     }
     case "country": {
-      const rows = await db.media.groupBy({
-        by: ["country"],
-        where: PUBLISHED,
-        orderBy: { country: "asc" },
-      });
-      return rows.map((row) => row.country);
+      const rows = await executor
+        .selectFrom("media")
+        .select("country")
+        .distinct()
+        .where("status", "=", "published")
+        .where("trashedAt", "is", null)
+        .where("country", "is not", null)
+        .orderBy("country", "asc")
+        .execute();
+      return rows.map((row) => row.country!).filter(Boolean);
     }
     case "language": {
-      const rows = await db.media.groupBy({
-        by: ["language"],
-        where: PUBLISHED,
-        orderBy: { language: "asc" },
-      });
-      return rows.map((row) => row.language);
+      const rows = await executor
+        .selectFrom("media")
+        .select("language")
+        .distinct()
+        .where("status", "=", "published")
+        .where("trashedAt", "is", null)
+        .where("language", "is not", null)
+        .orderBy("language", "asc")
+        .execute();
+      return rows.map((row) => row.language!).filter(Boolean);
     }
     case "year": {
-      const rows = await db.media.groupBy({
-        by: ["year"],
-        where: PUBLISHED,
-        orderBy: { year: "desc" },
-      });
+      const rows = await executor
+        .selectFrom("media")
+        .select("year")
+        .distinct()
+        .where("status", "=", "published")
+        .where("trashedAt", "is", null)
+        .where("year", "is not", null)
+        .orderBy("year", "desc")
+        .execute();
       return rows.map((row) => String(row.year));
     }
   }
@@ -504,9 +661,11 @@ export async function listFilterValues(field: FilterField): Promise<string[]> {
  * TRENDING_DAYS days, ranked from 1. Titles nobody played in that time
  * aren't trending, so the list can be shorter than 100.
  */
-export async function listTrending(): Promise<TrendingMedia[]> {
+export async function listTrending(
+  executor: Kysely<DB> = database
+): Promise<TrendingMedia[]> {
   await connection();
-  const rows = await trendingRows(TRENDING_SIZE);
+  const rows = await trendingRows(TRENDING_SIZE, executor);
   return rows.map((row, index) => ({
     ...toMedia(row),
     views: row.views,
@@ -528,15 +687,32 @@ async function relatedRows(
     minScore = 0,
     excludeIds = [],
     unwatchedBy,
-  }: { minScore?: number; excludeIds?: string[]; unwatchedBy?: string } = {}
+  }: { minScore?: number; excludeIds?: string[]; unwatchedBy?: string } = {},
+  executor: Kysely<DB> = database
 ) {
-  return db.$queryRaw<CardRow[]>`
+  const unwatchedCondition =
+    unwatchedBy === undefined
+      ? sql``
+      : sql`AND id NOT IN (
+          -- History holds movie and episode ids; an episode stands for its series.
+          SELECT COALESCE(e."mediaId", h."mediaId") FROM watch_history h
+          LEFT JOIN episode e ON e.id = h."mediaId"
+          WHERE h."userId" = ${unwatchedBy}
+          UNION SELECT "mediaId" FROM media_rating WHERE "userId" = ${unwatchedBy}
+        )`;
+
+  const excludeCondition =
+    excludeIds.length === 0
+      ? sql``
+      : sql`AND NOT (id = ANY(${excludeIds}::text[]))`;
+
+  const { rows } = await sql<CardRow>`
     WITH this AS (
       SELECT genres AS g, tags AS t, "cast" AS c, director AS d, creator AS cr, type AS ty
       FROM media WHERE id = ${id}
     )
     SELECT * FROM (
-      SELECT ${CARD_COLUMNS}, "viewCount",
+      SELECT ${CARD_COLUMNS_SQL}, "viewCount",
         3 * cardinality(ARRAY(SELECT unnest(genres) INTERSECT SELECT unnest(this.g)))
         + 2 * cardinality(ARRAY(SELECT unnest(tags) INTERSECT SELECT unnest(this.t)))
         + 2 * cardinality(ARRAY(SELECT unnest("cast") INTERSECT SELECT unnest(this.c)))
@@ -545,31 +721,26 @@ async function relatedRows(
         + CASE WHEN type = this.ty THEN 1 ELSE 0 END AS score
       FROM media, this
       WHERE status = 'published' AND "trashedAt" IS NULL AND id <> ${id}
-        AND NOT (id = ANY(${excludeIds}::text[]))
-        ${
-          unwatchedBy === undefined
-            ? Prisma.empty
-            : Prisma.sql`AND id NOT IN (
-                -- History holds movie and episode ids; an episode stands for its series.
-                SELECT COALESCE(e."mediaId", h."mediaId") FROM watch_history h
-                LEFT JOIN episode e ON e.id = h."mediaId"
-                WHERE h."userId" = ${unwatchedBy}
-                UNION SELECT "mediaId" FROM media_rating WHERE "userId" = ${unwatchedBy}
-              )`
-        }
+        ${excludeCondition}
+        ${unwatchedCondition}
     ) related
     WHERE score >= ${minScore}
     ORDER BY score DESC, "viewCount" DESC, "publishedAt" DESC NULLS LAST, id
-    LIMIT ${ROW_SIZE}`;
+    LIMIT ${ROW_SIZE}`.execute(executor);
+
+  return rows;
 }
 
 /**
  * "You Might Also Like" on a title's page: the other published titles
  * most like it (relatedRows). Titles that share nothing fill out the row.
  */
-export async function listRecommendations(id: string): Promise<Media[]> {
+export async function listRecommendations(
+  id: string,
+  executor: Kysely<DB> = database
+): Promise<Media[]> {
   await connection();
-  return (await relatedRows(id)).map(toMedia);
+  return (await relatedRows(id, {}, executor)).map(toMedia);
 }
 
 /**
@@ -600,12 +771,14 @@ const BECAUSE_SEEDS = 5;
  * gets none either. Empty for guests, whose history stays in their
  * browser.
  */
-export async function listBecauseYouWatched(): Promise<BecauseYouWatched[]> {
+export async function listBecauseYouWatched(
+  executor: Kysely<DB> = database
+): Promise<BecauseYouWatched[]> {
   await connection();
   const session = await getSession();
   if (!session) return [];
   const userId = session.user.id;
-  const seeds = await db.$queryRaw<BecauseYouWatched["seed"][]>`
+  const { rows: seeds } = await sql<BecauseYouWatched["seed"]>`
     SELECT media.id, media.title, COALESCE(r.value::text, 'watched') AS reason FROM (
       SELECT id, max(at) AS at FROM (
         -- History holds movie and episode ids; an episode stands for its series.
@@ -624,16 +797,20 @@ export async function listBecauseYouWatched(): Promise<BecauseYouWatched[]> {
     WHERE media.status = 'published' AND media."trashedAt" IS NULL
       AND r.value IS DISTINCT FROM 'not_for_me'
     ORDER BY seeds.at DESC, media.id
-    LIMIT ${BECAUSE_SEEDS}`;
+    LIMIT ${BECAUSE_SEEDS}`.execute(executor);
 
   const rows: BecauseYouWatched[] = [];
   const shown: string[] = [];
   for (const seed of seeds) {
-    const related = await relatedRows(seed.id, {
-      minScore: BECAUSE_MIN_SCORE,
-      excludeIds: shown,
-      unwatchedBy: userId,
-    });
+    const related = await relatedRows(
+      seed.id,
+      {
+        minScore: BECAUSE_MIN_SCORE,
+        excludeIds: shown,
+        unwatchedBy: userId,
+      },
+      executor
+    );
     if (related.length < BECAUSE_MIN_TITLES) continue;
     rows.push({ seed, media: related.map(toMedia) });
     shown.push(...related.map((row) => row.id));
@@ -656,12 +833,15 @@ export type PersonTitles = {
  * of, newest first (by release year), matched without regard to case.
  * Null when there's nothing: no page for a name the catalog doesn't have.
  */
-export async function getPerson(name: string): Promise<PersonTitles | null> {
+export async function getPerson(
+  name: string,
+  executor: Kysely<DB> = database
+): Promise<PersonTitles | null> {
   await connection();
-  const rows = await db.$queryRaw<
-    (CardRow & { director: string | null; creator: string | null; cast: string[] | null })[]
+  const { rows } = await sql<
+    CardRow & { director: string | null; creator: string | null; cast: string[] | null }
   >`
-    SELECT ${CARD_COLUMNS}, director, creator, "cast" FROM media
+    SELECT ${CARD_COLUMNS_SQL}, director, creator, "cast" FROM media
     WHERE status = 'published' AND "trashedAt" IS NULL
       AND (
         lower(director) = lower(${name})
@@ -669,7 +849,7 @@ export async function getPerson(name: string): Promise<PersonTitles | null> {
         OR EXISTS (SELECT 1 FROM unnest("cast") AS person WHERE lower(person) = lower(${name}))
       )
     ORDER BY year DESC, "publishedAt" DESC NULLS LAST, id
-    LIMIT 300`;
+    LIMIT 300`.execute(executor);
   if (rows.length === 0) return null;
 
   const same = (value: string | null | undefined) =>
@@ -685,38 +865,45 @@ export async function getPerson(name: string): Promise<PersonTitles | null> {
 }
 
 /** Everyone named on a published title, for the sitemap. */
-export async function listPublishedPeople(): Promise<string[]> {
+export async function listPublishedPeople(
+  executor: Kysely<DB> = database
+): Promise<string[]> {
   await connection();
-  const rows = await db.$queryRaw<{ name: string }[]>`
+  const { rows } = await sql<{ name: string }>`
     SELECT DISTINCT name FROM (
       SELECT unnest("cast") AS name FROM media WHERE status = 'published' AND "trashedAt" IS NULL
       UNION SELECT director FROM media WHERE status = 'published' AND "trashedAt" IS NULL
       UNION SELECT creator FROM media WHERE status = 'published' AND "trashedAt" IS NULL
     ) people
     WHERE name IS NOT NULL AND trim(name) <> ''
-    ORDER BY name`;
+    ORDER BY name`.execute(executor);
   return rows.map((row) => row.name);
 }
 
 /** Every published title, for the sitemap. */
-export async function listPublishedTitles() {
+export async function listPublishedTitles(executor: Kysely<DB> = database) {
   await connection();
-  return db.media.findMany({
-    where: PUBLISHED,
-    orderBy: { id: "asc" },
-    select: { id: true, type: true, updatedAt: true },
-  });
+  return executor
+    .selectFrom("media")
+    .select(["id", "type", "updatedAt"])
+    .where("status", "=", "published")
+    .where("trashedAt", "is", null)
+    .orderBy("id", "asc")
+    .execute();
 }
 
 /** Every episode of a published series, for the sitemap. */
-export async function listPublishedEpisodes() {
+export async function listPublishedEpisodes(executor: Kysely<DB> = database) {
   await connection();
-  const rows = await db.episode.findMany({
-    where: { media: PUBLISHED },
-    orderBy: { id: "asc" },
-    select: { id: true, media: { select: { updatedAt: true } } },
-  });
-  return rows.map((row) => ({ id: row.id, updatedAt: row.media.updatedAt }));
+  const rows = await executor
+    .selectFrom("episode")
+    .innerJoin("media", "media.id", "episode.mediaId")
+    .select(["episode.id", "media.updatedAt"])
+    .where("media.status", "=", "published")
+    .where("media.trashedAt", "is", null)
+    .orderBy("episode.id", "asc")
+    .execute();
+  return rows.map((row) => ({ id: row.id, updatedAt: row.updatedAt }));
 }
 
 // --- Search ------------------------------------------------------------------
@@ -730,7 +917,7 @@ export async function listPublishedEpisodes() {
 function searchCondition(query: string) {
   const pattern = `%${escapeLike(query)}%`;
   const year = queryYear(query);
-  return Prisma.sql`status = 'published' AND (
+  return sql`status = 'published' AND "trashedAt" IS NULL AND (
     title ILIKE ${pattern}
     OR synopsis ILIKE ${pattern}
     OR director ILIKE ${pattern}
@@ -740,7 +927,7 @@ function searchCondition(query: string) {
     OR EXISTS (SELECT 1 FROM unnest("cast") AS person WHERE person ILIKE ${pattern})
     OR EXISTS (SELECT 1 FROM unnest(genres) AS genre WHERE genre ILIKE ${pattern})
     OR EXISTS (SELECT 1 FROM unnest(tags) AS tag WHERE tag ILIKE ${pattern})
-    ${year === null ? Prisma.empty : Prisma.sql`OR year = ${year}`}
+    ${year === null ? sql`` : sql`OR year = ${year}`}
   )`;
 }
 
@@ -751,7 +938,7 @@ function searchCondition(query: string) {
  */
 function titleMatchOrder(query: string) {
   const escaped = escapeLike(query);
-  return Prisma.sql`(title ILIKE ${`${escaped}%`}) DESC, (title ILIKE ${`%${escaped}%`}) DESC, lower(title), id`;
+  return sql`(title ILIKE ${`${escaped}%`}) DESC, (title ILIKE ${`%${escaped}%`}) DESC, lower(title), id`;
 }
 
 /** Fuzzy matching looks through at most this many titles (the catalog is far smaller). */
@@ -763,22 +950,44 @@ const FUZZY_POOL = 5000;
  * src/lib/search.ts), at most `limit`. Done here rather than in the
  * database, which has no fuzzy matching built in.
  */
-async function fuzzyTitles(query: string, limit: number): Promise<CardRow[]> {
+async function fuzzyTitles(
+  query: string,
+  limit: number,
+  executor: Kysely<DB> = database
+): Promise<CardRow[]> {
   if (allowedTypos(query.length) === 0) return [];
-  const rows = await db.media.findMany({
-    where: PUBLISHED,
-    orderBy: { viewCount: "desc" },
-    take: FUZZY_POOL,
-    select: CARD,
-  });
-  return fuzzyMatches(query, rows, (row) => row.title, limit);
+  const rows = await executor
+    .selectFrom("media")
+    .select([
+      "id",
+      "type",
+      "title",
+      "year",
+      "duration",
+      "genres",
+      "posterUrl",
+      "gradient",
+      "category",
+      "createdAt",
+      "publishedAt",
+    ])
+    .where("status", "=", "published")
+    .where("trashedAt", "is", null)
+    .orderBy("viewCount", "desc")
+    .limit(FUZZY_POOL)
+    .execute();
+  return fuzzyMatches(query, rows as CardRow[], (row) => row.title, limit);
 }
 
 /**
  * The search page: one page of matching published titles. When none
  * match as typed, the titles spelled closest to the query, on one page.
  */
-export async function searchTitles(rawQuery: string, requestedPage: number): Promise<TitlePage> {
+export async function searchTitles(
+  rawQuery: string,
+  requestedPage: number,
+  executor: Kysely<DB> = database
+): Promise<TitlePage> {
   await connection();
   const query = normalizeQuery(rawQuery);
   if (!query) return { items: [], page: 1, totalPages: 1, total: 0 };
@@ -786,19 +995,20 @@ export async function searchTitles(rawQuery: string, requestedPage: number): Pro
   const settings = await getSiteSettings();
   const perPage = settings.defaultPageSize || PAGE_SIZE;
   const where = searchCondition(query);
-  const [{ total }] = await db.$queryRaw<{ total: number }[]>`
-    SELECT count(*)::int AS total FROM media WHERE ${where}`;
+  const { rows: countRows } = await sql<{ total: number }>`
+    SELECT count(*)::int AS total FROM media WHERE ${where}`.execute(executor);
+  const total = countRows[0]?.total ?? 0;
   if (total === 0) {
-    const close = await fuzzyTitles(query, perPage);
+    const close = await fuzzyTitles(query, perPage, executor);
     if (close.length > 0) {
       return { items: close.map(toMedia), page: 1, totalPages: 1, total: close.length, fuzzy: true };
     }
   }
   const { page, totalPages, skip } = pageWindow(total, requestedPage, perPage);
-  const rows = await db.$queryRaw<CardRow[]>`
-    SELECT ${CARD_COLUMNS} FROM media WHERE ${where}
+  const { rows } = await sql<CardRow>`
+    SELECT ${CARD_COLUMNS_SQL} FROM media WHERE ${where}
     ORDER BY ${titleMatchOrder(query)}
-    LIMIT ${perPage} OFFSET ${skip}`;
+    LIMIT ${perPage} OFFSET ${skip}`.execute(executor);
   return { items: rows.map(toMedia), page, totalPages, total };
 }
 
@@ -809,24 +1019,25 @@ export async function searchTitles(rawQuery: string, requestedPage: number): Pro
  * named on published titles whose names match.
  */
 export async function suggestTitles(
-  rawQuery: string
+  rawQuery: string,
+  executor: Kysely<DB> = database
 ): Promise<{ items: SearchSuggestion[]; total: number; people: string[]; fuzzy: boolean }> {
   await connection();
   const query = normalizeQuery(rawQuery);
   if (!query) return { items: [], total: 0, people: [], fuzzy: false };
   const where = searchCondition(query);
-  const [items, [{ total }], people] = await Promise.all([
-    db.$queryRaw<SearchSuggestion[]>`
+  const [{ rows: items }, { rows: countRows }, people] = await Promise.all([
+    sql<SearchSuggestion>`
       SELECT id, type::text AS type, title, year, "posterUrl" FROM media WHERE ${where}
       ORDER BY ${titleMatchOrder(query)}
-      LIMIT ${MAX_SUGGESTIONS}`,
-    db.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total FROM media WHERE ${where}`,
-    suggestPeople(query),
+      LIMIT ${MAX_SUGGESTIONS}`.execute(executor),
+    sql<{ total: number }>`SELECT count(*)::int AS total FROM media WHERE ${where}`.execute(executor),
+    suggestPeople(query, executor),
   ]);
+  const total = countRows[0]?.total ?? 0;
   if (total === 0) {
-    // As the search page would show them.
     const settings = await getSiteSettings();
-    const close = await fuzzyTitles(query, settings.defaultPageSize || PAGE_SIZE);
+    const close = await fuzzyTitles(query, settings.defaultPageSize || PAGE_SIZE, executor);
     if (close.length > 0) {
       const suggestions = close.slice(0, MAX_SUGGESTIONS).map(({ id, type, title, year, posterUrl }) => ({
         id,
@@ -846,21 +1057,24 @@ export async function suggestTitles(
  * names have the query, those starting with it first; or, when none do,
  * the names spelled closest to it. At most MAX_PEOPLE_SUGGESTIONS.
  */
-async function suggestPeople(query: string): Promise<string[]> {
+async function suggestPeople(
+  query: string,
+  executor: Kysely<DB> = database
+): Promise<string[]> {
   const escaped = escapeLike(query);
-  const rows = await db.$queryRaw<{ name: string }[]>`
+  const { rows } = await sql<{ name: string }>`
     SELECT name FROM (
       SELECT DISTINCT name FROM (
-        SELECT unnest("cast") AS name FROM media WHERE status = 'published'
-        UNION SELECT director FROM media WHERE status = 'published'
-        UNION SELECT creator FROM media WHERE status = 'published'
+        SELECT unnest("cast") AS name FROM media WHERE status = 'published' AND "trashedAt" IS NULL
+        UNION SELECT director FROM media WHERE status = 'published' AND "trashedAt" IS NULL
+        UNION SELECT creator FROM media WHERE status = 'published' AND "trashedAt" IS NULL
       ) named
       WHERE name ILIKE ${`%${escaped}%`}
     ) people
     ORDER BY (name ILIKE ${`${escaped}%`}) DESC, lower(name)
-    LIMIT ${MAX_PEOPLE_SUGGESTIONS}`;
+    LIMIT ${MAX_PEOPLE_SUGGESTIONS}`.execute(executor);
   if (rows.length > 0 || allowedTypos(query.length) === 0) return rows.map((row) => row.name);
-  return fuzzyMatches(query, await listPublishedPeople(), (name) => name, MAX_PEOPLE_SUGGESTIONS);
+  return fuzzyMatches(query, await listPublishedPeople(executor), (name) => name, MAX_PEOPLE_SUGGESTIONS);
 }
 
 // --- Titles and episodes ------------------------------------------------------
@@ -871,35 +1085,83 @@ async function suggestPeople(query: string): Promise<string[]> {
  */
 
 /** A published title with its episodes, and whether it's "Most liked", or null. */
-export const getTitle = cache(async (id: string): Promise<MediaDetail | null> => {
-  await connection();
-  if (!isMediaId(id)) return null;
-  const [row, ratings] = await Promise.all([
-    db.media.findUnique({
-      where: { id, ...PUBLISHED },
-      include: { episodes: { orderBy: EPISODE_ORDER } },
-    }),
-    db.mediaRating.groupBy({ by: ["value"], where: { mediaId: id }, _count: true }),
-  ]);
-  if (!row) return null;
-  const count = (values: Rating[]) =>
-    ratings.reduce((sum, group) => sum + (values.includes(group.value) ? group._count : 0), 0);
-  return {
-    ...toDetail(row),
-    mostLiked: isMostLiked({ liked: count(["like", "love"]), total: count([...RATINGS]) }),
-  };
-});
+export const getTitle = cache(
+  async (id: string, executor: Kysely<DB> = database): Promise<MediaDetail | null> => {
+    await connection();
+    if (!isMediaId(id)) return null;
+    const [row, ratings] = await Promise.all([
+      executor
+        .selectFrom("media")
+        .selectAll("media")
+        .select((eb) => [
+          jsonArrayFrom(
+            eb
+              .selectFrom("episode")
+              .selectAll("episode")
+              .whereRef("episode.mediaId", "=", "media.id")
+              .orderBy("episode.seasonNumber", "asc")
+              .orderBy("episode.episodeNumber", "asc")
+          ).as("episodes"),
+        ])
+        .where("media.id", "=", id)
+        .where("media.status", "=", "published")
+        .where("media.trashedAt", "is", null)
+        .executeTakeFirst(),
+      executor
+        .selectFrom("media_rating")
+        .select(["value", (eb) => eb.fn.countAll<string>().as("count")])
+        .where("mediaId", "=", id)
+        .groupBy("value")
+        .execute(),
+    ]);
+    if (!row) return null;
+    const count = (values: Rating[]) =>
+      ratings.reduce(
+        (sum, group) => sum + (values.includes(group.value as Rating) ? Number(group.count) : 0),
+        0
+      );
+    return {
+      ...toDetail(row),
+      mostLiked: isMostLiked({ liked: count(["like", "love"]), total: count([...RATINGS]) }),
+    };
+  }
+);
 
 /** An episode of a published series, with the series, or null. */
 export const getEpisode = cache(
-  async (id: string): Promise<{ episode: Episode; series: MediaDetail } | null> => {
+  async (
+    id: string,
+    executor: Kysely<DB> = database
+  ): Promise<{ episode: Episode; series: MediaDetail } | null> => {
     await connection();
     if (!isMediaId(id)) return null;
-    const row = await db.episode.findUnique({
-      where: { id },
-      include: { media: { include: { episodes: { orderBy: EPISODE_ORDER } } } },
-    });
-    if (!row || row.media.status !== "published") return null;
+    const row = await executor
+      .selectFrom("episode")
+      .selectAll("episode")
+      .select((eb) => [
+        jsonObjectFrom(
+          eb
+            .selectFrom("media")
+            .selectAll("media")
+            .select((mb) => [
+              jsonArrayFrom(
+                mb
+                  .selectFrom("episode as other")
+                  .selectAll("other")
+                  .whereRef("other.mediaId", "=", "media.id")
+                  .orderBy("other.seasonNumber", "asc")
+                  .orderBy("other.episodeNumber", "asc")
+              ).as("episodes"),
+            ])
+            .whereRef("media.id", "=", "episode.mediaId")
+        ).as("media"),
+      ])
+      .where("episode.id", "=", id)
+      .executeTakeFirst();
+
+    if (!row || !row.media || row.media.status !== "published" || row.media.trashedAt !== null) {
+      return null;
+    }
     return { episode: toEpisode(row), series: toDetail(row.media) };
   }
 );
@@ -1133,27 +1395,38 @@ export async function searchTitlesForCollection(query: string, executor: Kysely<
  * Episode" for an episode of one. Null when there's no such title, so
  * the browser can't file reports under made-up names.
  */
-export async function findReportTitle(mediaId: string): Promise<string | null> {
+export async function findReportTitle(mediaId: string, executor: Kysely<DB> = database): Promise<string | null> {
   await connection();
-  const media = await db.media.findUnique({
-    where: { id: mediaId, ...PUBLISHED },
-    select: { title: true },
-  });
+  const media = await executor
+    .selectFrom("media")
+    .select("title")
+    .where("id", "=", mediaId)
+    .where("status", "=", "published")
+    .where("trashedAt", "is", null)
+    .executeTakeFirst();
   if (media) return media.title;
-  const episode = await db.episode.findUnique({
-    where: { id: mediaId },
-    select: { title: true, media: { select: { title: true, status: true } } },
-  });
-  return episode?.media.status === "published"
-    ? `${episode.media.title}: ${episode.title}`
+
+  const episode = await executor
+    .selectFrom("episode")
+    .innerJoin("media", "media.id", "episode.mediaId")
+    .select(["episode.title as episodeTitle", "media.title as seriesTitle", "media.status", "media.trashedAt"])
+    .where("episode.id", "=", mediaId)
+    .executeTakeFirst();
+
+  return episode && episode.status === "published" && !episode.trashedAt
+    ? `${episode.seriesTitle}: ${episode.episodeTitle}`
     : null;
 }
 
 /** Which of these ids are episodes (their player is /episode/[id]). */
-export async function findEpisodeIds(ids: string[]): Promise<Set<string>> {
+export async function findEpisodeIds(ids: string[], executor: Kysely<DB> = database): Promise<Set<string>> {
   await connection();
   if (ids.length === 0) return new Set();
-  const rows = await db.episode.findMany({ where: { id: { in: ids } }, select: { id: true } });
+  const rows = await executor
+    .selectFrom("episode")
+    .select("id")
+    .where("id", "in", ids)
+    .execute();
   return new Set(rows.map((row) => row.id));
 }
 
@@ -1162,16 +1435,26 @@ export async function findEpisodeIds(ids: string[]): Promise<Set<string>> {
  * episodes of published series. Saved favorites, history and lists hide
  * the rest (src/lib/library.ts), so they never lead to a 404.
  */
-export async function findPublishedIds(ids: string[]): Promise<Set<string>> {
+export async function findPublishedIds(ids: string[], executor: Kysely<DB> = database): Promise<Set<string>> {
   await connection();
   const unique = [...new Set(ids)];
   if (unique.length === 0) return new Set();
   const [titles, episodes] = await Promise.all([
-    db.media.findMany({ where: { id: { in: unique }, ...PUBLISHED }, select: { id: true } }),
-    db.episode.findMany({
-      where: { id: { in: unique }, media: PUBLISHED },
-      select: { id: true },
-    }),
+    executor
+      .selectFrom("media")
+      .select("id")
+      .where("id", "in", unique)
+      .where("status", "=", "published")
+      .where("trashedAt", "is", null)
+      .execute(),
+    executor
+      .selectFrom("episode")
+      .innerJoin("media", "media.id", "episode.mediaId")
+      .select("episode.id")
+      .where("episode.id", "in", unique)
+      .where("media.status", "=", "published")
+      .where("media.trashedAt", "is", null)
+      .execute(),
   ]);
   return new Set([...titles, ...episodes].map((row) => row.id));
 }
@@ -1182,10 +1465,17 @@ export async function findPublishedIds(ids: string[]): Promise<Set<string>> {
  * Whether `id` is a title members can rate (src/lib/rating-actions.ts):
  * a published movie or series. Episodes are rated through their series.
  */
-export async function isRatableTitle(id: string): Promise<boolean> {
+export async function isRatableTitle(id: string, executor: Kysely<DB> = database): Promise<boolean> {
   await connection();
   if (!isMediaId(id)) return false;
-  return (await db.media.count({ where: { id, ...PUBLISHED } })) > 0;
+  const countRow = await executor
+    .selectFrom("media")
+    .select((eb) => eb.fn.countAll().as("count"))
+    .where("id", "=", id)
+    .where("status", "=", "published")
+    .where("trashedAt", "is", null)
+    .executeTakeFirst();
+  return (countRow ? countOf(countRow) : 0) > 0;
 }
 
 // --- Views -------------------------------------------------------------------
@@ -1195,19 +1485,27 @@ export async function isRatableTitle(id: string): Promise<boolean> {
  * a published movie, or the published series of an episode. Null for
  * anything else.
  */
-export async function findViewTarget(id: string): Promise<string | null> {
+export async function findViewTarget(id: string, executor: Kysely<DB> = database): Promise<string | null> {
   await connection();
   if (!isMediaId(id)) return null;
-  const movie = await db.media.findFirst({
-    where: { id, ...PUBLISHED, type: "movie" },
-    select: { id: true },
-  });
+  const movie = await executor
+    .selectFrom("media")
+    .select("id")
+    .where("id", "=", id)
+    .where("status", "=", "published")
+    .where("trashedAt", "is", null)
+    .where("type", "=", "movie")
+    .executeTakeFirst();
   if (movie) return movie.id;
-  const episode = await db.episode.findUnique({
-    where: { id },
-    select: { media: { select: { id: true, status: true } } },
-  });
-  return episode?.media.status === "published" ? episode.media.id : null;
+
+  const episode = await executor
+    .selectFrom("episode")
+    .innerJoin("media", "media.id", "episode.mediaId")
+    .select(["media.id as mediaId", "media.status", "media.trashedAt"])
+    .where("episode.id", "=", id)
+    .executeTakeFirst();
+
+  return episode && episode.status === "published" && !episode.trashedAt ? episode.mediaId : null;
 }
 
 // --- Video ----------------------------------------------------------------------
@@ -1397,28 +1695,31 @@ export const MAX_LIBRARY_PAGE_SIZE = 100;
  * Supports sorting, audit filters, and configurable page size.
  * Only for admins (checked here too).
  */
-export async function listLibrary({
-  type,
-  page: requestedPage,
-  query = "",
-  status,
-  sort = "createdAt",
-  order = "desc",
-  pageSize = LIBRARY_PAGE_SIZE,
-  genre,
-  audit,
-}: {
-  type: MediaType;
-  page: number;
-  /** Matches titles containing it. */
-  query?: string;
-  status?: MediaStatus;
-  sort?: LibrarySort;
-  order?: LibraryOrder;
-  pageSize?: number;
-  genre?: string;
-  audit?: LibraryAudit;
-}) {
+export async function listLibrary(
+  {
+    type,
+    page: requestedPage,
+    query = "",
+    status,
+    sort = "createdAt",
+    order = "desc",
+    pageSize = LIBRARY_PAGE_SIZE,
+    genre,
+    audit,
+  }: {
+    type: MediaType;
+    page: number;
+    /** Matches titles containing it. */
+    query?: string;
+    status?: MediaStatus;
+    sort?: LibrarySort;
+    order?: LibraryOrder;
+    pageSize?: number;
+    genre?: string;
+    audit?: LibraryAudit;
+  },
+  executor: Kysely<DB> = database
+) {
   await requireAdmin();
   await connection();
   // These come from the address bar: anything unknown falls back to the default.
@@ -1429,90 +1730,164 @@ export async function listLibrary({
     ? Math.min(Math.max(pageSize, 1), MAX_LIBRARY_PAGE_SIZE)
     : LIBRARY_PAGE_SIZE;
   const search = normalizeQuery(query);
-  const where: Prisma.MediaWhereInput = {
-    type,
-    status,
-    trashedAt: null,
-    title: search ? { contains: escapeLike(search), mode: "insensitive" } : undefined,
-    ...(genre ? { genres: { has: genre } } : {}),
-  };
+
+  let baseQuery = executor
+    .selectFrom("media")
+    .where("type", "=", type)
+    .where("trashedAt", "is", null);
+
+  if (status) {
+    baseQuery = baseQuery.where("status", "=", status);
+  }
+  if (search) {
+    baseQuery = baseQuery.where("title", "ilike", `%${escapeLike(search)}%`);
+  }
+  if (genre) {
+    baseQuery = baseQuery.where(sql<boolean>`${genre} = ANY(genres)`);
+  }
 
   if (audit === "missing-video" || audit === "no-video") {
     if (type === "movie") {
-      where.videoSources = { none: { enabled: true } };
-      where.status = "published";
+      baseQuery = baseQuery
+        .where((eb) =>
+          eb.not(
+            eb.exists(
+              eb
+                .selectFrom("video_source")
+                .whereRef("video_source.mediaId", "=", "media.id")
+                .where("video_source.enabled", "=", true)
+            )
+          )
+        )
+        .where("status", "=", "published");
     } else {
-      where.episodes = { none: { videoSources: { some: { enabled: true } } } };
-      where.status = "published";
+      baseQuery = baseQuery
+        .where((eb) =>
+          eb.not(
+            eb.exists(
+              eb
+                .selectFrom("episode")
+                .innerJoin("video_source", "video_source.episodeId", "episode.id")
+                .whereRef("episode.mediaId", "=", "media.id")
+                .where("video_source.enabled", "=", true)
+            )
+          )
+        )
+        .where("status", "=", "published");
     }
   } else if (audit === "missing-backdrop" || audit === "no-backdrop") {
-    where.OR = [{ backdropUrl: null }, { backdropUrl: "" }];
+    baseQuery = baseQuery.where((eb) =>
+      eb.or([eb("backdropUrl", "is", null), eb("backdropUrl", "=", "")])
+    );
   } else if (audit === "empty-series") {
-    where.episodes = { none: {} };
+    baseQuery = baseQuery.where((eb) =>
+      eb.not(
+        eb.exists(
+          eb.selectFrom("episode").whereRef("episode.mediaId", "=", "media.id")
+        )
+      )
+    );
   } else if (audit === "stale-drafts") {
-    where.status = "draft";
-    where.createdAt = { lte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) };
+    const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+    baseQuery = baseQuery
+      .where("status", "=", "draft")
+      .where("createdAt", "<=", twoWeeksAgo);
   }
 
-  const sortMap: Record<LibrarySort, Prisma.MediaOrderByWithRelationInput> = {
-    title: { title: order },
-    year: { year: order },
-    status: { status: order },
-    viewCount: { viewCount: order },
-    publishedAt: { publishedAt: order },
-    createdAt: { createdAt: order },
-    updatedAt: { updatedAt: order },
-  };
-  const orderBy: Prisma.MediaOrderByWithRelationInput[] = [
-    sortMap[sort],
-    { id: "desc" },
-  ];
-
-  const total = await db.media.count({ where });
+  const countRow = await baseQuery
+    .select((eb) => eb.fn.countAll().as("count"))
+    .executeTakeFirst();
+  const total = countRow ? countOf(countRow) : 0;
   const { page, totalPages, skip } = pageWindow(total, requestedPage, pageSize);
-  const rows = await db.media.findMany({
-    where,
-    orderBy,
-    skip,
-    take: pageSize,
-    select: {
-      id: true,
-      title: true,
-      year: true,
-      type: true,
-      status: true,
-      posterUrl: true,
-      backdropUrl: true,
-      duration: true,
-      genres: true,
-      tags: true,
-      tagline: true,
-      rating: true,
-      viewCount: true,
-      featured: true,
-      publishedAt: true,
-      createdAt: true,
-      updatedAt: true,
-      _count: { select: { episodes: true, videoSources: { where: { enabled: true } } } },
-    },
-  });
+
+  let queryBuilder = baseQuery.select([
+    "media.id",
+    "media.title",
+    "media.year",
+    "media.type",
+    "media.status",
+    "media.posterUrl",
+    "media.backdropUrl",
+    "media.duration",
+    "media.genres",
+    "media.tags",
+    "media.tagline",
+    "media.rating",
+    "media.viewCount",
+    "media.featured",
+    "media.publishedAt",
+    "media.createdAt",
+    "media.updatedAt",
+    (eb) =>
+      eb
+        .selectFrom("video_source")
+        .select((ib) => ib.fn.countAll().as("count"))
+        .whereRef("video_source.mediaId", "=", "media.id")
+        .where("video_source.enabled", "=", true)
+        .as("videoSourcesCount"),
+    (eb) =>
+      eb
+        .selectFrom("episode")
+        .select((ib) => ib.fn.countAll().as("count"))
+        .whereRef("episode.mediaId", "=", "media.id")
+        .as("episodesCount"),
+  ]);
+
+  if (sort === "title") {
+    queryBuilder = queryBuilder.orderBy("title", order).orderBy("id", "desc");
+  } else if (sort === "year") {
+    queryBuilder = queryBuilder.orderBy("year", order).orderBy("id", "desc");
+  } else if (sort === "status") {
+    queryBuilder = queryBuilder.orderBy("status", order).orderBy("id", "desc");
+  } else if (sort === "viewCount") {
+    queryBuilder = queryBuilder.orderBy("viewCount", order).orderBy("id", "desc");
+  } else if (sort === "publishedAt") {
+    queryBuilder = queryBuilder.orderBy("publishedAt", order).orderBy("id", "desc");
+  } else if (sort === "updatedAt") {
+    queryBuilder = queryBuilder.orderBy("updatedAt", order).orderBy("id", "desc");
+  } else {
+    queryBuilder = queryBuilder.orderBy("createdAt", order).orderBy("id", "desc");
+  }
+
+  const rows = await queryBuilder.offset(skip).limit(pageSize).execute();
 
   const seasons = new Map<string, number>();
   if (type === "series" && rows.length > 0) {
-    const groups = await db.episode.groupBy({
-      by: ["mediaId", "seasonNumber"],
-      where: { mediaId: { in: rows.map((row) => row.id) } },
-    });
+    const groups = await executor
+      .selectFrom("episode")
+      .select(["mediaId", "seasonNumber"])
+      .distinct()
+      .where("mediaId", "in", rows.map((row) => row.id))
+      .execute();
     for (const group of groups) {
       seasons.set(group.mediaId, (seasons.get(group.mediaId) ?? 0) + 1);
     }
   }
 
-  const items: LibraryRow[] = rows.map(({ _count, ...row }) => ({
-    ...row,
-    videoSourcesCount: _count.videoSources,
-    ...(_count.episodes > 0 ? { seasons: seasons.get(row.id), episodes: _count.episodes } : {}),
-  }));
+  const items: LibraryRow[] = rows.map((row) => {
+    const epCount = Number(row.episodesCount ?? 0);
+    return {
+      id: row.id,
+      title: row.title,
+      year: row.year,
+      type: row.type,
+      status: row.status,
+      posterUrl: row.posterUrl,
+      backdropUrl: row.backdropUrl,
+      duration: row.duration,
+      genres: row.genres ?? undefined,
+      tags: row.tags ?? undefined,
+      tagline: row.tagline,
+      rating: row.rating,
+      viewCount: row.viewCount,
+      featured: row.featured,
+      publishedAt: row.publishedAt,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      videoSourcesCount: Number(row.videoSourcesCount ?? 0),
+      ...(epCount > 0 ? { seasons: seasons.get(row.id), episodes: epCount } : {}),
+    };
+  });
   return { items, page, totalPages, total, sort, order, audit, pageSize };
 }
 
@@ -1520,111 +1895,212 @@ export async function listLibrary({
 // Everything here includes drafts and trashed titles, so each one checks
 // for an admin itself.
 
-/** What the admin panel lists of a movie's or an episode's subtitles (not the files). */
-const SUBTITLE_SUMMARY = {
-  select: { id: true, language: true, fileName: true, createdAt: true },
-} satisfies Prisma.Media$subtitlesArgs;
-
 /** A title with its episodes and a movie's video sources and subtitles, for its edit page. */
-export async function getTitleForEdit(id: string) {
+export async function getTitleForEdit(id: string, executor: Kysely<DB> = database) {
   await requireAdmin();
   await connection();
   if (!isMediaId(id)) return null;
-  return db.media.findUnique({
-    where: { id },
-    include: {
-      episodes: { orderBy: EPISODE_ORDER },
-      videoSources: { orderBy: VIDEO_ORDER },
-      subtitles: SUBTITLE_SUMMARY,
-    },
-  });
+  const row = await executor
+    .selectFrom("media")
+    .selectAll("media")
+    .select((eb) => [
+      jsonArrayFrom(
+        eb
+          .selectFrom("episode")
+          .selectAll("episode")
+          .whereRef("episode.mediaId", "=", "media.id")
+          .orderBy("episode.seasonNumber", "asc")
+          .orderBy("episode.episodeNumber", "asc")
+      ).as("episodes"),
+      jsonArrayFrom(
+        eb
+          .selectFrom("video_source")
+          .selectAll("video_source")
+          .whereRef("video_source.mediaId", "=", "media.id")
+          .orderBy("video_source.position", "asc")
+          .orderBy("video_source.id", "asc")
+      ).as("videoSources"),
+      jsonArrayFrom(
+        eb
+          .selectFrom("subtitle")
+          .select(["subtitle.id", "subtitle.language", "subtitle.fileName", "subtitle.createdAt"])
+          .whereRef("subtitle.mediaId", "=", "media.id")
+      ).as("subtitles"),
+    ])
+    .where("media.id", "=", id)
+    .executeTakeFirst();
+  if (!row) return null;
+
+  return {
+    ...row,
+    genres: row.genres ?? [],
+    cast: row.cast ?? [],
+    tags: row.tags ?? [],
+    contentNotes: row.contentNotes ?? [],
+    subtitles: (row.subtitles ?? []).map((s) => ({
+      ...s,
+      createdAt: new Date(s.createdAt),
+    })),
+  };
 }
 
 /** The series an episode can be added to (not trashed), A to Z. */
-export async function listSeriesChoices() {
+export async function listSeriesChoices(executor: Kysely<DB> = database) {
   await requireAdmin();
   await connection();
-  return db.media.findMany({
-    where: { type: "series", trashedAt: null },
-    orderBy: [{ title: "asc" }, { id: "asc" }],
-    select: { id: true, title: true },
-  });
+  return executor
+    .selectFrom("media")
+    .select(["id", "title"])
+    .where("type", "=", "series")
+    .where("trashedAt", "is", null)
+    .orderBy("title", "asc")
+    .orderBy("id", "asc")
+    .execute();
 }
 
 /** A series' last episode (highest season, then episode), or null. */
-export async function getLastEpisode(seriesId: string) {
+export async function getLastEpisode(seriesId: string, executor: Kysely<DB> = database) {
   await requireAdmin();
   await connection();
-  return db.episode.findFirst({
-    where: { mediaId: seriesId },
-    orderBy: [{ seasonNumber: "desc" }, { episodeNumber: "desc" }],
-    select: { seasonNumber: true, episodeNumber: true },
-  });
+  const row = await executor
+    .selectFrom("episode")
+    .select(["seasonNumber", "episodeNumber"])
+    .where("mediaId", "=", seriesId)
+    .orderBy("seasonNumber", "desc")
+    .orderBy("episodeNumber", "desc")
+    .executeTakeFirst();
+  return row ?? null;
 }
 
 /** /admin/library/episodes: one page of episodes, of one series or all. */
 export type EpisodeSort = "title" | "series" | "season" | "episode" | "airDate";
 
-export async function listEpisodes({
-  seriesId,
-  query = "",
-  page: requestedPage,
-  sort = "series",
-  order = "asc",
-  pageSize = LIBRARY_PAGE_SIZE,
-}: {
-  seriesId?: string;
-  query?: string;
-  page: number;
-  sort?: EpisodeSort;
-  order?: "asc" | "desc";
-  pageSize?: number;
-}) {
+export async function listEpisodes(
+  {
+    seriesId,
+    query = "",
+    page: requestedPage,
+    sort = "series",
+    order = "asc",
+    pageSize = LIBRARY_PAGE_SIZE,
+  }: {
+    seriesId?: string;
+    query?: string;
+    page: number;
+    sort?: EpisodeSort;
+    order?: "asc" | "desc";
+    pageSize?: number;
+  },
+  executor: Kysely<DB> = database
+) {
   await requireAdmin();
   await connection();
   const search = normalizeQuery(query);
-  const where: Prisma.EpisodeWhereInput = {
-    ...(seriesId ? { mediaId: seriesId } : {}),
-    media: { trashedAt: null },
-    ...(search ? { title: { contains: escapeLike(search), mode: "insensitive" } } : {}),
-  };
-  const total = await db.episode.count({ where });
+  let baseQuery = executor
+    .selectFrom("episode")
+    .innerJoin("media", "media.id", "episode.mediaId")
+    .where("media.trashedAt", "is", null);
+
+  if (seriesId) {
+    baseQuery = baseQuery.where("episode.mediaId", "=", seriesId);
+  }
+  if (search) {
+    baseQuery = baseQuery.where("episode.title", "ilike", `%${escapeLike(search)}%`);
+  }
+
+  const countRow = await baseQuery
+    .select((eb) => eb.fn.countAll().as("count"))
+    .executeTakeFirst();
+  const total = countRow ? countOf(countRow) : 0;
   const { page, totalPages, skip } = pageWindow(total, requestedPage, pageSize);
 
-  const orderBy: Prisma.EpisodeOrderByWithRelationInput[] =
-    sort === "title"
-      ? [{ title: order }, { id: "asc" }]
-      : sort === "season"
-      ? [{ seasonNumber: order }, { episodeNumber: order }, { id: "asc" }]
-      : sort === "episode"
-      ? [{ episodeNumber: order }, { seasonNumber: order }, { id: "asc" }]
-      : sort === "airDate"
-      ? [{ airDate: order }, { id: "asc" }]
-      : [{ media: { title: order } }, { mediaId: "asc" }, ...EPISODE_ORDER];
+  const episodeColumns = [
+    "episode.id",
+    "episode.mediaId",
+    "episode.seasonNumber",
+    "episode.episodeNumber",
+    "episode.title",
+    "episode.duration",
+    "episode.airDate",
+    "episode.stillUrl",
+    "episode.synopsis",
+    "media.title as seriesTitle",
+  ] as const;
 
-  const items = await db.episode.findMany({
-    where,
-    orderBy,
-    skip,
-    take: pageSize,
-    include: { media: { select: { title: true } } },
-  });
+  let queryBuilder = baseQuery.select(episodeColumns);
+
+  if (sort === "title") {
+    queryBuilder = queryBuilder.orderBy("episode.title", order).orderBy("episode.id", "asc");
+  } else if (sort === "season") {
+    queryBuilder = queryBuilder
+      .orderBy("episode.seasonNumber", order)
+      .orderBy("episode.episodeNumber", order)
+      .orderBy("episode.id", "asc");
+  } else if (sort === "episode") {
+    queryBuilder = queryBuilder
+      .orderBy("episode.episodeNumber", order)
+      .orderBy("episode.seasonNumber", order)
+      .orderBy("episode.id", "asc");
+  } else if (sort === "airDate") {
+    queryBuilder = queryBuilder.orderBy("episode.airDate", order).orderBy("episode.id", "asc");
+  } else {
+    queryBuilder = queryBuilder
+      .orderBy("media.title", order)
+      .orderBy("episode.mediaId", "asc")
+      .orderBy("episode.seasonNumber", "asc")
+      .orderBy("episode.episodeNumber", "asc");
+  }
+
+  const rows = await queryBuilder.offset(skip).limit(pageSize).execute();
+  const items = rows.map(({ seriesTitle, ...rest }) => ({
+    ...rest,
+    media: { title: seriesTitle },
+  }));
   return { items, page, totalPages, total };
 }
 
 /** An episode with its series, video sources and subtitles, for its edit page. */
-export async function getEpisodeForEdit(id: string) {
+export async function getEpisodeForEdit(id: string, executor: Kysely<DB> = database) {
   await requireAdmin();
   await connection();
   if (!isMediaId(id)) return null;
-  return db.episode.findUnique({
-    where: { id },
-    include: {
-      media: { select: { id: true, title: true, trashedAt: true } },
-      videoSources: { orderBy: VIDEO_ORDER },
-      subtitles: SUBTITLE_SUMMARY,
-    },
-  });
+  const row = await executor
+    .selectFrom("episode")
+    .selectAll("episode")
+    .select((eb) => [
+      jsonObjectFrom(
+        eb
+          .selectFrom("media")
+          .select(["id", "title", "trashedAt"])
+          .whereRef("media.id", "=", "episode.mediaId")
+      ).as("media"),
+      jsonArrayFrom(
+        eb
+          .selectFrom("video_source")
+          .selectAll("video_source")
+          .whereRef("video_source.episodeId", "=", "episode.id")
+          .orderBy("video_source.position", "asc")
+          .orderBy("video_source.id", "asc")
+      ).as("videoSources"),
+      jsonArrayFrom(
+        eb
+          .selectFrom("subtitle")
+          .select(["subtitle.id", "subtitle.language", "subtitle.fileName", "subtitle.createdAt"])
+          .whereRef("subtitle.episodeId", "=", "episode.id")
+      ).as("subtitles"),
+    ])
+    .where("episode.id", "=", id)
+    .executeTakeFirst();
+  if (!row || !row.media) return null;
+
+  return {
+    ...row,
+    media: row.media,
+    subtitles: (row.subtitles ?? []).map((s) => ({
+      ...s,
+      createdAt: new Date(s.createdAt),
+    })),
+  };
 }
 
 /**
@@ -1632,76 +2108,121 @@ export async function getEpisodeForEdit(id: string) {
  * media.imdbId), trashed ones included, so the Import page links to them
  * instead of bringing in a copy.
  */
-export async function findImported({ tmdbIds, imdbIds }: { tmdbIds: string[]; imdbIds: string[] }) {
+export async function findImported(
+  { tmdbIds, imdbIds }: { tmdbIds: string[]; imdbIds: string[] },
+  executor: Kysely<DB> = database
+) {
   await requireAdmin();
   await connection();
   if (tmdbIds.length === 0 && imdbIds.length === 0) return [];
-  return db.media.findMany({
-    where: { OR: [{ tmdbId: { in: tmdbIds } }, { imdbId: { in: imdbIds } }] },
-    select: { id: true, type: true, title: true, trashedAt: true, tmdbId: true, imdbId: true },
-  });
+  let query = executor
+    .selectFrom("media")
+    .select(["id", "type", "title", "trashedAt", "tmdbId", "imdbId"]);
+
+  if (tmdbIds.length > 0 && imdbIds.length > 0) {
+    query = query.where((eb) =>
+      eb.or([eb("tmdbId", "in", tmdbIds), eb("imdbId", "in", imdbIds)])
+    );
+  } else if (tmdbIds.length > 0) {
+    query = query.where("tmdbId", "in", tmdbIds);
+  } else {
+    query = query.where("imdbId", "in", imdbIds);
+  }
+
+  return query.execute();
 }
 
 /** /admin/trash: titles moved to the trash, with search and sorting support. */
-export async function listTrash({
-  page: requestedPage,
-  query = "",
-  sort = "trashedAt",
-  order = "desc",
-  pageSize = LIBRARY_PAGE_SIZE,
-}: {
-  page: number;
-  query?: string;
-  sort?: "title" | "year" | "trashedAt";
-  order?: "asc" | "desc";
-  pageSize?: number;
-}) {
+export async function listTrash(
+  {
+    page: requestedPage,
+    query = "",
+    sort = "trashedAt",
+    order = "desc",
+    pageSize = LIBRARY_PAGE_SIZE,
+  }: {
+    page: number;
+    query?: string;
+    sort?: "title" | "year" | "trashedAt";
+    order?: "asc" | "desc";
+    pageSize?: number;
+  },
+  executor: Kysely<DB> = database
+) {
   await requireAdmin();
   await connection();
   const search = normalizeQuery(query);
-  const where: Prisma.MediaWhereInput = {
-    trashedAt: { not: null },
-    ...(search ? { title: { contains: escapeLike(search), mode: "insensitive" } } : {}),
-  };
-  const total = await db.media.count({ where });
-  const { page, totalPages, skip } = pageWindow(total, requestedPage, pageSize);
-  const orderBy: Prisma.MediaOrderByWithRelationInput[] =
-    sort === "title"
-      ? [{ title: order }, { id: "asc" }]
-      : sort === "year"
-      ? [{ year: order }, { id: "asc" }]
-      : [{ trashedAt: order }, { id: "asc" }];
+  let baseQuery = executor.selectFrom("media").where("trashedAt", "is not", null);
+  if (search) {
+    baseQuery = baseQuery.where("title", "ilike", `%${escapeLike(search)}%`);
+  }
 
-  const items = await db.media.findMany({
-    where,
-    orderBy,
-    skip,
-    take: pageSize,
-    select: {
-      id: true,
-      type: true,
-      title: true,
-      year: true,
-      trashedAt: true,
-      statusBeforeTrash: true,
-      _count: { select: { episodes: true } },
-    },
-  });
+  const countRow = await baseQuery
+    .select((eb) => eb.fn.countAll().as("count"))
+    .executeTakeFirst();
+  const total = countRow ? countOf(countRow) : 0;
+  const { page, totalPages, skip } = pageWindow(total, requestedPage, pageSize);
+
+  let queryBuilder = baseQuery.select([
+    "id",
+    "type",
+    "title",
+    "year",
+    "trashedAt",
+    "statusBeforeTrash",
+    (eb) =>
+      eb
+        .selectFrom("episode")
+        .select((ib) => ib.fn.countAll().as("count"))
+        .whereRef("episode.mediaId", "=", "media.id")
+        .as("episodesCount"),
+  ]);
+
+  if (sort === "title") {
+    queryBuilder = queryBuilder.orderBy("title", order).orderBy("id", "asc");
+  } else if (sort === "year") {
+    queryBuilder = queryBuilder.orderBy("year", order).orderBy("id", "asc");
+  } else {
+    queryBuilder = queryBuilder.orderBy("trashedAt", order).orderBy("id", "asc");
+  }
+
+  const rows = await queryBuilder.offset(skip).limit(pageSize).execute();
+  const items = rows.map((r) => ({
+    id: r.id,
+    type: r.type,
+    title: r.title,
+    year: r.year,
+    trashedAt: r.trashedAt,
+    statusBeforeTrash: r.statusBeforeTrash,
+    _count: { episodes: Number(r.episodesCount ?? 0) },
+  }));
   return { items, page, totalPages, total };
 }
 
 /** Admin-only draft preview for titles before they are published. */
 export async function getDraftTitleForPreview(
-  id: string
+  id: string,
+  executor: Kysely<DB> = database
 ): Promise<(MediaDetail & { status: MediaStatus }) | null> {
   await requireAdmin();
   await connection();
   if (!isMediaId(id)) return null;
-  const row = await db.media.findUnique({
-    where: { id },
-    include: { episodes: { orderBy: EPISODE_ORDER } },
-  });
-  return row && { ...toDetail(row), status: row.status };
+  const row = await executor
+    .selectFrom("media")
+    .selectAll("media")
+    .select((eb) => [
+      jsonArrayFrom(
+        eb
+          .selectFrom("episode")
+          .selectAll("episode")
+          .whereRef("episode.mediaId", "=", "media.id")
+          .orderBy("episode.seasonNumber", "asc")
+          .orderBy("episode.episodeNumber", "asc")
+      ).as("episodes"),
+    ])
+    .where("id", "=", id)
+    .executeTakeFirst();
+  return row ? { ...toDetail(row), status: row.status } : null;
 }
 
 /** How many titles the dashboard lists under Most played and Recently added. */
@@ -1712,32 +2233,44 @@ const DASHBOARD_LIST_SIZE = 5;
  * (not counting the trash), plays in Trending's window and the titles
  * played most in it, and the titles added last, drafts included.
  */
-export async function getCatalogOverview() {
+export async function getCatalogOverview(executor: Kysely<DB> = database) {
   await requireAdmin();
   await connection();
-  const live: Prisma.MediaWhereInput = { trashedAt: null };
-  const [groups, plays, mostPlayed, recentlyAdded] = await Promise.all([
-    db.media.groupBy({ by: ["type", "status"], where: live, _count: { _all: true } }),
-    db.mediaView.count({
-      where: {
-        day: { gte: new Date(trendingSince(new Date())) },
-        media: { status: "published", trashedAt: null },
-      },
-    }),
-    trendingRows(DASHBOARD_LIST_SIZE),
-    db.media.findMany({
-      where: live,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: DASHBOARD_LIST_SIZE,
-      select: { id: true, type: true, title: true, status: true, createdAt: true },
-    }),
+  const [groups, playCountRow, mostPlayed, recentlyAdded] = await Promise.all([
+    executor
+      .selectFrom("media")
+      .select(["type", "status", (eb) => eb.fn.countAll().as("count")])
+      .where("trashedAt", "is", null)
+      .groupBy(["type", "status"])
+      .execute(),
+    executor
+      .selectFrom("media_view")
+      .innerJoin("media", "media.id", "media_view.mediaId")
+      .select((eb) => eb.fn.countAll().as("count"))
+      .where("media_view.day", ">=", new Date(trendingSince(new Date())))
+      .where("media.status", "=", "published")
+      .where("media.trashedAt", "is", null)
+      .executeTakeFirst(),
+    trendingRows(DASHBOARD_LIST_SIZE, executor),
+    executor
+      .selectFrom("media")
+      .select(["id", "type", "title", "status", "createdAt"])
+      .where("trashedAt", "is", null)
+      .orderBy("createdAt", "desc")
+      .orderBy("id", "desc")
+      .limit(DASHBOARD_LIST_SIZE)
+      .execute(),
   ]);
-  const count = (type: MediaType, status: MediaStatus) =>
-    groups.find((group) => group.type === type && group.status === status)?._count._all ?? 0;
+
+  const count = (type: MediaType, status: MediaStatus) => {
+    const found = groups.find((group) => group.type === type && group.status === status);
+    return found ? countOf(found) : 0;
+  };
+
   return {
     published: { movie: count("movie", "published"), series: count("series", "published") },
     drafts: { movie: count("movie", "draft"), series: count("series", "draft") },
-    plays,
+    plays: playCountRow ? countOf(playCountRow) : 0,
     mostPlayed: mostPlayed.map(({ id, type, title, views }) => ({ id, type, title, plays: views })),
     recentlyAdded,
   };
@@ -1749,15 +2282,19 @@ export async function getCatalogOverview() {
  * itself leads nowhere (null), so the page is a 404 rather than a
  * redirect loop.
  */
-export async function resolveEpisodeRedirect(slug: string): Promise<string | null> {
+export async function resolveEpisodeRedirect(
+  slug: string,
+  executor: Kysely<DB> = database
+): Promise<string | null> {
   await connection();
   const seen = new Set([slug]);
   let currentSlug = slug;
   while (seen.size <= 10) {
-    const redirect = await db.episodeRedirect.findFirst({
-      where: { oldSlug: currentSlug },
-      select: { newSlug: true },
-    });
+    const redirect = await executor
+      .selectFrom("episode_redirect")
+      .select("newSlug")
+      .where("oldSlug", "=", currentSlug)
+      .executeTakeFirst();
     if (!redirect) break;
     if (seen.has(redirect.newSlug)) return null;
     seen.add(redirect.newSlug);

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { jsonArrayFrom, jsonObjectFrom } from "kysely/helpers/postgres";
 import {
   blockList,
   deleteReviewForGood,
@@ -10,7 +11,8 @@ import {
 } from "@/lib/admin-community-actions";
 import { memberNicknames } from "@/lib/community";
 import { REPORT_REASONS, isReportReason } from "@/lib/community-rules";
-import { db } from "@/lib/db";
+import { database } from "@/lib/database";
+import { countOf } from "@/lib/sql-helpers";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 import { requireAdmin } from "@/lib/session";
 import { accountEmails } from "@/lib/user-admin-store";
@@ -51,11 +53,6 @@ function reasonSummary(reports: { reason: string }[]) {
   return [...counts].map(([label, count]) => (count > 1 ? `${label} (${count})` : label)).join(", ");
 }
 
-const REVIEW_INCLUDE = {
-  media: { select: { id: true, title: true, type: true } },
-  reports: { where: { resolvedAt: null }, select: { reason: true } },
-} as const;
-
 /** Who posted it: their nickname, and for staff, their account's email. */
 type Author = { id: string; email: string; nickname: string | null };
 
@@ -70,8 +67,50 @@ async function loadAuthors(userIds: string[]): Promise<(userId: string) => Autho
 
 type ReviewRow = Awaited<ReturnType<typeof loadReviews>>[number] & { author: Author };
 
-function loadReviews(where: object, orderBy: object) {
-  return db.review.findMany({ where, orderBy, take: SHOWN, include: REVIEW_INCLUDE });
+async function loadReviews(tab: Tab) {
+  let query = database
+    .selectFrom("review")
+    .select([
+      "review.id",
+      "review.userId",
+      "review.mediaId",
+      "review.body",
+      "review.createdAt",
+      "review.hiddenAt",
+      "review.hiddenBy",
+    ])
+    .select((eb) => [
+      jsonObjectFrom(
+        eb.selectFrom("media").select(["id", "title", "type"]).whereRef("media.id", "=", "review.mediaId")
+      ).as("media"),
+      jsonArrayFrom(
+        eb
+          .selectFrom("content_report")
+          .select("reason")
+          .whereRef("content_report.reviewId", "=", "review.id")
+          .where("resolvedAt", "is", null)
+      ).as("reports"),
+    ]);
+
+  if (tab === "reported") {
+    query = query
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom("content_report")
+            .whereRef("content_report.reviewId", "=", "review.id")
+            .where("resolvedAt", "is", null)
+        )
+      )
+      .orderBy("review.createdAt", "desc");
+  } else if (tab === "recent") {
+    query = query.orderBy("review.createdAt", "desc");
+  } else {
+    query = query.where("review.hiddenAt", "is not", null).orderBy("review.hiddenAt", "desc");
+  }
+
+  const rows = await query.limit(SHOWN).execute();
+  return rows.filter((r): r is typeof r & { media: NonNullable<typeof r.media> } => r.media !== null);
 }
 
 function ReviewItem({ review }: { review: ReviewRow }) {
@@ -153,34 +192,68 @@ export default async function CommunityPage({
   await requireAdmin();
   const requested = firstParam((await searchParams).tab);
   const tab: Tab = TABS.some((t) => t.key === requested) ? (requested as Tab) : "reported";
-  const openReports = { reports: { some: { resolvedAt: null } } };
 
-  const [reviewRows, listRows, openCount] = await Promise.all([
-    tab === "reported"
-      ? loadReviews(openReports, { createdAt: "desc" })
-      : tab === "recent"
-        ? loadReviews({}, { createdAt: "desc" })
-        : loadReviews({ hiddenAt: { not: null } }, { hiddenAt: "desc" }),
-    db.mediaList.findMany({
-      where:
-        tab === "reported"
-          ? openReports
-          : tab === "recent"
-            ? { isPublic: true, inCommunity: true, communityBlocked: false }
-            : { communityBlocked: true },
-      orderBy: { updatedAt: "desc" },
-      take: SHOWN,
-      select: {
-        id: true,
-        name: true,
-        communityBlocked: true,
-        userId: true,
-        _count: { select: { items: true } },
-        reports: { where: { resolvedAt: null }, select: { reason: true } },
-      },
-    }),
-    db.contentReport.count({ where: { resolvedAt: null } }),
+  let listQuery = database
+    .selectFrom("media_list")
+    .select([
+      "media_list.id",
+      "media_list.name",
+      "media_list.communityBlocked",
+      "media_list.userId",
+    ])
+    .select((eb) => [
+      eb
+        .selectFrom("list_item")
+        .select((ib) => ib.fn.countAll().as("count"))
+        .whereRef("list_item.listId", "=", "media_list.id")
+        .as("itemsCount"),
+      jsonArrayFrom(
+        eb
+          .selectFrom("content_report")
+          .select("reason")
+          .whereRef("content_report.listId", "=", "media_list.id")
+          .where("resolvedAt", "is", null)
+      ).as("reports"),
+    ]);
+
+  if (tab === "reported") {
+    listQuery = listQuery.where((eb) =>
+      eb.exists(
+        eb
+          .selectFrom("content_report")
+          .whereRef("content_report.listId", "=", "media_list.id")
+          .where("resolvedAt", "is", null)
+      )
+    );
+  } else if (tab === "recent") {
+    listQuery = listQuery
+      .where("media_list.isPublic", "=", true)
+      .where("media_list.inCommunity", "=", true)
+      .where("media_list.communityBlocked", "=", false);
+  } else {
+    listQuery = listQuery.where("media_list.communityBlocked", "=", true);
+  }
+
+  const [reviewRows, rawLists, openCountRow] = await Promise.all([
+    loadReviews(tab),
+    listQuery.orderBy("media_list.updatedAt", "desc").limit(SHOWN).execute(),
+    database
+      .selectFrom("content_report")
+      .select((eb) => eb.fn.countAll().as("count"))
+      .where("resolvedAt", "is", null)
+      .executeTakeFirst(),
   ]);
+
+  const listRows = rawLists.map((l) => ({
+    id: l.id,
+    name: l.name,
+    communityBlocked: l.communityBlocked,
+    userId: l.userId,
+    _count: { items: Number(l.itemsCount ?? 0) },
+    reports: l.reports ?? [],
+  }));
+  const openCount = openCountRow ? countOf(openCountRow) : 0;
+
   const authorOf = await loadAuthors([...reviewRows, ...listRows].map((row) => row.userId));
   const reviews = reviewRows.map((row) => ({ ...row, author: authorOf(row.userId) }));
   const lists = listRows.map((row) => ({ ...row, author: authorOf(row.userId) }));

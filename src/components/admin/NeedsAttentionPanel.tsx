@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
-import { db } from "@/lib/db";
+import { database } from "@/lib/database";
 import { libraryPath } from "@/lib/title-form";
 import type { MediaType } from "@/lib/media";
 
@@ -14,46 +14,59 @@ type TriageItem = {
 export default async function NeedsAttentionPanel() {
   const [moviesWithoutVideo, seriesWithoutEpisodes, mediaWithoutPoster, featuredHero] =
     await Promise.all([
-      db.media.findMany({
-        where: {
-          type: "movie",
-          status: "published",
-          trashedAt: null,
-          videoSources: { none: { enabled: true } },
-        },
-        select: { id: true, title: true, type: true },
-        orderBy: { createdAt: "desc" },
-        take: 50,
-      }),
-      db.media.findMany({
-        where: {
-          type: "series",
-          status: "published",
-          trashedAt: null,
-          episodes: { none: {} },
-        },
-        select: { id: true, title: true, type: true },
-        orderBy: { createdAt: "desc" },
-        take: 50,
-      }),
-      db.media.findMany({
-        where: {
-          status: "published",
-          trashedAt: null,
-          OR: [{ posterUrl: "/brand/no-poster.jpg" }, { posterUrl: "" }],
-        },
-        select: { id: true, title: true, type: true },
-        orderBy: { createdAt: "desc" },
-        take: 50,
-      }),
-      db.media.findFirst({
-        where: {
-          status: "published",
-          trashedAt: null,
-          featured: true,
-        },
-        select: { id: true },
-      }),
+      database
+        .selectFrom("media")
+        .select(["id", "title", "type"])
+        .where("type", "=", "movie")
+        .where("status", "=", "published")
+        .where("trashedAt", "is", null)
+        .where((eb) =>
+          eb.not(
+            eb.exists(
+              eb
+                .selectFrom("video_source")
+                .whereRef("video_source.mediaId", "=", "media.id")
+                .where("video_source.enabled", "=", true)
+            )
+          )
+        )
+        .orderBy("createdAt", "desc")
+        .limit(50)
+        .execute(),
+      database
+        .selectFrom("media")
+        .select(["id", "title", "type"])
+        .where("type", "=", "series")
+        .where("status", "=", "published")
+        .where("trashedAt", "is", null)
+        .where((eb) =>
+          eb.not(
+            eb.exists(
+              eb.selectFrom("episode").whereRef("episode.mediaId", "=", "media.id")
+            )
+          )
+        )
+        .orderBy("createdAt", "desc")
+        .limit(50)
+        .execute(),
+      database
+        .selectFrom("media")
+        .select(["id", "title", "type"])
+        .where("status", "=", "published")
+        .where("trashedAt", "is", null)
+        .where((eb) =>
+          eb.or([eb("posterUrl", "=", "/brand/no-poster.jpg"), eb("posterUrl", "=", "")])
+        )
+        .orderBy("createdAt", "desc")
+        .limit(50)
+        .execute(),
+      database
+        .selectFrom("media")
+        .select("id")
+        .where("status", "=", "published")
+        .where("trashedAt", "is", null)
+        .where("featured", "=", true)
+        .executeTakeFirst(),
     ]);
 
   const itemMap = new Map<string, TriageItem>();

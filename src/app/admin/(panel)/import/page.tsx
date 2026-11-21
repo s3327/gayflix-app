@@ -15,7 +15,7 @@ import { requireAdmin } from "@/lib/session";
 import { tmdbConfigured } from "@/lib/tmdb";
 import { gradientFor, imageUrlProblem, NO_POSTER, libraryPath } from "@/lib/title-form";
 import { searchSources, type ImportCard, type ImportSearch } from "@/lib/title-import";
-import { db } from "@/lib/db";
+import { database } from "@/lib/database";
 
 export const metadata: Metadata = {
   title: "Import",
@@ -38,12 +38,14 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
   };
 
   const recentImports = !search.query
-    ? await db.media.findMany({
-        where: { tmdbId: { not: null }, trashedAt: null },
-        orderBy: { createdAt: "desc" },
-        take: 6,
-        select: { id: true, title: true, type: true, year: true, posterUrl: true },
-      })
+    ? await database
+        .selectFrom("media")
+        .select(["id", "title", "type", "year", "posterUrl"])
+        .where("tmdbId", "is not", null)
+        .where("trashedAt", "is", null)
+        .orderBy("createdAt", "desc")
+        .limit(6)
+        .execute()
     : [];
 
   return (

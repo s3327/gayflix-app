@@ -5,7 +5,8 @@ import Pagination from "@/components/Pagination";
 import ReportTriageView, { type ReportGroup } from "@/components/admin/ReportTriageView";
 import { reopenReport, resolveReport } from "@/lib/admin-report-actions";
 import { findEpisodeIds } from "@/lib/catalog";
-import { db } from "@/lib/db";
+import { database } from "@/lib/database";
+import { countOf } from "@/lib/sql-helpers";
 import { firstParam, pageParam, type SearchParams } from "@/lib/search-params";
 import { requireAdmin } from "@/lib/session";
 import { accountEmails } from "@/lib/user-admin-store";
@@ -39,21 +40,41 @@ export default async function ReportsPage({
   const params = await searchParams;
   const showResolved = firstParam(params.status) === "resolved";
   const viewMode = firstParam(params.view) ?? "list";
-  const where = { resolvedAt: showResolved ? { not: null } : null };
 
-  const [total, openCount] = await Promise.all([
-    db.report.count({ where }),
-    db.report.count({ where: { resolvedAt: null } }),
+  let countQuery = database
+    .selectFrom("report")
+    .select((eb) => eb.fn.countAll().as("count"));
+  if (showResolved) {
+    countQuery = countQuery.where("resolvedAt", "is not", null);
+  } else {
+    countQuery = countQuery.where("resolvedAt", "is", null);
+  }
+
+  const [totalRow, openCountRow] = await Promise.all([
+    countQuery.executeTakeFirst(),
+    database
+      .selectFrom("report")
+      .select((eb) => eb.fn.countAll().as("count"))
+      .where("resolvedAt", "is", null)
+      .executeTakeFirst(),
   ]);
+  const total = totalRow ? countOf(totalRow) : 0;
+  const openCount = openCountRow ? countOf(openCountRow) : 0;
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
   const page = Math.min(pageParam(params.page), totalPages);
 
-  const rows = await db.report.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    skip: (page - 1) * PER_PAGE,
-    take: PER_PAGE,
-  });
+  let reportQuery = database.selectFrom("report").selectAll();
+  if (showResolved) {
+    reportQuery = reportQuery.where("resolvedAt", "is not", null);
+  } else {
+    reportQuery = reportQuery.where("resolvedAt", "is", null);
+  }
+
+  const rows = await reportQuery
+    .orderBy("createdAt", "desc")
+    .offset((page - 1) * PER_PAGE)
+    .limit(PER_PAGE)
+    .execute();
   // Accounts are Supabase Auth's, outside the Prisma schema.
   const emails = await accountEmails(rows.map((report) => report.userId));
   const reports = rows.map((report) => {
@@ -66,10 +87,11 @@ export default async function ReportsPage({
   const nonEpisodeMediaIds = allMediaIds.filter((id) => !episodeIds.has(id));
   const mediaRows =
     nonEpisodeMediaIds.length > 0
-      ? await db.media.findMany({
-          where: { id: { in: nonEpisodeMediaIds } },
-          select: { id: true, type: true },
-        })
+      ? await database
+          .selectFrom("media")
+          .select(["id", "type"])
+          .where("id", "in", nonEpisodeMediaIds)
+          .execute()
       : [];
   const mediaTypeMap = new Map(mediaRows.map((m) => [m.id, m.type]));
 
@@ -113,14 +135,18 @@ export default async function ReportsPage({
   // episode's server tabs that are still on.
   if (reportGroups.length > 0) {
     const groupMediaIds = [...new Set(reportGroups.map((group) => group.mediaId))];
-    const sources = await db.videoSource.findMany({
-      where: {
-        enabled: true,
-        OR: [{ mediaId: { in: groupMediaIds } }, { episodeId: { in: groupMediaIds } }],
-      },
-      orderBy: { position: "asc" },
-      select: { id: true, label: true, mediaId: true, episodeId: true },
-    });
+    const sources = await database
+      .selectFrom("video_source")
+      .select(["id", "label", "mediaId", "episodeId"])
+      .where("enabled", "=", true)
+      .where((eb) =>
+        eb.or([
+          eb("mediaId", "in", groupMediaIds),
+          eb("episodeId", "in", groupMediaIds),
+        ])
+      )
+      .orderBy("position", "asc")
+      .execute();
     for (const group of reportGroups) {
       group.sources = sources
         .filter((source) => (source.episodeId ?? source.mediaId) === group.mediaId)

@@ -3,7 +3,7 @@ import { BUTTON_SECONDARY } from "@/components/admin/FormFields";
 import TitleForm from "@/components/admin/TitleForm";
 import { createTitle } from "@/lib/admin-catalog-actions";
 import { getLiveHero } from "@/lib/catalog";
-import { db } from "@/lib/db";
+import { database } from "@/lib/database";
 import { imageHosts, uploadHost } from "@/lib/image-hosts.mjs";
 import { parseTmdbRef } from "@/lib/import-mapping";
 import type { MediaType } from "@/lib/media";
@@ -24,7 +24,7 @@ export default async function AddTitlePage({ type, tmdbId }: { type: MediaType; 
   const [plan, currentHero, existingMedia] = await Promise.all([
     ref ? prepareImport(ref, type) : null,
     getLiveHero(),
-    db.media.findMany({ select: { title: true } }),
+    database.selectFrom("media").select("title").execute(),
   ]);
   const existingTitles = existingMedia.map((m) => m.title);
   const heading = isMovie ? "Add a movie" : "Add a series";
