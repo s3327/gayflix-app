@@ -81,3 +81,92 @@ export async function hasPasswordSignIn(userId: string, executor: Kysely<DB> = d
   `.execute(executor);
   return rows[0]?.found ?? false;
 }
+
+/** A signed-in device: one of the account's live sessions in Supabase Auth. */
+export type AccountSession = {
+  id: string;
+  /** The browser that signed in (src/lib/supabase/config.ts forwards it), or null. */
+  userAgent: string | null;
+  createdAt: Date;
+  /** When the session was last renewed (about hourly while it's in use). */
+  lastActiveAt: Date;
+};
+
+/**
+ * The account's live sessions (not past `not_after`), most recently
+ * active first. Never the address Supabase saw (`ip`, blanked anyway).
+ */
+export async function listAccountSessions(
+  userId: string,
+  executor: Kysely<DB> = database
+): Promise<AccountSession[]> {
+  if (!UUID.test(userId)) return [];
+  const { rows } = await sql<{ id: string; userAgent: string | null; createdAt: Date; lastActiveAt: Date }>`
+    SELECT id, user_agent AS "userAgent", created_at AS "createdAt",
+           COALESCE(updated_at, created_at) AS "lastActiveAt"
+    FROM auth.sessions
+    WHERE user_id = ${userId}::uuid AND (not_after IS NULL OR not_after > now())
+    ORDER BY COALESCE(updated_at, created_at) DESC, created_at DESC
+  `.execute(executor);
+  return rows.map((row) => ({ ...row, createdAt: new Date(row.createdAt), lastActiveAt: new Date(row.lastActiveAt) }));
+}
+
+/**
+ * Ends one of the account's sessions by deleting its row, only when it
+ * belongs to `userId`; its refresh tokens go with it (ON DELETE CASCADE),
+ * so the device can't renew, and getVerifiedSession() refuses its token
+ * at once. Returns how many sessions were deleted (0 or 1).
+ */
+export async function deleteAccountSession(
+  userId: string,
+  sessionId: string,
+  executor: Kysely<DB> = database
+): Promise<number> {
+  if (!UUID.test(userId) || !UUID.test(sessionId)) return 0;
+  const result = await sql`
+    DELETE FROM auth.sessions WHERE id = ${sessionId}::uuid AND user_id = ${userId}::uuid
+  `.execute(executor);
+  return Number(result.numAffectedRows ?? 0);
+}
+
+export type SignInMethod = "email" | "google";
+
+/** How the account can sign in: with its password ("email"), with Google, or both. */
+export async function signInMethods(userId: string, executor: Kysely<DB> = database): Promise<SignInMethod[]> {
+  if (!UUID.test(userId)) return [];
+  const { rows } = await sql<{ provider: SignInMethod }>`
+    SELECT DISTINCT provider FROM auth.identities
+    WHERE user_id = ${userId}::uuid AND provider IN ('email', 'google')
+    ORDER BY provider
+  `.execute(executor);
+  return rows.map((row) => row.provider);
+}
+
+/** When the account was made (its profile row's `createdAt`), or null without one. */
+export async function accountCreatedAt(userId: string, executor: Kysely<DB> = database): Promise<Date | null> {
+  if (!UUID.test(userId)) return null;
+  const row = await executor.selectFrom("profile").select("createdAt").where("id", "=", userId).executeTakeFirst();
+  return row ? new Date(row.createdAt) : null;
+}
+
+/**
+ * The account's email change waiting for its codes, or null when there's
+ * none. With secure email change on, Supabase Auth emails a code to each
+ * address and clears each one's token as its code is accepted (checked
+ * on the local stack), so a side whose token is gone is already confirmed.
+ */
+export async function pendingEmailChange(
+  userId: string,
+  executor: Kysely<DB> = database
+): Promise<{ newEmail: string; currentPending: boolean; newPending: boolean } | null> {
+  if (!UUID.test(userId)) return null;
+  const { rows } = await sql<{ newEmail: string | null; currentPending: boolean; newPending: boolean }>`
+    SELECT email_change AS "newEmail",
+           COALESCE(email_change_token_current, '') <> '' AS "currentPending",
+           COALESCE(email_change_token_new, '') <> '' AS "newPending"
+    FROM auth.users WHERE id = ${userId}::uuid
+  `.execute(executor);
+  const row = rows[0];
+  if (!row?.newEmail || (!row.currentPending && !row.newPending)) return null;
+  return { newEmail: row.newEmail, currentPending: row.currentPending, newPending: row.newPending };
+}

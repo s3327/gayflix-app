@@ -232,6 +232,12 @@ web3 = 30
 enabled = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
+# On (it sets GOTRUE_MAILER_SECURE_EMAIL_CHANGE_ENABLED): each address gets
+# its own 6-digit code, and the email changes only once both are entered.
+# The account page also asks for the password, but only Auth can make a
+# stolen session unable to move the account to a new address on its own.
+# The hosted project turns on the same in its dashboard (Auth > Providers >
+# Email > Secure email change).
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
 enable_confirmations = true
@@ -267,8 +273,16 @@ subject = "Your Gayflix password reset code"
 content_path = "./supabase/templates/recovery.html"
 
 [auth.email.template.email_change]
-subject = "Confirm your new Gayflix email"
+subject = "Confirm your Gayflix email change"
 content_path = "./supabase/templates/email_change.html"
+
+# Tells the old address once the email has changed (to the new one, as
+# `{{ .Email }}`). The hosted project turns on the same notification in its
+# dashboard (Auth > Emails > Security notifications).
+[auth.email.notification.email_changed]
+enabled = true
+subject = "Your Gayflix email was changed"
+content_path = "./supabase/templates/email_changed_notification.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]

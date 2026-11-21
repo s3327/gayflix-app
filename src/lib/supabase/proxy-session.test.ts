@@ -84,6 +84,21 @@ describe("refreshSessionCookies", () => {
     expect(request.cookies.get("theme")?.value).toBe("dark");
   });
 
+  it("tells Supabase Auth the visitor's browser, and nothing else about them", async () => {
+    refreshingClient();
+    const request = new NextRequest(new URL("/home", "http://localhost:3000"), {
+      headers: {
+        cookie: `sb-127-auth-token=${OLD_TOKEN}`,
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0) Firefox/140.0",
+        "x-forwarded-for": "203.0.113.7",
+      },
+    });
+    await refreshSessionCookies(request, NextResponse.next());
+    const options = createServerClient.mock.calls[0][2] as { global?: { headers?: Record<string, string> } };
+    // A refresh records the session's browser again (auth.sessions.user_agent).
+    expect(options.global?.headers).toEqual({ "User-Agent": "Mozilla/5.0 (Windows NT 10.0) Firefox/140.0" });
+  });
+
   it("does nothing for a guest with no Supabase cookies", async () => {
     const request = pageRequest("/home", "theme=dark");
     const response = NextResponse.next();

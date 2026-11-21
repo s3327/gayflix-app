@@ -1,16 +1,13 @@
-import { headers } from "next/headers";
 import { connection } from "next/server";
 import { Monitor, Smartphone } from "lucide-react";
 import DeleteAccount from "@/components/DeleteAccount";
 import NicknameSetting from "@/components/NicknameSetting";
 import TwoFactorSetting from "@/components/TwoFactorSetting";
-import { signOutDevice, signOutOtherDevices } from "@/lib/account-actions";
+import { listDevices, signOutDevice, signOutOtherDevices } from "@/lib/account-actions";
 import { accountDeletionProblem } from "@/lib/account-deletion";
 import { isStaffRole } from "@/lib/admin-roles";
-import { auth } from "@/lib/auth";
 import { hasPasswordSignIn, hasVerifiedTotpFactor } from "@/lib/auth-profile";
 import { getMyNickname } from "@/lib/community";
-import { db } from "@/lib/db";
 import { deviceName, isMobileDevice } from "@/lib/device-name";
 import { requireUser } from "@/lib/session";
 
@@ -27,33 +24,17 @@ const SECONDARY_BUTTON =
 /**
  * Where the account is signed in, with a way to sign out of the other
  * devices, optional two-factor sign-in, the public nickname, and deleting
- * the account. Device names come from each
- * session's browser (src/lib/device-name.ts); addresses aren't shown.
- * "Last active" moves at most once a day, when the session is renewed.
+ * the account. Devices are the account's Supabase Auth sessions
+ * (listDevices); their names come from each session's browser
+ * (src/lib/device-name.ts), and addresses aren't shown. "Last active"
+ * moves when the session is renewed, about hourly while it's in use.
  */
 export default async function AccountSettingPage() {
   const session = await requireUser("/account/setting");
-  const requestHeaders = await headers();
   await connection();
 
-  let sessions: Array<{
-    id: string;
-    userAgent?: string | null;
-    createdAt: Date | string;
-    updatedAt: Date | string;
-  }> = [];
-
-  try {
-    sessions = await auth.api.listSessions({ headers: requestHeaders });
-  } catch {
-    const dbSessions = await db.session.findMany({
-      where: { userId: session.user.id, expiresAt: { gt: new Date() } },
-      select: { id: true, userAgent: true, createdAt: true, updatedAt: true },
-    });
-    sessions = dbSessions;
-  }
-
-  const [nickname, twoFactorEnabled, hasPassword] = await Promise.all([
+  const [sessions, nickname, twoFactorEnabled, hasPassword] = await Promise.all([
+    listDevices(),
     getMyNickname(),
     hasVerifiedTotpFactor(session.user.id),
     hasPasswordSignIn(session.user.id),
@@ -64,12 +45,12 @@ export default async function AccountSettingPage() {
       id: s.id,
       name: deviceName(s.userAgent),
       mobile: isMobileDevice(s.userAgent),
-      current: s.id === session.sessionId,
-      createdAt: new Date(s.createdAt),
-      updatedAt: new Date(s.updatedAt),
+      current: s.current,
+      createdAt: s.createdAt,
+      lastActiveAt: s.lastActiveAt,
     }))
     // This device first, then the most recently used.
-    .sort((a, b) => Number(b.current) - Number(a.current) || +b.updatedAt - +a.updatedAt);
+    .sort((a, b) => Number(b.current) - Number(a.current) || +b.lastActiveAt - +a.lastActiveAt);
   const hasOtherDevices = devices.some((device) => !device.current);
 
   // Anything that stops deletion besides the password, which the dialog asks for.
@@ -119,7 +100,7 @@ export default async function AccountSettingPage() {
                     </span>{" "}
                     ·{" "}
                     <span className="whitespace-nowrap">
-                      Last active {DATE.format(device.updatedAt)}
+                      Last active {DATE.format(device.lastActiveAt)}
                     </span>
                   </p>
                 </div>

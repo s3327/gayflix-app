@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <meta name="supported-color-schemes" content="dark">
-<title>Confirm your new email</title>
+<title>Confirm your email change</title>
 </head>
 <body style="margin:0;padding:0;background:#0b0b0f;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0b0b0f" style="background:#0b0b0f;">
@@ -13,11 +13,12 @@
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
 <tr><td align="center" style="padding:0 0 24px;font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:28px;font-weight:700;color:#f13da8;">Gayflix</td></tr>
 <tr><td bgcolor="#17171f" style="background:#17171f;border:1px solid #2a2a35;border-radius:16px;padding:32px 28px;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
-<h1 style="margin:0 0 16px;font-size:24px;line-height:32px;font-weight:700;color:#ffffff;">Confirm your new email</h1>
-<p style="margin:0 0 16px;font-size:16px;line-height:24px;color:#b7b7c3;">Enter this code to make this your Gayflix email. Your account keeps using the old one until you do.</p>
+{{ if eq .SendingTo .Email }}<h1 style="margin:0 0 16px;font-size:24px;line-height:32px;font-weight:700;color:#ffffff;">Confirm your email change</h1>
+<p style="margin:0 0 16px;font-size:16px;line-height:24px;color:#b7b7c3;">Someone asked to change your Gayflix email to {{ .NewEmail }}. If it was you, enter this code as the one from your current email. A second code went to the new address: both are needed.</p>{{ else }}<h1 style="margin:0 0 16px;font-size:24px;line-height:32px;font-weight:700;color:#ffffff;">Confirm your new email</h1>
+<p style="margin:0 0 16px;font-size:16px;line-height:24px;color:#b7b7c3;">Enter this code as the one from your new email. Your account keeps using the old one until both codes are entered.</p>{{ end }}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px;"><tr><td style="background:#22222c;border:1px solid #2a2a35;border-radius:12px;padding:14px 24px;font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:32px;line-height:40px;font-weight:700;letter-spacing:8px;color:#ffffff;">{{ .Token }}</td></tr></table>
 <p style="margin:0 0 16px;font-size:16px;line-height:24px;color:#b7b7c3;">It expires in 60 minutes.</p>
-<p style="margin:8px 0 0;padding-top:16px;border-top:1px solid #2a2a35;font-size:13px;line-height:20px;color:#878794;">If you didn't ask for it, you can ignore this email.</p>
+<p style="margin:8px 0 0;padding-top:16px;border-top:1px solid #2a2a35;font-size:13px;line-height:20px;color:#878794;">If you didn't ask for it, don't enter the code, and change your password: someone may have it.</p>
 </td></tr>
 </table>
 </td></tr>

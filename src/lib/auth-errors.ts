@@ -18,6 +18,8 @@ const MESSAGES: Record<string, string> = {
   weak_password: "Choose a stronger password: at least 8 characters.",
   same_password: "Choose a password different from your current one.",
   user_banned: "This account has been banned.",
+  // Changing the email (src/lib/account-actions.ts) to another account's.
+  email_exists: "That email is already used by another account.",
   signup_disabled: REGISTRATION_CLOSED,
   // Two-factor (TOTP) codes, from src/lib/two-factor-actions.ts.
   mfa_verification_failed: "That code isn't right. Check your authenticator app and try again.",

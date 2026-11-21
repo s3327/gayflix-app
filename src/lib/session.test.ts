@@ -161,12 +161,14 @@ describe("a sign-in waiting for its two-factor code", () => {
 
   it("is signed out for getSession and requireUser", async () => {
     getClaims.mockResolvedValue({ data: { claims: pending() }, error: null });
+    readAuthProfile.mockResolvedValue({ role: "user", hasVerifiedTotp: true });
     expect(await getSession()).toBeNull();
     await expect(requireUser("/account")).rejects.toThrow("NEXT_REDIRECT /login?next=%2Faccount");
   });
 
   it("is signed in once it passed two-factor (aal2)", async () => {
     getClaims.mockResolvedValue({ data: { claims: adminClaims({ has_totp: true }) }, error: null });
+    readAuthProfile.mockResolvedValue({ role: "admin", hasVerifiedTotp: true });
     expect((await getSession())?.aal).toBe("aal2");
     expect((await requireUser("/account")).user.id).toBe(USER_ID);
   });
@@ -225,5 +227,21 @@ describe("requireUser", () => {
   it("sends a guest to /login with a way back", async () => {
     requestCookies = [];
     await expect(requireUser("/account")).rejects.toThrow("NEXT_REDIRECT /login?next=%2Faccount");
+  });
+
+  it("reads the session fresh from the database, so the page shows its current role and two-factor", async () => {
+    getClaims.mockResolvedValue({ data: { claims: claims({ user_role: "admin" }) }, error: null });
+    readAuthProfile.mockResolvedValue({ role: "user", hasVerifiedTotp: false });
+    const session = await requireUser("/account/setting");
+    expect(readAuthProfile).toHaveBeenCalledWith(USER_ID, SESSION_ID);
+    expect(session.user.role).toBe("user");
+  });
+
+  it("sends a signed-out or banned account to /login at once, though its token still verifies", async () => {
+    getClaims.mockResolvedValue({ data: { claims: claims() }, error: null });
+    readAuthProfile.mockResolvedValue(null);
+    await expect(requireUser("/account/setting")).rejects.toThrow(
+      "NEXT_REDIRECT /login?next=%2Faccount%2Fsetting"
+    );
   });
 });

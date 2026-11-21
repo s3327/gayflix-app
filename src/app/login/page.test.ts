@@ -8,9 +8,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const getSession = vi.fn();
+const getVerifiedSession = vi.fn();
 const getPendingTwoFactorSession = vi.fn();
 vi.mock("@/lib/session", () => ({
   getSession: () => getSession(),
+  getVerifiedSession: () => getVerifiedSession(),
   getPendingTwoFactorSession: () => getPendingTwoFactorSession(),
 }));
 vi.mock("@/lib/supabase/server", () => ({ googleSignInEnabled: async () => false }));
@@ -30,6 +32,7 @@ async function render(query: Record<string, string>) {
 
 beforeEach(() => {
   getSession.mockResolvedValue(null);
+  getVerifiedSession.mockResolvedValue(null);
   getPendingTwoFactorSession.mockResolvedValue(null);
 });
 
@@ -53,6 +56,14 @@ describe("/login", () => {
 
   it("sends a signed-in member on", async () => {
     getSession.mockResolvedValue({ user: { id: "u1" } });
+    getVerifiedSession.mockResolvedValue({ user: { id: "u1" } });
     await expect(render({ twoFactor: "1", next: "/title/x" })).rejects.toThrow("NEXT_REDIRECT /title/x");
+  });
+
+  // Account pages read the session fresh (requireUser) and send such a
+  // device here; sending it back would loop.
+  it("shows the form to a device signed out elsewhere, though its token still verifies", async () => {
+    getSession.mockResolvedValue({ user: { id: "u1" } });
+    expect(await render({ next: "/account" })).toMatchObject({ next: "/account" });
   });
 });

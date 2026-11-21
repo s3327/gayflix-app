@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { deleteAccount as deleteAccountAction } from "@/lib/account-actions";
 import { signOut } from "@/lib/auth-actions";
-import { authClient, authErrorMessage } from "@/lib/auth-client";
 import { isActionRedirect } from "@/lib/auth-redirects";
 
 /** The signed-in user as the root layout passes it down (from getSession()). */
@@ -12,8 +12,6 @@ export type AuthUser = {
   email: string;
   role: string;
   name: string | null;
-  /** Not in the session token; read on the pages that show it. */
-  createdAt?: Date | string;
 };
 
 type AuthContextValue = {
@@ -92,20 +90,23 @@ export function AuthProvider({
     }
   }, []);
 
-  const deleteAccount = useCallback(
-    async (password?: string) => {
-      setIsLoggingOut(true);
-      const { error } = await authClient.deleteUser(password ? { password } : {});
-      if (error) {
+  const deleteAccount = useCallback(async (password?: string) => {
+    setIsLoggingOut(true);
+    try {
+      // Returns only if the account couldn't be deleted: on success the
+      // server signs out and sends the browser to /home.
+      const { error } = await deleteAccountAction(password);
+      setIsLoggingOut(false);
+      return error;
+    } catch (thrown) {
+      if (!isActionRedirect(thrown)) {
         setIsLoggingOut(false);
-      } else {
-        setSignedOut(true);
-        router.refresh();
+        throw thrown;
       }
-      return authErrorMessage(error);
-    },
-    [router]
-  );
+      setSignedOut(true);
+      return "";
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     router.refresh();

@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import type { NextRequest, NextResponse } from "next/server";
-import { hasSupabaseAuthCookie, sessionCookieOptions, supabaseConfig } from "@/lib/supabase/config";
+import { hasSupabaseAuthCookie, sessionCookieOptions, supabaseConfig, visitorHeaders } from "@/lib/supabase/config";
 
 /**
  * Refreshes the signed-in user's session when its access token has
@@ -17,6 +17,8 @@ import { hasSupabaseAuthCookie, sessionCookieOptions, supabaseConfig } from "@/l
  *   keeps them and no CDN serves them to someone else.
  *
  * Guests (no Supabase cookies) are skipped: there's nothing to refresh.
+ * A refresh rewrites the session's recorded browser, so it carries the
+ * visitor's User-Agent too (visitorHeaders).
  */
 export async function refreshSessionCookies(
   request: NextRequest,
@@ -25,6 +27,7 @@ export async function refreshSessionCookies(
   if (!hasSupabaseAuthCookie(request.cookies.getAll())) return;
   const { url, publishableKey } = supabaseConfig();
   const supabase = createServerClient(url, publishableKey, {
+    global: { headers: visitorHeaders(request.headers.get("user-agent")) },
     cookieOptions: sessionCookieOptions(request.nextUrl.protocol),
     cookies: {
       getAll: () => request.cookies.getAll(),

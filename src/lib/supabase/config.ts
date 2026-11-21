@@ -44,3 +44,15 @@ export function sessionCookieOptions(protocol?: string) {
 export function hasSupabaseAuthCookie(cookies: { name: string }[]) {
   return cookies.some(({ name }) => name.startsWith("sb-") && name.includes("-auth-token"));
 }
+
+/**
+ * Headers every Supabase Auth call made for a visitor carries: their
+ * browser's User-Agent only. Every auth call runs on this server, so
+ * without it Auth would record this server's fetch ("node") as each
+ * session's device (`auth.sessions.user_agent`, which a sign-in and
+ * every token refresh write), and /account/setting couldn't name the
+ * devices. Never the visitor's address or any other header.
+ */
+export function visitorHeaders(userAgent: string | null | undefined): Record<string, string> {
+  return userAgent ? { "User-Agent": userAgent.slice(0, 512) } : {};
+}

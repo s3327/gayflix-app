@@ -142,10 +142,14 @@ export const getVerifiedSession = cache(async (): Promise<AppSession | null> => 
 
 /**
  * For account pages: sends guests to /login, which brings them back to
- * `returnTo` afterwards.
+ * `returnTo` afterwards. Reads the session fresh (getVerifiedSession()),
+ * so these pages show the account as it is now (its role, two-factor
+ * turned on or off), and a device that was signed out elsewhere, or a
+ * banned account, goes to /login at once rather than when its token
+ * expires. Cached per request, so the layout and the page share one read.
  */
 export async function requireUser(returnTo: string): Promise<AppSession> {
-  const session = await getSession();
+  const session = await getVerifiedSession();
   if (!session) redirect(`/login?next=${encodeURIComponent(returnTo)}`);
   return session;
 }

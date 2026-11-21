@@ -1,7 +1,7 @@
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
-import { sessionCookieOptions, supabaseConfig } from "@/lib/supabase/config";
+import { cookies, headers } from "next/headers";
+import { sessionCookieOptions, supabaseConfig, visitorHeaders } from "@/lib/supabase/config";
 
 /**
  * Whether Google sign-in is turned on in Supabase Auth (the provider is
@@ -35,11 +35,16 @@ export async function googleSignInEnabled(): Promise<boolean> {
  * src/proxy.ts has already refreshed the session before the page renders
  * (refreshSessionCookies). Server actions and route handlers can set
  * cookies, and do.
+ *
+ * Its calls carry the visitor's User-Agent (visitorHeaders), so the
+ * sessions it starts record the visitor's browser.
  */
 export async function createServerSupabase() {
   const { url, publishableKey } = supabaseConfig();
   const cookieStore = await cookies();
+  const userAgent = (await headers()).get("user-agent");
   return createServerClient(url, publishableKey, {
+    global: { headers: visitorHeaders(userAgent) },
     cookieOptions: sessionCookieOptions(),
     cookies: {
       getAll: () => cookieStore.getAll(),

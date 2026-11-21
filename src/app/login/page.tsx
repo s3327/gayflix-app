@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { nextParam } from "@/lib/safe-redirect";
-import { getPendingTwoFactorSession, getSession } from "@/lib/session";
+import { getPendingTwoFactorSession, getVerifiedSession } from "@/lib/session";
 import { googleSignInEnabled } from "@/lib/supabase/server";
 import LoginForm from "./LoginForm";
 
@@ -26,7 +26,9 @@ export default async function LoginPage({
 }) {
   const params = await searchParams;
   const next = nextParam(params.next);
-  if (await getSession()) redirect(next ?? "/home");
+  // Checked against the database, like the account pages (requireUser),
+  // so a device signed out elsewhere sees the form rather than a loop.
+  if (await getVerifiedSession()) redirect(next ?? "/home");
   const twoFactor = params.twoFactor === "1" && (await getPendingTwoFactorSession()) !== null;
   return (
     <LoginForm

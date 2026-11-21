@@ -10,10 +10,9 @@ import { useToast } from "@/lib/toast-context";
 /**
  * The Delete Account button on /account/setting and the dialog that
  * confirms it. Accounts with a password must enter it; Google-only
- * accounts confirm with the button, and Better Auth then wants a
- * session from the last day. The auth server checks both again
- * (src/lib/account-deletion.ts). Once the account is gone, the member
- * lands on /home with a note saying so.
+ * accounts confirm with the button. The deleteAccount server action
+ * checks again (src/lib/account-actions.ts, src/lib/account-deletion.ts).
+ * Once the account is gone, the member lands on /home with a note saying so.
  */
 export default function DeleteAccount({ hasPassword }: { hasPassword: boolean }) {
   const { deleteAccount } = useAuth();
