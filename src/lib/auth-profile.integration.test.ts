@@ -107,16 +107,41 @@ describe("profileRole", () => {
 });
 
 describe("hasPasswordSignIn", () => {
-  it("is true only with an email identity (a Google-only account has none)", async () => {
+  const identity = (provider: string) => sql`
+    INSERT INTO auth.identities (provider_id, user_id, identity_data, provider, created_at, updated_at)
+    VALUES (${USER}, ${USER}::uuid, '{}'::jsonb, ${provider}, now(), now())
+  `;
+  const setPassword = (hash: string | null) =>
+    sql`UPDATE auth.users SET encrypted_password = ${hash} WHERE id = ${USER}::uuid`;
+
+  it("is false for a Google-only account, which has no password", async () => {
     await withRollback(async (trx) => {
       await seed(trx);
-      const identity = (provider: string) => sql`
-        INSERT INTO auth.identities (provider_id, user_id, identity_data, provider, created_at, updated_at)
-        VALUES (${USER}, ${USER}::uuid, '{}'::jsonb, ${provider}, now(), now())
-      `;
       await identity("google").execute(trx);
       expect(await hasPasswordSignIn(USER, trx)).toBe(false);
+      await setPassword("").execute(trx);
+      expect(await hasPasswordSignIn(USER, trx)).toBe(false);
+    });
+  });
+
+  it("is true once a Google-only account sets a password, though Auth adds no email identity for it", async () => {
+    // Checked on the local stack: the admin API's password update (what
+    // resetPassword uses) sets encrypted_password and leaves the account's
+    // only identity the Google one; password sign-in then works.
+    await withRollback(async (trx) => {
+      await seed(trx);
+      await identity("google").execute(trx);
+      await setPassword("$2a$10$abcdefghijklmnopqrstuuabcdefghijklmnopqrstuvwxyz012345").execute(trx);
+      expect(await hasPasswordSignIn(USER, trx)).toBe(true);
+      expect(await signInMethods(USER, trx)).toEqual(["email", "google"]);
+    });
+  });
+
+  it("is true for an account that signed up with email and password", async () => {
+    await withRollback(async (trx) => {
+      await seed(trx);
       await identity("email").execute(trx);
+      await setPassword("$2a$10$abcdefghijklmnopqrstuuabcdefghijklmnopqrstuvwxyz012345").execute(trx);
       expect(await hasPasswordSignIn(USER, trx)).toBe(true);
     });
   });
@@ -203,17 +228,16 @@ describe("deleteAccountSession", () => {
 });
 
 describe("signInMethods", () => {
-  it("names the account's email and Google sign-ins", async () => {
+  it("names the account's password (email) and Google sign-ins", async () => {
     await withRollback(async (trx) => {
       await seed(trx);
       expect(await signInMethods(USER, trx)).toEqual([]);
-      const identity = (provider: string) => sql`
+      await sql`
         INSERT INTO auth.identities (provider_id, user_id, identity_data, provider, created_at, updated_at)
-        VALUES (${USER}, ${USER}::uuid, '{}'::jsonb, ${provider}, now(), now())
-      `;
-      await identity("google").execute(trx);
+        VALUES (${USER}, ${USER}::uuid, '{}'::jsonb, 'google', now(), now())
+      `.execute(trx);
       expect(await signInMethods(USER, trx)).toEqual(["google"]);
-      await identity("email").execute(trx);
+      await sql`UPDATE auth.users SET encrypted_password = 'hash' WHERE id = ${USER}::uuid`.execute(trx);
       expect(await signInMethods(USER, trx)).toEqual(["email", "google"]);
     });
   });

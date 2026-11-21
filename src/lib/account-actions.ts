@@ -114,8 +114,14 @@ export async function changePassword(current: unknown, next: unknown): Promise<R
   const supabase = await createServerSupabase();
   const { error } = await supabase.auth.updateUser({ password: next });
   if (error) return { error: authErrorMessage(error) };
-  await supabase.auth.signOut({ scope: "others" });
+  const { error: signOutError } = await supabase.auth.signOut({ scope: "others" });
   revalidatePath("/account/setting");
+  if (signOutError) {
+    return {
+      error:
+        "Your password was changed, but your other devices couldn't be signed out. Use Sign Out All Other Devices on the Setting page to try again.",
+    };
+  }
   return { ok: true };
 }
 
@@ -244,12 +250,16 @@ export async function signOutDevice(sessionId: unknown): Promise<void> {
   revalidatePath("/account/setting");
 }
 
-/** Signs out every device but this one. */
+/**
+ * Signs out every device but this one. Throws when Supabase couldn't, so
+ * the page shows an error instead of the devices it still lists.
+ */
 export async function signOutOtherDevices(): Promise<void> {
   await requireSession();
   const supabase = await createServerSupabase();
-  await supabase.auth.signOut({ scope: "others" });
+  const { error } = await supabase.auth.signOut({ scope: "others" });
   revalidatePath("/account/setting");
+  if (error) throw new Error("Couldn't sign out the other devices");
 }
 
 /** How the signed-in account can sign in: with a password ("email"), Google, or both. */

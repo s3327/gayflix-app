@@ -68,16 +68,17 @@ export async function profileRole(userId: string, executor: Kysely<DB> = databas
 }
 
 /**
- * Whether the account can sign in with a password (it has an `email`
- * identity in Supabase Auth); a Google-only account can't, so it can't
- * turn on two-factor here.
+ * Whether the account can sign in with a password: it has one
+ * (`auth.users.encrypted_password`). A Google-only account has none, so
+ * it can't turn on two-factor here. Not judged by an `email` identity:
+ * a Google-only account that sets a password ("Set a Password", through
+ * the admin API) gets none, though password sign-in then works (checked
+ * on the local stack).
  */
 export async function hasPasswordSignIn(userId: string, executor: Kysely<DB> = database): Promise<boolean> {
   if (!UUID.test(userId)) return false;
   const { rows } = await sql<{ found: boolean }>`
-    SELECT EXISTS (
-      SELECT 1 FROM auth.identities WHERE user_id = ${userId}::uuid AND provider = 'email'
-    ) AS found
+    SELECT COALESCE(encrypted_password, '') <> '' AS found FROM auth.users WHERE id = ${userId}::uuid
   `.execute(executor);
   return rows[0]?.found ?? false;
 }
@@ -131,15 +132,20 @@ export async function deleteAccountSession(
 
 export type SignInMethod = "email" | "google";
 
-/** How the account can sign in: with its password ("email"), with Google, or both. */
+/**
+ * How the account can sign in: with its password ("email", judged like
+ * hasPasswordSignIn), with Google (a `google` identity), or both.
+ */
 export async function signInMethods(userId: string, executor: Kysely<DB> = database): Promise<SignInMethod[]> {
   if (!UUID.test(userId)) return [];
-  const { rows } = await sql<{ provider: SignInMethod }>`
-    SELECT DISTINCT provider FROM auth.identities
-    WHERE user_id = ${userId}::uuid AND provider IN ('email', 'google')
-    ORDER BY provider
+  const { rows } = await sql<{ password: boolean; google: boolean }>`
+    SELECT COALESCE(u.encrypted_password, '') <> '' AS password,
+           EXISTS (SELECT 1 FROM auth.identities i WHERE i.user_id = u.id AND i.provider = 'google') AS google
+    FROM auth.users u WHERE u.id = ${userId}::uuid
   `.execute(executor);
-  return rows.map((row) => row.provider);
+  const row = rows[0];
+  if (!row) return [];
+  return [...(row.password ? (["email"] as const) : []), ...(row.google ? (["google"] as const) : [])];
 }
 
 /** When the account was made (its profile row's `createdAt`), or null without one. */

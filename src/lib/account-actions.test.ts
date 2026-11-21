@@ -216,6 +216,15 @@ describe("changePassword", () => {
     expect(auth.signOut).toHaveBeenCalledWith({ scope: "others" });
   });
 
+  it("says so when the other devices couldn't be signed out, rather than claiming they were", async () => {
+    auth.signOut.mockResolvedValue({ error: { status: 500, code: "unexpected_failure" } });
+    expect(await changePassword("old-password", "new-password")).toEqual({
+      error:
+        "Your password was changed, but your other devices couldn't be signed out. Use Sign Out All Other Devices on the Setting page to try again.",
+    });
+    expect(auth.updateUser).toHaveBeenCalledWith({ password: "new-password" });
+  });
+
   it("refuses a wrong current password, changing nothing", async () => {
     mockCheckPassword.mockResolvedValue("wrong");
     expect(await changePassword("guess", "new-password")).toEqual({ error: "That password isn't right." });
@@ -447,6 +456,11 @@ describe("signOutOtherDevices", () => {
     await signOutOtherDevices();
     expect(auth.signOut).toHaveBeenCalledWith({ scope: "others" });
     expect(mockRevalidatePath).toHaveBeenCalledWith("/account/setting");
+  });
+
+  it("fails loudly when Supabase couldn't sign them out", async () => {
+    auth.signOut.mockResolvedValue({ error: { status: 500, code: "unexpected_failure" } });
+    await expect(signOutOtherDevices()).rejects.toThrow("Couldn't sign out the other devices");
   });
 });
 

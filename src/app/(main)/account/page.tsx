@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import AccountProfile from "@/components/AccountProfile";
 import { linkedSignInMethods } from "@/lib/account-actions";
 import { accountCreatedAt } from "@/lib/auth-profile";
@@ -12,6 +13,7 @@ const MEMBER_SINCE = new Intl.DateTimeFormat("en-US", { month: "long", year: "nu
  */
 export default async function AccountPage() {
   const session = await requireUser("/account");
+  await connection();
   const [methods, createdAt] = await Promise.all([
     linkedSignInMethods(),
     accountCreatedAt(session.user.id),
