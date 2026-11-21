@@ -1,7 +1,9 @@
 "use server";
 
-import { db } from "@/lib/db";
-import { HISTORY_LIMIT } from "@/lib/library";
+import type { Kysely } from "kysely";
+import { database } from "@/lib/database";
+import type { DB } from "./db-types";
+import { HISTORY_LIMIT, trimHistory } from "@/lib/library";
 import {
   cleanListName,
   isMediaId,
@@ -13,6 +15,7 @@ import {
   type FavoriteEntry,
 } from "@/lib/library-types";
 import { getSession } from "@/lib/session";
+import { countOf } from "@/lib/sql-helpers";
 import { parseProgress } from "@/lib/watch-progress";
 
 /*
@@ -43,64 +46,111 @@ function requireMediaId(value: unknown): string {
   return value;
 }
 
-async function requireOwnList(userId: string, listId: unknown): Promise<string> {
+async function requireOwnList(
+  userId: string,
+  listId: unknown,
+  executor: Kysely<DB> = database
+): Promise<string> {
   if (typeof listId !== "string" || !LIST_ID.test(listId)) throw new Error("Invalid list");
-  const list = await db.mediaList.findFirst({ where: { id: listId, userId }, select: { id: true } });
+  const list = await executor
+    .selectFrom("media_list")
+    .select("id")
+    .where("id", "=", listId)
+    .where("userId", "=", userId)
+    .executeTakeFirst();
   if (!list) throw new Error("List not found");
   return list.id;
 }
 
 // --- Favorites ---------------------------------------------------------
 
-export async function setFavorite(value: unknown, on: boolean): Promise<void> {
+export async function setFavorite(
+  value: unknown,
+  on: boolean,
+  executor: Kysely<DB> = database
+): Promise<void> {
   const userId = await requireUserId();
   const entry = requireEntry(value);
   if (on) {
-    if ((await db.favorite.count({ where: { userId } })) >= MAX_FAVORITES) {
+    const row = await executor
+      .selectFrom("favorite")
+      .select((eb) => eb.fn.countAll().as("count"))
+      .where("userId", "=", userId)
+      .executeTakeFirstOrThrow();
+    if (countOf(row) >= MAX_FAVORITES) {
       throw new Error("Too many favorites");
     }
-    await db.favorite.upsert({
-      where: { userId_mediaId: { userId, mediaId: entry.id } },
-      create: { userId, mediaId: entry.id, entry },
-      update: { entry },
-    });
+    await executor
+      .insertInto("favorite")
+      .values({ userId, mediaId: entry.id, entry: JSON.stringify(entry) })
+      .onConflict((oc) =>
+        oc.columns(["userId", "mediaId"]).doUpdateSet({ entry: JSON.stringify(entry) })
+      )
+      .execute();
   } else {
-    await db.favorite.deleteMany({ where: { userId, mediaId: entry.id } });
+    await executor
+      .deleteFrom("favorite")
+      .where("userId", "=", userId)
+      .where("mediaId", "=", entry.id)
+      .execute();
   }
 }
 
 // --- Watchlist ---------------------------------------------------------
 
-export async function setWatchlist(value: unknown, on: boolean): Promise<void> {
+export async function setWatchlist(
+  value: unknown,
+  on: boolean,
+  executor: Kysely<DB> = database
+): Promise<void> {
   const userId = await requireUserId();
   const entry = requireEntry(value);
   if (on) {
-    if ((await db.watchlistItem.count({ where: { userId } })) >= MAX_WATCHLIST) {
+    const row = await executor
+      .selectFrom("watchlist_item")
+      .select((eb) => eb.fn.countAll().as("count"))
+      .where("userId", "=", userId)
+      .executeTakeFirstOrThrow();
+    if (countOf(row) >= MAX_WATCHLIST) {
       throw new Error("Watchlist full");
     }
-    await db.watchlistItem.upsert({
-      where: { userId_mediaId: { userId, mediaId: entry.id } },
-      create: { userId, mediaId: entry.id, entry },
-      update: { entry },
-    });
+    await executor
+      .insertInto("watchlist_item")
+      .values({ userId, mediaId: entry.id, entry: JSON.stringify(entry) })
+      .onConflict((oc) =>
+        oc.columns(["userId", "mediaId"]).doUpdateSet({ entry: JSON.stringify(entry) })
+      )
+      .execute();
   } else {
-    await db.watchlistItem.deleteMany({ where: { userId, mediaId: entry.id } });
+    await executor
+      .deleteFrom("watchlist_item")
+      .where("userId", "=", userId)
+      .where("mediaId", "=", entry.id)
+      .execute();
   }
 }
 
 // --- History -----------------------------------------------------------
 
-export async function recordWatch(value: unknown): Promise<void> {
+export async function recordWatch(
+  value: unknown,
+  executor: Kysely<DB> = database
+): Promise<void> {
   const userId = await requireUserId();
   const entry = requireEntry(value);
   const watchedAt = new Date();
-  await db.watchHistory.upsert({
-    where: { userId_mediaId: { userId, mediaId: entry.id } },
-    create: { userId, mediaId: entry.id, entry, watchedAt },
-    // Watching it again puts it back on Continue Watching.
-    update: { entry, watchedAt, hiddenFromContinue: false },
-  });
-  await trimHistory(userId);
+  await executor
+    .insertInto("watch_history")
+    .values({ userId, mediaId: entry.id, entry: JSON.stringify(entry), watchedAt })
+    .onConflict((oc) =>
+      oc.columns(["userId", "mediaId"]).doUpdateSet({
+        entry: JSON.stringify(entry),
+        watchedAt,
+        hiddenFromContinue: false,
+      })
+    )
+    .execute();
+  await trimHistory(userId, executor);
 }
 
 /**
@@ -111,136 +161,212 @@ export async function recordWatch(value: unknown): Promise<void> {
 export async function saveProgress(
   mediaId: unknown,
   position: unknown,
-  duration: unknown
+  duration: unknown,
+  executor: Kysely<DB> = database
 ): Promise<void> {
   const userId = await requireUserId();
   const id = requireMediaId(mediaId);
   const progress = parseProgress(position, duration);
   if (!progress) throw new Error("Invalid progress");
-  await db.watchHistory.updateMany({
-    where: { userId, mediaId: id },
-    data: { progressSeconds: progress.position, durationSeconds: progress.duration },
-  });
+  await executor
+    .updateTable("watch_history")
+    .set({ progressSeconds: progress.position, durationSeconds: progress.duration })
+    .where("userId", "=", userId)
+    .where("mediaId", "=", id)
+    .execute();
 }
 
 /** Takes a title off Continue Watching, or puts it back (Undo). It stays in History. */
-export async function setHiddenFromContinue(mediaId: unknown, hidden: unknown): Promise<void> {
+export async function setHiddenFromContinue(
+  mediaId: unknown,
+  hidden: unknown,
+  executor: Kysely<DB> = database
+): Promise<void> {
   const userId = await requireUserId();
   const id = requireMediaId(mediaId);
   if (typeof hidden !== "boolean") throw new Error("Invalid setting");
-  await db.watchHistory.updateMany({ where: { userId, mediaId: id }, data: { hiddenFromContinue: hidden } });
+  await executor
+    .updateTable("watch_history")
+    .set({ hiddenFromContinue: hidden })
+    .where("userId", "=", userId)
+    .where("mediaId", "=", id)
+    .execute();
 }
 
 /**
  * Moves history recorded while logged out (kept in this browser) into
  * the account, keeping whichever watch time is newer.
  */
-export async function importHistory(values: unknown): Promise<void> {
+export async function importHistory(
+  values: unknown,
+  executor: Kysely<DB> = database
+): Promise<void> {
   const userId = await requireUserId();
   if (!Array.isArray(values)) throw new Error("Invalid history");
   for (const value of values.slice(0, HISTORY_LIMIT)) {
     const entry = parseEntry(value);
     const watchedAt = new Date((value as { watchedAt?: unknown })?.watchedAt as string);
     if (!entry || Number.isNaN(watchedAt.getTime()) || watchedAt > new Date()) continue;
-    const existing = await db.watchHistory.findUnique({
-      where: { userId_mediaId: { userId, mediaId: entry.id } },
-      select: { watchedAt: true },
-    });
-    if (existing && existing.watchedAt >= watchedAt) continue;
-    await db.watchHistory.upsert({
-      where: { userId_mediaId: { userId, mediaId: entry.id } },
-      create: { userId, mediaId: entry.id, entry, watchedAt },
-      update: { entry, watchedAt },
-    });
+    const existing = await executor
+      .selectFrom("watch_history")
+      .select("watchedAt")
+      .where("userId", "=", userId)
+      .where("mediaId", "=", entry.id)
+      .executeTakeFirst();
+    if (existing && new Date(existing.watchedAt) >= watchedAt) continue;
+    await executor
+      .insertInto("watch_history")
+      .values({ userId, mediaId: entry.id, entry: JSON.stringify(entry), watchedAt })
+      .onConflict((oc) =>
+        oc.columns(["userId", "mediaId"]).doUpdateSet({
+          entry: JSON.stringify(entry),
+          watchedAt,
+        })
+      )
+      .execute();
   }
-  await trimHistory(userId);
+  await trimHistory(userId, executor);
 }
 
-async function trimHistory(userId: string) {
-  const overflow = await db.watchHistory.findMany({
-    where: { userId },
-    orderBy: { watchedAt: "desc" },
-    skip: HISTORY_LIMIT,
-    select: { mediaId: true },
-  });
-  if (overflow.length > 0) {
-    await db.watchHistory.deleteMany({
-      where: { userId, mediaId: { in: overflow.map((row) => row.mediaId) } },
-    });
-  }
-}
-
-export async function removeFromHistory(mediaId: unknown): Promise<void> {
+export async function removeFromHistory(
+  mediaId: unknown,
+  executor: Kysely<DB> = database
+): Promise<void> {
   const userId = await requireUserId();
-  await db.watchHistory.deleteMany({ where: { userId, mediaId: requireMediaId(mediaId) } });
+  await executor
+    .deleteFrom("watch_history")
+    .where("userId", "=", userId)
+    .where("mediaId", "=", requireMediaId(mediaId))
+    .execute();
 }
 
-export async function clearHistory(): Promise<void> {
+export async function clearHistory(executor: Kysely<DB> = database): Promise<void> {
   const userId = await requireUserId();
-  await db.watchHistory.deleteMany({ where: { userId } });
+  await executor.deleteFrom("watch_history").where("userId", "=", userId).execute();
 }
 
 // --- Lists -------------------------------------------------------------
 
-export async function createList(id: unknown, name: unknown, firstItem?: unknown): Promise<void> {
+export async function createList(
+  id: unknown,
+  name: unknown,
+  firstItem?: unknown,
+  executor: Kysely<DB> = database
+): Promise<void> {
   const userId = await requireUserId();
   if (typeof id !== "string" || !LIST_ID.test(id)) throw new Error("Invalid list");
   const entry = firstItem === undefined ? null : requireEntry(firstItem);
-  if ((await db.mediaList.count({ where: { userId } })) >= MAX_LISTS) {
+  const row = await executor
+    .selectFrom("media_list")
+    .select((eb) => eb.fn.countAll().as("count"))
+    .where("userId", "=", userId)
+    .executeTakeFirstOrThrow();
+  if (countOf(row) >= MAX_LISTS) {
     throw new Error("Too many lists");
   }
-  await db.mediaList.create({
-    data: {
-      id,
-      userId,
-      name: cleanListName(name),
-      items: entry ? { create: { mediaId: entry.id, entry } } : undefined,
-    },
-  });
+
+  const runInsert = async (target: Kysely<DB>) => {
+    await target
+      .insertInto("media_list")
+      .values({
+        id,
+        userId,
+        name: cleanListName(name),
+      })
+      .execute();
+    if (entry) {
+      await target
+        .insertInto("list_item")
+        .values({
+          listId: id,
+          mediaId: entry.id,
+          entry: JSON.stringify(entry),
+        })
+        .execute();
+    }
+  };
+
+  if (executor.isTransaction) {
+    await runInsert(executor);
+  } else {
+    await executor.transaction().execute(runInsert);
+  }
 }
 
-export async function deleteList(listId: unknown): Promise<void> {
+export async function deleteList(listId: unknown, executor: Kysely<DB> = database): Promise<void> {
   const userId = await requireUserId();
-  await db.mediaList.delete({ where: { id: await requireOwnList(userId, listId) } });
+  const id = await requireOwnList(userId, listId, executor);
+  await executor.deleteFrom("media_list").where("id", "=", id).execute();
 }
 
-export async function renameList(listId: unknown, name: unknown): Promise<void> {
+export async function renameList(
+  listId: unknown,
+  name: unknown,
+  executor: Kysely<DB> = database
+): Promise<void> {
   const userId = await requireUserId();
-  await db.mediaList.update({
-    where: { id: await requireOwnList(userId, listId) },
-    data: { name: cleanListName(name) },
-  });
+  const id = await requireOwnList(userId, listId, executor);
+  await executor
+    .updateTable("media_list")
+    .set({ name: cleanListName(name) })
+    .where("id", "=", id)
+    .execute();
 }
 
 /**
  * Shares a list with anyone who has its link, or makes it private again,
  * which also takes it off Community Lists.
  */
-export async function setListPublic(listId: unknown, isPublic: unknown): Promise<void> {
+export async function setListPublic(
+  listId: unknown,
+  isPublic: unknown,
+  executor: Kysely<DB> = database
+): Promise<void> {
   const userId = await requireUserId();
   if (typeof isPublic !== "boolean") throw new Error("Invalid setting");
-  await db.mediaList.update({
-    where: { id: await requireOwnList(userId, listId) },
-    data: isPublic ? { isPublic } : { isPublic, inCommunity: false },
-  });
+  const id = await requireOwnList(userId, listId, executor);
+  await executor
+    .updateTable("media_list")
+    .set(isPublic ? { isPublic } : { isPublic, inCommunity: false })
+    .where("id", "=", id)
+    .execute();
 }
 
-export async function addToList(listId: unknown, value: unknown): Promise<void> {
+export async function addToList(
+  listId: unknown,
+  value: unknown,
+  executor: Kysely<DB> = database
+): Promise<void> {
   const userId = await requireUserId();
-  const id = await requireOwnList(userId, listId);
+  const id = await requireOwnList(userId, listId, executor);
   const entry = requireEntry(value);
-  if ((await db.listItem.count({ where: { listId: id } })) >= MAX_LIST_ITEMS) {
+  const row = await executor
+    .selectFrom("list_item")
+    .select((eb) => eb.fn.countAll().as("count"))
+    .where("listId", "=", id)
+    .executeTakeFirstOrThrow();
+  if (countOf(row) >= MAX_LIST_ITEMS) {
     throw new Error("List is full");
   }
-  await db.listItem.upsert({
-    where: { listId_mediaId: { listId: id, mediaId: entry.id } },
-    create: { listId: id, mediaId: entry.id, entry },
-    update: {},
-  });
+  await executor
+    .insertInto("list_item")
+    .values({ listId: id, mediaId: entry.id, entry: JSON.stringify(entry) })
+    .onConflict((oc) => oc.columns(["listId", "mediaId"]).doNothing())
+    .execute();
 }
 
-export async function removeFromList(listId: unknown, mediaId: unknown): Promise<void> {
+export async function removeFromList(
+  listId: unknown,
+  mediaId: unknown,
+  executor: Kysely<DB> = database
+): Promise<void> {
   const userId = await requireUserId();
-  const id = await requireOwnList(userId, listId);
-  await db.listItem.deleteMany({ where: { listId: id, mediaId: requireMediaId(mediaId) } });
+  const id = await requireOwnList(userId, listId, executor);
+  await executor
+    .deleteFrom("list_item")
+    .where("listId", "=", id)
+    .where("mediaId", "=", requireMediaId(mediaId))
+    .execute();
 }
+
+export { trimHistory } from "@/lib/library";
