@@ -26,7 +26,7 @@ let mockRatable = true;
 let mockViewTarget: string | null = null;
 
 vi.mock("@/lib/catalog", () => ({
-  findViewTarget: vi.fn(async (id: string) => mockViewTarget ?? id),
+  findViewTarget: vi.fn(async () => mockViewTarget),
   isRatableTitle: vi.fn(async () => mockRatable),
 }));
 
