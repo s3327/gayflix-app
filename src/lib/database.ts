@@ -6,14 +6,12 @@ import { postgresConfig } from "@/lib/database-config.mjs";
 const TIMESTAMP_WITHOUT_TIME_ZONE = 1114;
 
 /**
- * The Kysely client for new code. Server code only: it holds the database
- * connection string. Same connection as the Prisma client in src/lib/db.ts
- * (DATABASE_URL, TLS from src/lib/database-config.mjs). In development it
- * is kept on globalThis so hot reloads don't open a new pool each time.
+ * The database client for the app (Kysely). Server code only: it holds the
+ * database connection string (DATABASE_URL, TLS from
+ * src/lib/database-config.mjs). In development it is kept on globalThis so
+ * hot reloads don't open a new pool each time.
  *
- * Columns of type `timestamp` (without time zone) are read as UTC. The
- * parser is set on this pool only, so it doesn't change what Prisma's
- * adapter reads.
+ * Columns of type `timestamp` (without time zone) are read as UTC.
  */
 function createClient() {
   const pool = new pg.Pool({

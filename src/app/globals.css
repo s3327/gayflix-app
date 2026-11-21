@@ -5,8 +5,6 @@
 @source not "../../e2e";
 @source not "../../gayflix-app";
 @source not "../../.agents";
-/* Migrations hold catalog data, not markup. */
-@source not "../../prisma";
 
 /*
   A title's gradient (media.gradient) comes from the database, so it never

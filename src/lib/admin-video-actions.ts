@@ -17,7 +17,7 @@ import { MAX_VIDEO_SOURCES, parseVideoSource, VIDEO_SOURCE_FIELDS } from "@/lib/
  * argument, the ones bound in the page included.
  */
 
-/** Prisma's cuid(). */
+/** A cuid identifier. */
 const SOURCE_ID = /^[a-z0-9]{20,40}$/;
 
 function getExecutor(val: unknown): Kysely<DB> {

@@ -19,7 +19,7 @@ export const SUBTITLE_TYPE_PROBLEM =
 /** What the player gets for each language: its <track>. */
 export type SubtitleTrack = { id: string; language: string; label: string };
 
-/** Prisma's cuid(), a subtitle's id. */
+/** A cuid identifier, a subtitle's id. */
 export const SUBTITLE_ID = /^[a-z0-9]{20,40}$/;
 
 /** Where the player loads a subtitle file from. */

@@ -12,15 +12,11 @@
     "test:watch": "vitest",
     "check": "npm run lint && npm run typecheck && npm test && npm run build",
     "test:e2e": "playwright test",
-    "postinstall": "prisma generate",
-    "db:migrate": "prisma migrate dev",
     "db:deploy": "node scripts/migrate.mjs",
     "make-admin": "node scripts/make-admin.mjs",
-    "db:types": "kysely-codegen --dialect postgres --out-file src/lib/db-types.ts --include-pattern \"public.*\" --exclude-pattern \"{supabase_migrations.*,auth.*,_prisma_migrations}\""
+    "db:types": "kysely-codegen --dialect postgres --out-file src/lib/db-types.ts --include-pattern \"public.*\" --exclude-pattern \"{supabase_migrations.*,auth.*}\""
   },
   "dependencies": {
-    "@prisma/adapter-pg": "7.10.1",
-    "@prisma/client": "7.10.1",
     "@sentry/nextjs": "11.6.0",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.119.0",
@@ -47,7 +43,6 @@
     "kysely-codegen": "0.20.0",
     "playwright-core": "1.56.1",
     "postcss": "8.5.29",
-    "prisma": "7.10.1",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3",
     "vite": "7.3.7",
@@ -57,13 +52,6 @@
     "node": "^20.19 || ^22.12 || >=24"
   },
   "overrides": {
-    "prisma": {
-      "mysql2": "3.24.5"
-    },
-    "@prisma/config": {
-      "deepmerge-ts": "8.0.2",
-      "effect": "3.22.5"
-    },
     "undici": "6.29.1",
     "zod": "4.6.7"
   }

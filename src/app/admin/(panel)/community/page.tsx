@@ -58,7 +58,7 @@ type Author = { id: string; email: string; nickname: string | null };
 
 /**
  * Authors of reviews and lists, by account id. Accounts are Supabase
- * Auth's, outside the Prisma schema, so they're read on their own.
+ * Auth's, outside the public schema, so they're read on their own.
  */
 async function loadAuthors(userIds: string[]): Promise<(userId: string) => Author> {
   const [emails, nicknames] = await Promise.all([accountEmails(userIds), memberNicknames(userIds)]);

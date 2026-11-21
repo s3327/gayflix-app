@@ -17,7 +17,7 @@ has to change before launch.
 - **Next.js 16** (App Router, Turbopack) + **React 19** + TypeScript (strict)
 - **Tailwind CSS 4** with the approved design tokens in `src/app/globals.css` (`@theme`)
 - Fonts self-hosted with `next/font`: **Baloo 2** (display) and **Inter** (body)
-- **Prisma ORM 7** on **Supabase** Postgres (any Postgres locally), through
+- **Kysely** on **Supabase** Postgres (any Postgres locally), through
   the `pg` driver adapter
 - **Supabase Auth** for accounts and sessions (called only from the
   server); roles in the site's own `profile` table
@@ -26,14 +26,14 @@ has to change before launch.
 
 ## Getting started
 
-Requires Node.js 20.19+, 22.12+ or 24+ (Prisma 7's range; CI uses 22)
+Requires Node.js 20.19+, 22.12+ or 24+ (CI uses 22)
 and Docker (for Supabase's local stack: Postgres, Auth and Mailpit).
 
 ```bash
 npx supabase@3.2.0 start -x studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector
 npx supabase@3.2.0 status -o env   # DB_URL, API_URL, PUBLISHABLE_KEY, SECRET_KEY
 
-npm install                  # also generates the Prisma client
+npm install
 cp .env.example .env.local   # set DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL,
                              # SUPABASE_PUBLISHABLE_KEY and SUPABASE_SECRET_KEY
                              # from the status output (the secret key stays
@@ -69,9 +69,8 @@ sign-in needs a code, and lasts 12 hours.
 | `npm run typecheck` | Generates Next's route types, then runs `tsc --noEmit` |
 | `npm test` | Unit tests (Vitest) |
 | `npm run check` | All of the above, in the order CI runs them |
-| `npm run test:e2e` | End-to-end and accessibility (axe) tests with Playwright, against the production build and the database (run `npm run build` and `npm run db:migrate` first) |
-| `npm run db:migrate` | Applies migrations locally and creates new ones after a schema change (`prisma migrate dev`) |
-| `npm run db:deploy` | Applies pending migrations, for production and CI (`prisma migrate deploy`) |
+| `npm run test:e2e` | End-to-end and accessibility (axe) tests with Playwright, against the production build and the database (run `npm run build` and `npm run db:deploy` first) |
+| `npm run db:deploy` | Applies pending migrations, for production and CI |
 | `npm run make-admin -- <email> [--revoke]` | Gives an existing account the admin role, or takes it away |
 
 CI (`.github/workflows/ci.yml`) runs on every push to `main` and on every
@@ -167,14 +166,12 @@ src/
                            holds the rules (nobody changes their own account)
     auth-actions.ts      → sign-up, sign-in and reset (Supabase Auth, server only)
     session.ts           → getSession / requireUser / requireAdmin (server only)
-    db.ts                → the Prisma client (server only)
+    database.ts          → the Kysely database client (server only)
     library*.ts          → favorites, lists and history: loading (library.ts),
                            server functions (library-actions.ts), input checks
     report*.ts           → reports and their daily limits
     view*.ts             → counting views for Trending (once per person per
                            title per day); visitor.ts hashes IPs and accounts
-  generated/prisma/      → Prisma client (generated on npm install; not committed)
-prisma/                  → schema.prisma (the Prisma client's view of the tables)
 supabase/                → migrations (one of them loads the sample catalog),
                            the local stack's config.toml, email templates
 scripts/make-admin.mjs   → grant or revoke the admin role
@@ -220,8 +217,7 @@ docs/                    → design notes (build log) and the audit plan
   `useAuth()` in client components is for display only.
 - **Schema changes:** write a new SQL file in `supabase/migrations/`
   (a new table also enables row-level security), apply it with
-  `npm run db:deploy`, then `npm run db:types`; while Prisma remains,
-  mirror it in `prisma/schema.prisma` and run `npx prisma generate`.
+  `npm run db:deploy`, then `npm run db:types`.
 - **Third-party origins.** Images load through `next/image`, so a new
   image host only needs adding to `IMAGE_HOSTS` (`src/lib/image-hosts.mjs`).
   Anything the browser loads directly, such as a video embed, needs adding
