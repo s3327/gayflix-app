@@ -368,5 +368,3 @@ export async function removeFromList(
     .where("mediaId", "=", requireMediaId(mediaId))
     .execute();
 }
-
-export { trimHistory } from "@/lib/library";
