@@ -28,21 +28,23 @@ const SSL_PARAMS = ["sslmode", "sslcert", "sslkey", "sslrootcert", "uselibpqcomp
  * @returns {{ connectionString: string | undefined, ssl?: { ca?: string, rejectUnauthorized: boolean } }}
  */
 export function postgresConfig(
-  connectionString = process.env.DATABASE_URL,
-  caCert = process.env.DATABASE_CA_CERT,
+  connectionString,
+  caCert,
   env = process.env
 ) {
-  if (!connectionString) return { connectionString };
+  const urlString = connectionString !== undefined ? connectionString : env.DATABASE_URL;
+  const cert = caCert !== undefined ? caCert : env.DATABASE_CA_CERT;
+  if (!urlString) return { connectionString: urlString };
   let url;
   try {
-    url = new URL(connectionString);
+    url = new URL(urlString);
   } catch {
-    return { connectionString };
+    return { connectionString: urlString };
   }
-  if (!SUPABASE_HOST.test(url.hostname)) return { connectionString };
+  if (!SUPABASE_HOST.test(url.hostname)) return { connectionString: urlString };
 
   for (const name of SSL_PARAMS) url.searchParams.delete(name);
-  const ca = caCert?.trim() ? caCert.trim().replace(/\\n/g, "\n") : undefined;
+  const ca = cert?.trim() ? cert.trim().replace(/\\n/g, "\n") : undefined;
   if (ca) return { connectionString: url.toString(), ssl: { ca, rejectUnauthorized: true } };
 
   if (env.DATABASE_TLS_INSECURE === "1" && !env.VERCEL_ENV) {
