@@ -5,8 +5,8 @@
  * in src/lib/admin-user-actions.ts apply them.
  */
 
-/** Better Auth's user ids: 16-64 alphanumeric characters, hyphens or underscores. */
-const USER_ID = /^[A-Za-z0-9_-]{16,64}$/;
+/** Supabase Auth's user ids: UUIDs. */
+const USER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isUserId(value: unknown): value is string {
   return typeof value === "string" && USER_ID.test(value);
@@ -33,12 +33,28 @@ export function isAdmin(user: Pick<UserTarget, "role">): boolean {
   return user.role === "admin";
 }
 
-/**
- * Banned right now. A ban with an end date stays in the database after
- * it ends, until the account next signs in (Better Auth clears it then).
- */
+/** Banned right now: a ban with an end date counts until it ends. */
 export function isBanned(user: Pick<UserTarget, "banned" | "banExpires">, now = Date.now()): boolean {
   return Boolean(user.banned) && (!user.banExpires || user.banExpires.getTime() > now);
+}
+
+/** Supabase Auth's ban_duration for a ban "until unbanned": 100 years. */
+const BAN_FOREVER = "876000h";
+/** A ban ending further off than this counts as "until unbanned" (it has no end date worth showing). */
+const FOREVER_AFTER_MS = 50 * 365 * 24 * 60 * 60 * 1000;
+
+/** Supabase Auth's ban_duration for a ban of `seconds`, or until unbanned. */
+export function banDuration(seconds: number | undefined): string {
+  return seconds === undefined ? BAN_FOREVER : `${seconds}s`;
+}
+
+/** The ban an account's `auth.users.banned_until` describes. */
+export function banFromBannedUntil(
+  bannedUntil: Date | null,
+  now = Date.now()
+): { banned: boolean; banExpires: Date | null } {
+  if (!bannedUntil || bannedUntil.getTime() <= now) return { banned: false, banExpires: null };
+  return { banned: true, banExpires: bannedUntil.getTime() - now > FOREVER_AFTER_MS ? null : bannedUntil };
 }
 
 export type UserAction = "make-admin" | "remove-admin" | "ban" | "unban" | "sign-out";

@@ -25,8 +25,12 @@ const role = flag === "--revoke" ? "user" : "admin";
 const client = new pg.Client(postgresConfig());
 await client.connect();
 try {
+  // The role lives in public.profile (one row per Supabase Auth account).
   const result = await client.query(
-    `UPDATE "user" SET role = $1, "updatedAt" = now() WHERE lower(email) = lower($2) RETURNING email, "emailVerified"`,
+    `UPDATE public.profile p SET role = $1
+       FROM auth.users u
+      WHERE u.id = p.id AND lower(u.email) = lower($2)
+      RETURNING u.email, u.email_confirmed_at IS NOT NULL AS "emailVerified"`,
     [role, email]
   );
   if (result.rowCount === 0) {
@@ -36,8 +40,9 @@ try {
     const [user] = result.rows;
     console.log(`${user.email} is now ${role === "admin" ? "an admin" : "a regular user"}.`);
     if (!user.emailVerified) console.log("Note: this email isn't verified yet, so it can't log in until it is.");
-    // Existing sessions keep working; the role is read fresh on every
-    // admin request, so the change applies immediately.
+    // Existing sessions keep working; admin access reads the role from
+    // the database, so the change applies to it at once (elsewhere at
+    // the account's next token refresh, within the hour).
   }
 } finally {
   await client.end();

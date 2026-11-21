@@ -211,6 +211,7 @@ export interface MemberProfile {
 }
 
 export interface Profile {
+  ban_reason: string | null;
   createdAt: Generated<Timestamp>;
   id: string;
   role: Generated<string>;

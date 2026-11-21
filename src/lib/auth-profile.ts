@@ -130,6 +130,19 @@ export async function deleteAccountSession(
   return Number(result.numAffectedRows ?? 0);
 }
 
+/**
+ * Ends every session the account has (an admin's "sign out everywhere",
+ * a ban, a two-factor reset) by deleting its `auth.sessions` rows; their
+ * refresh tokens go with them (ON DELETE CASCADE). getVerifiedSession()
+ * refuses its tokens at once; elsewhere they last until they expire (at
+ * most an hour), since they can't be renewed. Returns how many went.
+ */
+export async function deleteAllAccountSessions(userId: string, executor: Kysely<DB> = database): Promise<number> {
+  if (!UUID.test(userId)) return 0;
+  const result = await sql`DELETE FROM auth.sessions WHERE user_id = ${userId}::uuid`.execute(executor);
+  return Number(result.numAffectedRows ?? 0);
+}
+
 export type SignInMethod = "email" | "google";
 
 /**

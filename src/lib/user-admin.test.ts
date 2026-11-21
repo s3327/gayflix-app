@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   BAN_REASON_MAX,
+  banDuration,
+  banFromBannedUntil,
   isBanned,
   isUserId,
   parseBanForm,
@@ -10,10 +12,10 @@ import {
 } from "@/lib/user-admin";
 
 const NOW = Date.parse("2026-10-11T12:00:00Z");
-const ME = "AdminAdminAdminAdminAdminAdmin01";
+const ME = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 const user: UserTarget = {
-  id: "UserUserUserUserUserUserUserUs01",
+  id: "11111111-1111-4111-8111-111111111111",
   role: "user",
   emailVerified: true,
   banned: false,
@@ -29,9 +31,20 @@ function form(fields: Record<string, string>) {
 }
 
 describe("isUserId", () => {
-  it("takes Better Auth's ids and nothing else", () => {
+  it("takes Supabase Auth's UUIDs and nothing else", () => {
     expect(isUserId(user.id)).toBe(true);
-    for (const bad of [undefined, 42, "", "short", "has space in it 0123456789", "a/b".repeat(10), "x".repeat(65)]) {
+    expect(isUserId("A1111111-1111-4111-8111-11111111111F")).toBe(true);
+    for (const bad of [
+      undefined,
+      42,
+      "",
+      "short",
+      "UserUserUserUserUserUserUserUs01",
+      "11111111-1111-4111-8111-11111111111",
+      "11111111-1111-4111-8111-111111111111 ",
+      "11111111111141118111111111111111",
+      "g1111111-1111-4111-8111-111111111111",
+    ]) {
       expect(isUserId(bad)).toBe(false);
     }
   });
@@ -90,6 +103,26 @@ describe("userActionProblem", () => {
   it("signs anyone else out", () => {
     expect(userActionProblem("sign-out", ME, user, NOW)).toBeNull();
     expect(userActionProblem("sign-out", ME, admin, NOW)).toBeNull();
+  });
+});
+
+describe("banFromBannedUntil", () => {
+  it("reads Supabase Auth's banned_until", () => {
+    expect(banFromBannedUntil(null, NOW)).toEqual({ banned: false, banExpires: null });
+    // A ban that has passed is no ban.
+    expect(banFromBannedUntil(new Date(NOW - 1000), NOW)).toEqual({ banned: false, banExpires: null });
+    const tomorrow = new Date(NOW + 24 * 60 * 60 * 1000);
+    expect(banFromBannedUntil(tomorrow, NOW)).toEqual({ banned: true, banExpires: tomorrow });
+    // "Until unbanned" is a 100-year ban; it has no end date to show.
+    const forever = new Date(NOW + 876000 * 60 * 60 * 1000);
+    expect(banFromBannedUntil(forever, NOW)).toEqual({ banned: true, banExpires: null });
+  });
+});
+
+describe("banDuration", () => {
+  it("turns the form's length into Supabase Auth's ban_duration", () => {
+    expect(banDuration(undefined)).toBe("876000h");
+    expect(banDuration(24 * 60 * 60)).toBe("86400s");
   });
 });
 
