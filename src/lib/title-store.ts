@@ -1,5 +1,7 @@
-import { Prisma } from "@/generated/prisma/client";
-import { db } from "@/lib/db";
+import type { Kysely, Transaction } from "kysely";
+import { sql } from "kysely";
+import { database } from "@/lib/database";
+import type { DB } from "./db-types";
 import type { MediaType } from "@/lib/media";
 import { gradientFor, movieDuration, seriesDuration, slugify, type TitleInput } from "@/lib/title-form";
 import { buildDefaultMovieEmbedUrl } from "@/lib/embed-builder";
@@ -10,28 +12,47 @@ import { buildDefaultMovieEmbedUrl } from "@/lib/embed-builder";
  * called from server functions that have already checked for an admin.
  */
 
-export type Tx = Prisma.TransactionClient;
+export type Tx = Transaction<DB> | Kysely<DB>;
 
-export function isUniqueViolation(error: unknown) {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+function getExecutor(val: unknown): Kysely<DB> | Transaction<DB> {
+  return typeof val === "object" && val !== null && "selectFrom" in val
+    ? (val as Kysely<DB> | Transaction<DB>)
+    : database;
+}
+
+export function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: string }).code === "23505"
+  );
 }
 
 /** The base address, or base-2, base-3...: one no title or episode has. */
-export async function freeId(base: string) {
+export async function freeId(base: string, executorOrUnknown?: Kysely<DB> | unknown): Promise<string> {
+  const executor = getExecutor(executorOrUnknown);
   for (let n = 1; ; n++) {
     const id = n === 1 ? base : `${base}-${n}`;
     const [media, episode] = await Promise.all([
-      db.media.findUnique({ where: { id }, select: { id: true } }),
-      db.episode.findUnique({ where: { id }, select: { id: true } }),
+      executor
+        .selectFrom("media")
+        .select("id")
+        .where("id", "=", id)
+        .executeTakeFirst(),
+      executor
+        .selectFrom("episode")
+        .select("id")
+        .where("id", "=", id)
+        .executeTakeFirst(),
     ]);
     if (!media && !episode) return id;
   }
 }
 
 /** Only one title is featured: the home page's hero. */
-export async function unfeatureOthers(tx: Tx, id: string) {
+export async function unfeatureOthers(tx: Tx, id: string): Promise<void> {
   // Raw, so the others' updatedAt (and their place in listings) stays.
-  await tx.$executeRaw`UPDATE media SET featured = false WHERE featured AND id <> ${id}`;
+  await sql`UPDATE media SET featured = false WHERE featured AND id <> ${id}`.execute(tx);
 }
 
 export function titleData(type: MediaType, input: TitleInput) {
@@ -63,7 +84,7 @@ export function titleData(type: MediaType, input: TitleInput) {
       runtimeMinutes: input.runtimeMinutes,
       duration: movieDuration(input.runtimeMinutes!),
     }),
-  } satisfies Prisma.MediaUpdateInput;
+  };
 }
 
 /** Where an imported title came from (media.tmdbId and media.imdbId). */
@@ -79,9 +100,11 @@ export type SourceIds = {
 export async function insertTitle(
   type: MediaType,
   input: TitleInput,
-  sources: SourceIds = {}
+  sources: SourceIds = {},
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<string | null> {
-  const id = await freeId(slugify(input.title) || type);
+  const executor = getExecutor(executorOrUnknown);
+  const id = await freeId(slugify(input.title) || type, executor);
   const rawTmdbId = sources.tmdbId ?? null;
   const tmdbId =
     rawTmdbId
@@ -90,10 +113,11 @@ export async function insertTitle(
   const imdbId = sources.imdbId ?? null;
 
   try {
-    await db.$transaction(async (tx) => {
+    const runInsert = async (tx: Transaction<DB> | Kysely<DB>) => {
       if (input.featured && input.status === "published") await unfeatureOthers(tx, id);
-      await tx.media.create({
-        data: {
+      await tx
+        .insertInto("media")
+        .values({
           id,
           type,
           ...titleData(type, input),
@@ -103,8 +127,8 @@ export async function insertTitle(
           gradient: gradientFor(id),
           tmdbId,
           imdbId,
-        },
-      });
+        })
+        .execute();
 
       if (type === "movie") {
         const defaultEmbedUrl = buildDefaultMovieEmbedUrl({
@@ -112,19 +136,26 @@ export async function insertTitle(
           tmdbId: rawTmdbId ?? tmdbId,
         });
         if (defaultEmbedUrl) {
-          await tx.videoSource.create({
-            data: {
+          await tx
+            .insertInto("video_source")
+            .values({
               mediaId: id,
               label: "Server 1",
               kind: "embed",
               url: defaultEmbedUrl,
               position: 1,
               enabled: true,
-            },
-          });
+            })
+            .execute();
         }
       }
-    });
+    };
+
+    if (executor.isTransaction) {
+      await runInsert(executor);
+    } else {
+      await executor.transaction().execute(runInsert);
+    }
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;
     return null;

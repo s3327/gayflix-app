@@ -14,17 +14,16 @@ vi.mock("@/lib/admin-guard", () => ({
   FORBIDDEN_CATALOG: "Forbidden",
 }));
 
-vi.mock("@/lib/db", () => ({
-  db: {
-    media: {
-      findMany: (...args: unknown[]) => mockFindMany(...args),
-      findFirst: (...args: unknown[]) => mockFindFirst(...args),
-      findUnique: vi.fn(),
-    },
-    episode: {
-      findUnique: vi.fn(),
-    },
-    $transaction: vi.fn(),
+vi.mock("@/lib/database", () => ({
+  database: {
+    selectFrom: vi.fn(() => ({
+      select: vi.fn(() => ({
+        where: vi.fn(() => ({
+          execute: vi.fn(async () => mockFindMany()),
+          executeTakeFirst: vi.fn(async () => mockFindFirst()),
+        })),
+      })),
+    })),
   },
 }));
 

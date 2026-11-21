@@ -1,9 +1,11 @@
 "use server";
 
+import type { Kysely } from "kysely";
 import { revalidatePath } from "next/cache";
 import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
+import { database } from "@/lib/database";
+import type { DB } from "./db-types";
 import { getSiteSettings } from "@/lib/site-settings";
-import { db } from "@/lib/db";
 import { imageHosts } from "@/lib/image-hosts.mjs";
 import {
   fillGaps,
@@ -17,6 +19,12 @@ import { getOmdbById, omdbConfigured } from "@/lib/omdb";
 import { findOnTmdb, getTmdbDetails } from "@/lib/tmdb";
 import { parseTitle } from "@/lib/title-form";
 import { insertTitle, isUniqueViolation } from "@/lib/title-store";
+
+function getExecutor(val: unknown): Kysely<DB> {
+  return typeof val === "object" && val !== null && "selectFrom" in val
+    ? (val as Kysely<DB>)
+    : database;
+}
 
 export type ExistingCheckResponse = {
   ok: boolean;
@@ -47,7 +55,11 @@ const MAX_CHUNK_SIZE = 25;
 /**
  * Checks which of the given IMDb IDs are already in the database.
  */
-export async function checkExistingImdbBatch(imdbIds: string[]): Promise<ExistingCheckResponse> {
+export async function checkExistingImdbBatch(
+  imdbIds: string[],
+  executorOrUnknown?: Kysely<DB> | unknown
+): Promise<ExistingCheckResponse> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) return { ok: false, existingImdbIds: [], error: FORBIDDEN_CATALOG };
 
@@ -59,10 +71,15 @@ export async function checkExistingImdbBatch(imdbIds: string[]): Promise<Existin
     .map((id) => (typeof id === "string" ? id.trim().toLowerCase() : ""))
     .filter(Boolean);
 
-  const existingRows = await db.media.findMany({
-    where: { imdbId: { in: cleanIds } },
-    select: { imdbId: true },
-  });
+  if (cleanIds.length === 0) {
+    return { ok: true, existingImdbIds: [] };
+  }
+
+  const existingRows = await executor
+    .selectFrom("media")
+    .select("imdbId")
+    .where("imdbId", "in", cleanIds)
+    .execute();
 
   const existingImdbIds = existingRows
     .map((r) => r.imdbId)
@@ -74,7 +91,11 @@ export async function checkExistingImdbBatch(imdbIds: string[]): Promise<Existin
 /**
  * Imports a chunk of up to 25 items from an IMDb list into the catalog as drafts.
  */
-export async function importImdbBatchChunk(items: ImdbImportItem[]): Promise<BatchChunkResponse> {
+export async function importImdbBatchChunk(
+  items: ImdbImportItem[],
+  executorOrUnknown?: Kysely<DB> | unknown
+): Promise<BatchChunkResponse> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) {
     return {
@@ -109,10 +130,11 @@ export async function importImdbBatchChunk(items: ImdbImportItem[]): Promise<Bat
 
     try {
       // 1. Check if title with this IMDb ID already exists in DB
-      const existingByImdb = await db.media.findFirst({
-        where: { imdbId },
-        select: { id: true, title: true, type: true },
-      });
+      const existingByImdb = await executor
+        .selectFrom("media")
+        .select(["id", "title", "type"])
+        .where("imdbId", "=", imdbId)
+        .executeTakeFirst();
 
       if (existingByImdb) {
         alreadyExistsCount++;
@@ -149,10 +171,11 @@ export async function importImdbBatchChunk(items: ImdbImportItem[]): Promise<Bat
         const tmdbRef = formatTmdbRef({ kind: candidateKind, id: candidateId });
 
         // Check if tmdbId already exists in DB
-        const existingByTmdb = await db.media.findFirst({
-          where: { tmdbId: tmdbRef },
-          select: { id: true, title: true, type: true },
-        });
+        const existingByTmdb = await executor
+          .selectFrom("media")
+          .select(["id", "title", "type"])
+          .where("tmdbId", "=", tmdbRef)
+          .executeTakeFirst();
 
         if (existingByTmdb) {
           alreadyExistsCount++;
@@ -232,10 +255,20 @@ export async function importImdbBatchChunk(items: ImdbImportItem[]): Promise<Bat
         }
 
         try {
-          const id = await insertTitle(targetType, parsed.data, {
-            tmdbId: tmdbRef,
-            imdbId,
-          });
+          const id = executorOrUnknown
+            ? await insertTitle(
+                targetType,
+                parsed.data,
+                {
+                  tmdbId: tmdbRef,
+                  imdbId,
+                },
+                executor
+              )
+            : await insertTitle(targetType, parsed.data, {
+                tmdbId: tmdbRef,
+                imdbId,
+              });
 
           if (id) {
             importedCount++;
@@ -281,10 +314,10 @@ export async function importImdbBatchChunk(items: ImdbImportItem[]): Promise<Bat
             if (targetType === "movie") {
               values.runtime =
                 values.runtime || (item.runtimeMinutes ? String(item.runtimeMinutes) : "90");
-          const runtimeNum = Number(values.runtime);
-          if (runtimeNum > 0 && runtimeNum <= settings.shortFilmCutoffMinutes) {
-            values.category = "Short Film";
-          }
+              const runtimeNum = Number(values.runtime);
+              if (runtimeNum > 0 && runtimeNum <= settings.shortFilmCutoffMinutes) {
+                values.category = "Short Film";
+              }
             }
             values.country = values.country || "United States";
             values.language = values.language || "English";
@@ -295,12 +328,22 @@ export async function importImdbBatchChunk(items: ImdbImportItem[]): Promise<Bat
             values.featured = "";
 
             const allowedHosts = [...new Set([...imageHosts(), "image.tmdb.org", "m.media-amazon.com"])];
-        const parsed = parseTitle(targetType, values, { hosts: allowedHosts });
+            const parsed = parseTitle(targetType, values, { hosts: allowedHosts });
             if (parsed.ok) {
-              const id = await insertTitle(targetType, parsed.data, {
-                tmdbId: null,
-                imdbId,
-              });
+              const id = executorOrUnknown
+                ? await insertTitle(
+                    targetType,
+                    parsed.data,
+                    {
+                      tmdbId: null,
+                      imdbId,
+                    },
+                    executor
+                  )
+                : await insertTitle(targetType, parsed.data, {
+                    tmdbId: null,
+                    imdbId,
+                  });
               if (id) {
                 importedCount++;
                 results.push({
