@@ -26,6 +26,13 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   adds a table must also `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`. Pin Prisma versions exactly (npm's `latest`
   tag has pointed at pre-releases). Prisma 7 doesn't generate the client on
   `migrate`; run `npx prisma generate` after schema changes.
+  New code reads and writes through `database` (Kysely,
+  `src/lib/database.ts`, types in `src/lib/db-types.ts`, regenerate with
+  `npm run db:types` after a migration); Prisma stays only until the
+  existing code is ported. Migrations are hand-written SQL files in
+  `supabase/migrations/`, applied with `npm run db:deploy`. Integration
+  tests (`*.integration.test.ts`) run when `TEST_DATABASE_URL` is set, and
+  wrap their work in `withRollback()` (`src/test/database.ts`).
 - **Accounts:** Better Auth (`src/lib/auth.ts`). Server code reads the
   session with `getSession()` / `requireUser()`; never trust client state
   for access decisions. Two-factor sign-in is optional for members (Account
