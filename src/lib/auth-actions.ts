@@ -11,6 +11,7 @@ import { atLeast } from "@/lib/auth-timing";
 import { safeAdminNextPath, safeNextPath } from "@/lib/safe-redirect";
 import { getSiteSettings } from "@/lib/site-settings";
 import { siteUrl } from "@/lib/site-url";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { clientIp } from "@/lib/visitor";
 
@@ -252,6 +253,12 @@ export async function requestPasswordReset(email: unknown): Promise<Result> {
  * account ends (this one included), so whoever had the old password is
  * out, and the user logs in with the new one. If the new password is
  * refused, that session ends too.
+ *
+ * The password is set through Auth's admin API, for the account the code
+ * belongs to: the code's session is aal1, and Auth refuses a password
+ * change from an aal1 session when the account has two-factor
+ * (src/lib/auth-hooks.integration.test.ts). The emailed code is what
+ * proves the reset, as before; two-factor still guards every sign-in.
  */
 export async function resetPassword(email: unknown, code: unknown, newPassword: unknown): Promise<Result> {
   const address = emailArg(email);
@@ -265,7 +272,10 @@ export async function resetPassword(email: unknown, code: unknown, newPassword: 
   const verified = await supabase.auth.verifyOtp({ email: address, token: code, type: "recovery" });
   if (verified.error) return { error: authErrorMessage(verified.error) };
 
-  const { error } = await supabase.auth.updateUser({ password: newPassword as string });
+  const userId = verified.data.user?.id;
+  const { error } = userId
+    ? await supabaseAdmin().auth.admin.updateUserById(userId, { password: newPassword as string })
+    : { error: { code: "unexpected_failure" } };
   if (error) {
     await supabase.auth.signOut({ scope: "local" });
     return { error: `${authErrorMessage(error)} Then request a new code.` };

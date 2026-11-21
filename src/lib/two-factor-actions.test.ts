@@ -66,8 +66,21 @@ import {
   verifyTwoFactor,
 } from "@/lib/two-factor-actions";
 
+const checkPassword = vi.fn();
+vi.mock("@/lib/supabase/password-check", () => ({
+  checkPassword: (...args: unknown[]) => checkPassword(...args),
+}));
+const hasPasswordSignIn = vi.fn();
+vi.mock("@/lib/auth-profile", () => ({
+  hasPasswordSignIn: (userId: string) => hasPasswordSignIn(userId),
+}));
+
 const USER_ID = "11111111-1111-1111-1111-111111111111";
+const TEST_TOTP_SECRET = "JBSWY3DPEHPK3PXP"; // nosemgrep: generic-api-key — public RFC example secret, test only
+const PASSWORD = "my-password";
 const FACTOR_ID = "33333333-3333-3333-3333-333333333333";
+const GOOGLE_ONLY =
+  "Your account signs in with Google, so two-factor here needs a password first: set one with \u201cForgot password\u201d on the log-in page.";
 const WRONG_CODE = "That code isn't right. Check your authenticator app and try again.";
 
 function session(extra: Record<string, unknown> = {}) {
@@ -101,20 +114,22 @@ beforeEach(() => {
     data: {
       id: FACTOR_ID,
       type: "totp",
-      totp: { qr_code: 'data:image/svg+xml;utf-8,<svg xmlns="http://www.w3.org/2000/svg"></svg>', secret: "JBSWY3DPEHPK3PXP", uri: "otpauth://totp/x" },
+      totp: { qr_code: 'data:image/svg+xml;utf-8,<svg xmlns="http://www.w3.org/2000/svg"></svg>', secret: TEST_TOTP_SECRET, uri: "otpauth://totp/x" },
     },
     error: null,
   });
   mfa.challengeAndVerify.mockResolvedValue({ data: {}, error: null });
   auth.refreshSession.mockResolvedValue({ data: {}, error: null });
+  checkPassword.mockResolvedValue("ok");
+  hasPasswordSignIn.mockResolvedValue(true);
 });
 
 describe("startTwoFactorEnrollment", () => {
   it("enrolls a TOTP factor for Gayflix and returns its QR code and key", async () => {
-    await expect(startTwoFactorEnrollment()).resolves.toEqual({
+    await expect(startTwoFactorEnrollment(PASSWORD)).resolves.toEqual({
       factorId: FACTOR_ID,
       qrSvg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
-      secret: "JBSWY3DPEHPK3PXP",
+      secret: TEST_TOTP_SECRET,
     });
     expect(mfa.enroll).toHaveBeenCalledWith({ factorType: "totp", issuer: "Gayflix" });
   });
@@ -130,20 +145,62 @@ describe("startTwoFactorEnrollment", () => {
       },
       error: null,
     });
-    await startTwoFactorEnrollment();
+    await startTwoFactorEnrollment(PASSWORD);
     expect(mfa.unenroll).toHaveBeenCalledTimes(1);
     expect(mfa.unenroll).toHaveBeenCalledWith({ factorId: "old-unverified" });
   });
 
   it("refuses without a live session", async () => {
     getVerifiedSession.mockResolvedValue(null);
-    expect(await startTwoFactorEnrollment()).toHaveProperty("error");
+    expect(await startTwoFactorEnrollment(PASSWORD)).toHaveProperty("error");
+    expect(mfa.enroll).not.toHaveBeenCalled();
+  });
+
+  it("re-checks the password for the session's own email first", async () => {
+    await startTwoFactorEnrollment(PASSWORD);
+    expect(checkPassword).toHaveBeenCalledWith("sam@gayflix.test", PASSWORD);
+    expect(checkPassword.mock.invocationCallOrder[0]).toBeLessThan(mfa.enroll.mock.invocationCallOrder[0]);
+  });
+
+  it("refuses a wrong password, so a stolen session can't add its own authenticator", async () => {
+    checkPassword.mockResolvedValue("wrong");
+    expect(await startTwoFactorEnrollment("guess")).toEqual({ error: "That password isn't right." });
+    expect(mfa.enroll).not.toHaveBeenCalled();
+    expect(mfa.unenroll).not.toHaveBeenCalled();
+  });
+
+  it("refuses without a password, without checking anything", async () => {
+    for (const password of ["", undefined, 42]) {
+      expect(await startTwoFactorEnrollment(password)).toEqual({ error: "Enter your password to turn on two-factor." });
+    }
+    expect(checkPassword).not.toHaveBeenCalled();
+    expect(mfa.enroll).not.toHaveBeenCalled();
+  });
+
+  it("says so when the password can't be checked", async () => {
+    checkPassword.mockResolvedValue("error");
+    expect(await startTwoFactorEnrollment(PASSWORD)).toEqual({ error: "Something went wrong. Please try again." });
+    expect(mfa.enroll).not.toHaveBeenCalled();
+  });
+
+  it("allows 5 password checks per account in a window, then refuses without checking", async () => {
+    checkPassword.mockResolvedValue("wrong");
+    for (let i = 0; i < 5; i++) await startTwoFactorEnrollment("guess");
+    expect(await startTwoFactorEnrollment("guess")).toEqual({ error: "Too many attempts. Try again later." });
+    expect(checkPassword).toHaveBeenCalledTimes(5);
+  });
+
+  it("refuses an account without a password (Google sign-in only), which couldn't turn it off again", async () => {
+    hasPasswordSignIn.mockResolvedValue(false);
+    expect(await startTwoFactorEnrollment(PASSWORD)).toEqual({ error: GOOGLE_ONLY });
+    expect(hasPasswordSignIn).toHaveBeenCalledWith(USER_ID);
+    expect(checkPassword).not.toHaveBeenCalled();
     expect(mfa.enroll).not.toHaveBeenCalled();
   });
 
   it("refuses when two-factor is already on", async () => {
     getVerifiedSession.mockResolvedValue(session({ aal: "aal2", hasVerifiedTotp: true }));
-    expect(await startTwoFactorEnrollment()).toEqual({ error: "Two-factor sign-in is already on." });
+    expect(await startTwoFactorEnrollment(PASSWORD)).toEqual({ error: "Two-factor sign-in is already on." });
     expect(mfa.enroll).not.toHaveBeenCalled();
   });
 });

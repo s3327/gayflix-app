@@ -25,7 +25,9 @@ import { authHref } from "@/lib/safe-redirect";
  * sends the browser on to `next` (the validated ?next= page that sent
  * the visitor here), or /account. An account whose email was never confirmed gets a fresh code
  * and is sent to /verify-email instead. Accounts with two-factor turned
- * on get the code step next (TwoFactorForm). Google shows
+ * on get the code step next (TwoFactorForm); `twoFactor` opens on it
+ * (page.tsx checks a sign-in is waiting), and the step puts
+ * `twoFactor=1` in the address so a reload comes back to it. Google shows
  * only where Supabase Auth has it turned on (`google`); `googleFailed`
  * is a Google sign-in that came back without a session.
  */
@@ -33,10 +35,12 @@ export default function LoginForm({
   next,
   google,
   googleFailed = false,
+  twoFactor = false,
 }: {
   next: string | null;
   google: boolean;
   googleFailed?: boolean;
+  twoFactor?: boolean;
 }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -45,7 +49,7 @@ export default function LoginForm({
     googleFailed ? "Google sign-in didn't finish. Please try again." : ""
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
+  const [needsTwoFactor, setNeedsTwoFactor] = useState(twoFactor);
 
   const destination = next ?? "/account";
 
@@ -72,6 +76,10 @@ export default function LoginForm({
     if ("needsTwoFactor" in result) {
       setPassword("");
       setNeedsTwoFactor(true);
+      // A reload comes back to the code step (page.tsx).
+      const codeStep = new URLSearchParams({ twoFactor: "1" });
+      if (next) codeStep.set("next", next);
+      window.history.replaceState(null, "", `/login?${codeStep}`);
       return;
     }
     setError(result.error);

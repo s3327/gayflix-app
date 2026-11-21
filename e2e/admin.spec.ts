@@ -156,7 +156,14 @@ test.describe("with the admin password", () => {
     // Two-factor is required for staff here, so there's no skipping it.
     await expect(page.getByRole("link", { name: /Skip for now/ })).toHaveCount(0);
 
-    // A wrong first code doesn't turn it on.
+    // It takes the password...
+    await page.getByLabel("Confirm your password").fill("not-the-password");
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.locator("main").getByRole("alert")).toHaveText("That password isn't right.");
+    await expect(page.locator("main code")).toHaveCount(0);
+
+    // ...and a wrong first code doesn't turn it on.
+    await page.getByLabel("Confirm your password").fill(admin.password);
     await page.getByRole("button", { name: "Continue" }).click();
     const secret = (await page.locator("main code").innerText()).replace(/\s/g, "");
     await page.getByLabel("Digit 1 of 6").fill(totp(secret) === "000000" ? "111111" : "000000");

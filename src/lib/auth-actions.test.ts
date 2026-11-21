@@ -70,6 +70,12 @@ vi.mock("@/lib/auth-rate-limit", async (importOriginal) => {
   };
 });
 
+// resetPassword sets the new password through Auth's admin API.
+const updateUserById = vi.fn();
+vi.mock("@/lib/supabase/admin", () => ({
+  supabaseAdmin: () => ({ auth: { admin: { updateUserById } } }),
+}));
+
 // The admin log-in's role check reads profile.role.
 const profileRole = vi.fn();
 vi.mock("@/lib/auth-profile", () => ({
@@ -128,6 +134,9 @@ beforeEach(() => {
     fn.mockResolvedValue(NO_ERROR);
   }
   auth.signInWithPassword.mockResolvedValue({ data: { user: { id: "u1" }, session: {} }, error: null });
+  // A right emailed code signs that account in.
+  auth.verifyOtp.mockResolvedValue({ data: { user: { id: "u1" }, session: {} }, error: null });
+  updateUserById.mockResolvedValue({ data: { user: { id: "u1" } }, error: null });
   auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
     data: { currentLevel: "aal1", nextLevel: "aal1" },
     error: null,
@@ -368,12 +377,16 @@ describe("requestPasswordReset", () => {
 });
 
 describe("resetPassword", () => {
-  it("checks the recovery code, sets the password, then signs out everywhere", async () => {
+  // The recovery code's session is aal1, and Auth won't change the
+  // password of an account with two-factor from one
+  // (src/lib/auth-hooks.integration.test.ts), so the admin API sets it.
+  it("checks the recovery code, sets the password for that account, then signs out everywhere", async () => {
     await expect(resetPassword(EMAIL, "123456", PASSWORD)).resolves.toEqual({ ok: true });
     expect(auth.verifyOtp).toHaveBeenCalledWith({ email: EMAIL, token: "123456", type: "recovery" });
-    expect(auth.updateUser).toHaveBeenCalledWith({ password: PASSWORD });
+    expect(updateUserById).toHaveBeenCalledWith("u1", { password: PASSWORD });
+    expect(auth.updateUser).not.toHaveBeenCalled();
     expect(auth.signOut).toHaveBeenCalledWith({ scope: "global" });
-    const order = [auth.verifyOtp, auth.updateUser, auth.signOut].map((fn) => fn.mock.invocationCallOrder[0]);
+    const order = [auth.verifyOtp, updateUserById, auth.signOut].map((fn) => fn.mock.invocationCallOrder[0]);
     expect(order).toEqual([...order].sort((a, b) => a - b));
   });
 
@@ -381,11 +394,11 @@ describe("resetPassword", () => {
     auth.verifyOtp.mockResolvedValue(authError("otp_expired", 403));
     const result = await resetPassword(EMAIL, "000000", PASSWORD);
     expect(result).toEqual({ error: expect.stringMatching(/code/) });
-    expect(auth.updateUser).not.toHaveBeenCalled();
+    expect(updateUserById).not.toHaveBeenCalled();
   });
 
   it("leaves no session behind when the new password is refused", async () => {
-    auth.updateUser.mockResolvedValue(authError("same_password", 422));
+    updateUserById.mockResolvedValue(authError("weak_password", 422));
     const result = await resetPassword(EMAIL, "123456", PASSWORD);
     expect(result).toEqual({ error: expect.stringMatching(/password/i) });
     expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
@@ -436,11 +449,11 @@ describe("attempt limits", () => {
     auth.verifyOtp.mockResolvedValue(authError("otp_expired", 403));
     for (let i = 0; i < 5; i++) await resetPassword(EMAIL, "000000", PASSWORD);
     await expect(resetPassword(EMAIL, "123456", PASSWORD)).resolves.toEqual(TOO_MANY);
-    expect(auth.updateUser).not.toHaveBeenCalled();
+    expect(updateUserById).not.toHaveBeenCalled();
 
     await requestPasswordReset(EMAIL);
     await finishResponse();
-    auth.verifyOtp.mockResolvedValue(NO_ERROR);
+    auth.verifyOtp.mockResolvedValue({ data: { user: { id: "u1" }, session: {} }, error: null });
     await expect(resetPassword(EMAIL, "123456", PASSWORD)).resolves.toEqual({ ok: true });
   });
 
@@ -511,6 +524,28 @@ describe("GET /auth/callback", () => {
   function callbackRequest(query: string) {
     return new NextRequest(`https://gayflix.test/auth/callback?${query}`);
   }
+
+  it("sends a Google sign-in on an account with two-factor to the code step, keeping next", async () => {
+    auth.exchangeCodeForSession.mockResolvedValue({ data: {}, error: null });
+    auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: { currentLevel: "aal1", nextLevel: "aal2" },
+      error: null,
+    });
+    const response = await callback(callbackRequest("code=abc&next=%2Ftitle%2Fx"));
+    expect(response.headers.get("location")).toBe("https://gayflix.test/login?twoFactor=1&next=%2Ftitle%2Fx");
+    expect(auth.signOut).not.toHaveBeenCalled();
+  });
+
+  it("ends the session when the two-factor check fails, rather than letting it through", async () => {
+    auth.exchangeCodeForSession.mockResolvedValue({ data: {}, error: null });
+    auth.mfa.getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: null,
+      error: { name: "AuthApiError", code: "unexpected_failure", status: 500, message: "boom" },
+    });
+    const response = await callback(callbackRequest("code=abc&next=%2Fhome"));
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(response.headers.get("location")).toBe("https://gayflix.test/login?error=google&next=%2Fhome");
+  });
 
   it("exchanges the code for a session and goes to next", async () => {
     auth.exchangeCodeForSession.mockResolvedValue({ data: {}, error: null });

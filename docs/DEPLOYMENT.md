@@ -16,8 +16,8 @@ before you move on.
   app.
 
 > **Keep secrets out of chats, issues and the repository.** The database
-> connection string, `BETTER_AUTH_SECRET`, API keys and your backup codes
-> go only into Vercel's environment variables and your password manager.
+> connection string, `BETTER_AUTH_SECRET` and API keys go only into
+> Vercel's environment variables and your password manager.
 
 ## Checklist
 
@@ -47,7 +47,7 @@ Then keep [Running the site](#running-the-site),
 | Resend account ([resend.com](https://resend.com)) | Sign-up codes and password-reset emails | Free plan with daily and monthly sending limits |
 | Prisma account | The database | Created for you when you add the database from Vercel (Part 3). Free plan available. |
 | An authenticator app on your phone (1Password, Google Authenticator, Authy, Microsoft Authenticator, ...) | Admin two-factor sign-in | Free |
-| A password manager | The secret, your admin password and backup codes | |
+| A password manager | The secret and your admin password | |
 | Optional: your own domain, e.g. `gayflix.com` | A real address, and email from your own domain | Yearly fee from a domain registrar |
 
 Plans and limits change, so check each provider's pricing page before you
@@ -298,17 +298,19 @@ then work on the production database.
    and click **Continue**.
 3. Scan the QR code with your authenticator app, or type in the key shown
    under it.
-4. **Save the backup codes** in your password manager. They're shown only
-   once. Each one gets you in once if you lose your phone.
-5. Enter the 6-digit code from the app and click **Turn on two-factor**.
+4. Enter the 6-digit code from the app and click **Turn on two-factor**.
+
+There are no backup codes. If you lose the phone, see "Lost phone or
+authenticator app" below.
 
 **You should see** the admin dashboard.
 
 From now on:
 
-- Every admin sign-in asks for a code from the app, or a backup code.
+- Every admin sign-in asks for a code from the app.
 - An admin sign-in lasts 12 hours. After that, you sign in again.
-- 10 wrong codes in a row lock two-factor sign-in for 15 minutes.
+- 5 wrong codes for one account within 15 minutes lock its code step
+  until the 15 minutes are up.
 - The same account asks for a code on the main site's login too.
 
 ## Part 7: Use your own domain and email address
@@ -705,16 +707,23 @@ arrive without episodes for now; add them as usual.
 
 ### Lost phone or authenticator app
 
-- **To get in once:** at `/admin/login`, after your password, choose
-  **Use a backup code instead**.
-- **To move two-factor to a new phone,** or if no backup codes are left:
-  1. In Studio, open the `user` table, find the account and copy its
-     `id`.
-  2. In the `twoFactor` table, delete the row whose `userId` is that id.
-  3. Back in the `user` table, set that account's `twoFactorEnabled` to
-     `false` and save.
-  4. Log in at `/admin/login`. You go through the two-factor setup (6.3)
-     again.
+There are no backup codes. Members who lose the device with their
+authenticator app ask staff through **Contact** (the site tells them
+so); staff who lose theirs ask another admin. Check that the request
+really comes from the account's owner (for example, a reply from the
+account's email address) before turning their two-factor off:
+
+1. In the Supabase dashboard, open **SQL Editor** and run, with the
+   account's email:
+
+   ```sql
+   DELETE FROM auth.mfa_factors
+   WHERE user_id = (SELECT id FROM auth.users WHERE email = 'them@example.com');
+   ```
+
+2. They log in with their password alone. A member can turn two-factor
+   on again in **Account → Setting**; an admin goes through the
+   two-factor setup (6.3) again at `/admin/login`.
 
 ### Backups
 

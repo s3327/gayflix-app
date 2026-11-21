@@ -14,29 +14,32 @@ function manualKey(secret: string): string {
 
 /**
  * Turning on two-factor sign-in, for admins (/admin/setup-2fa) and members
- * who choose to (Account → Setting). Continue asks the server for a new
- * authenticator key (startTwoFactorEnrollment); then scan the QR code and
- * enter the first code. Two-factor only counts as on once that code
+ * who choose to (Account → Setting). Confirm the password, and the
+ * server makes a new authenticator key (startTwoFactorEnrollment); then
+ * scan the QR code and enter the first code. Two-factor only counts as on once that code
  * checks out (confirmTwoFactorEnrollment), so a half-finished setup can
  * simply be started again. There are no backup codes: whoever loses
  * their device asks staff.
  */
 export default function TwoFactorEnrollment({ onEnabled }: { onEnabled: () => void }) {
+  const [password, setPassword] = useState("");
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [code, setCode] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function handleStart() {
+  async function handleStart(event: React.FormEvent) {
+    event.preventDefault();
     setError("");
     setIsSubmitting(true);
-    const result = await startTwoFactorEnrollment();
+    const result = await startTwoFactorEnrollment(password);
     setIsSubmitting(false);
     if ("error" in result) {
       setError(result.error);
       return;
     }
+    setPassword("");
     setEnrollment(result);
   }
 
@@ -56,21 +59,37 @@ export default function TwoFactorEnrollment({ onEnabled }: { onEnabled: () => vo
   }
 
   return !enrollment ? (
-    <div className="mt-6 flex flex-col gap-5">
+    <form method="post" onSubmit={handleStart} className="mt-6 flex flex-col gap-5">
       <p className="text-sm text-ink-secondary">
         You&apos;ll need an authenticator app on your phone. If you ever lose it, ask us through
         Contact to get back in.
       </p>
+      <div className="flex flex-col gap-1.5">
+        <label
+          htmlFor="two-factor-password"
+          className="text-xs font-semibold uppercase tracking-wide text-ink-secondary"
+        >
+          Confirm your password
+        </label>
+        <input
+          id="two-factor-password"
+          type="password"
+          autoComplete="current-password"
+          required
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          className="w-full rounded-md border border-border-subtle bg-bg-elevated px-4 py-2.5 text-sm text-ink-primary transition-colors focus:border-brand-pink focus-visible:outline-hidden"
+        />
+      </div>
       <FormError message={error} />
       <button
-        type="button"
-        onClick={handleStart}
+        type="submit"
         disabled={isSubmitting}
         className="w-full rounded-card bg-brand-pink px-6 py-3 text-sm font-bold text-ink-onBrand transition-colors hover:bg-brand-pink-light active:bg-brand-pink-dark disabled:cursor-wait disabled:opacity-70"
       >
-        {isSubmitting ? "Preparing…" : "Continue"}
+        {isSubmitting ? "Checking…" : "Continue"}
       </button>
-    </div>
+    </form>
   ) : (
     <form
       method="post"

@@ -163,6 +163,30 @@ describe.skipIf(!hasAuthApi)("Supabase Auth hooks", () => {
     expect(jwtClaims(refreshed.data.session!.access_token)).toMatchObject({ has_totp: false });
   });
 
+  // Why resetPassword (src/lib/auth-actions.ts) sets the new password with
+  // the admin API: the session the emailed recovery code makes is aal1,
+  // and Auth won't change the password of an account with two-factor
+  // from an aal1 session.
+  it("refuses a recovery-code session's password change on an account with two-factor; the admin API sets it", async () => {
+    const { id, email } = await createConfirmedUser();
+    await enrollTotp((await signIn(email)).client);
+    const { data: link, error: linkError } = await supabaseAdmin().auth.admin.generateLink({ type: "recovery", email });
+    if (linkError) throw linkError;
+    const client = publicClient();
+    const verified = await client.auth.verifyOtp({ email, token: link.properties.email_otp, type: "recovery" });
+    if (verified.error) throw verified.error;
+    expect(verified.data.user?.id).toBe(id);
+    expect(jwtClaims(verified.data.session!.access_token)).toMatchObject({ aal: "aal1", has_totp: true });
+
+    const refused = await client.auth.updateUser({ password: "a-brand-new-password-2" });
+    expect(refused.error?.code).toBe("insufficient_aal");
+
+    const { error } = await supabaseAdmin().auth.admin.updateUserById(id, { password: "a-brand-new-password-2" });
+    expect(error).toBeNull();
+    const again = await publicClient().auth.signInWithPassword({ email, password: "a-brand-new-password-2" });
+    expect(again.error).toBeNull();
+  });
+
   // Auth checks a code's request against the challenge's stored address,
   // so a challenge keeps it only until it's verified (the migration says why).
   it("keeps no IP address on a verified two-factor challenge, or on audit entries (D3)", async () => {

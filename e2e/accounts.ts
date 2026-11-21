@@ -186,6 +186,7 @@ export async function adminPasswordStep(page: Page, account: Account) {
 /** Completes /admin/setup-2fa and records the authenticator key on `account`. */
 export async function setUpTwoFactor(page: Page, account: Account) {
   await expect(page).toHaveURL(/\/admin\/setup-2fa$/);
+  await page.getByLabel("Confirm your password").fill(account.password);
   await page.getByRole("button", { name: "Continue" }).click();
   account.totpSecret = (await page.locator("main code").innerText()).replace(/\s/g, "");
   await page.getByLabel("Digit 1 of 6").fill(totp(account.totpSecret));

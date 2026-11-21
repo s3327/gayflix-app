@@ -32,6 +32,7 @@ test("a member turns on two-factor, signs in with a code, and turns it off", asy
   expect(await seriousViolations(page)).toEqual([]);
 
   await section.getByRole("button", { name: "Turn On Two-Factor" }).click();
+  await section.getByLabel("Confirm your password").fill(member.password);
   await section.getByRole("button", { name: "Continue" }).click();
   const secret = (await section.locator("code").innerText()).replace(/\s/g, "");
   await expect(section.getByRole("img", { name: "QR code for your authenticator app" })).toBeVisible();
@@ -53,6 +54,11 @@ test("a member turns on two-factor, signs in with a code, and turns it off", asy
   await expect(other.locator("main").getByRole("alert")).toHaveText(
     "That code isn't right. Check your authenticator app and try again."
   );
+  // A reload in the middle comes back to the code step, not the password.
+  await expect(other).toHaveURL(/\/login\?twoFactor=1/);
+  await other.reload();
+  await expect(other.getByLabel("Digit 1 of 6")).toBeVisible();
+  await expect(other.getByLabel("Password")).toHaveCount(0);
   await other.getByLabel("Digit 1 of 6").fill(totp(secret));
   await expect(other).toHaveURL(/\/account$/);
 

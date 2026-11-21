@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { hasPasswordSignIn } from "@/lib/auth-profile";
 import { LIMITS, overLimit, resetLimit, TOO_MANY_ATTEMPTS } from "@/lib/auth-rate-limit";
 import { safeNextPath } from "@/lib/safe-redirect";
 import { getPendingTwoFactorSession, getVerifiedSession } from "@/lib/session";
+import { checkPassword } from "@/lib/supabase/password-check";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { clientIp } from "@/lib/visitor";
 
@@ -19,6 +21,8 @@ import { clientIp } from "@/lib/visitor";
  * Every argument comes from the browser, so each is checked here before
  * Supabase is called. Codes are limited per account and per client
  * (src/lib/auth-rate-limit.ts): six digits are a million guesses.
+ * Turning it on takes the password, like turning it off, so a stolen
+ * session can't add its own authenticator and lock the owner out.
  */
 
 const CODE_PATTERN = /^\d{6}$/;
@@ -37,6 +41,14 @@ async function tooManyCodes(userId: string): Promise<boolean> {
   return overAccount || overClient;
 }
 
+/** Counts a password re-check for the account and for the client; true when either is over. */
+async function tooManyPasswords(userId: string): Promise<boolean> {
+  const client = await clientIp();
+  const overAccount = await overLimit(LIMITS.passwordRecheck, [userId]);
+  const overClient = await overLimit(LIMITS.passwordRecheckPerClient, [client]);
+  return overAccount || overClient;
+}
+
 /** The SVG markup of the QR code (supabase-js hands it over as a data: URL). */
 function svgMarkup(qrCode: string): string {
   return qrCode.replace(/^data:image\/svg\+xml;[^,]*,/, "");
@@ -44,16 +56,32 @@ function svgMarkup(qrCode: string): string {
 
 /**
  * Starts turning on two-factor: a new TOTP factor, not yet verified,
- * with its QR code (SVG markup) and key for the authenticator app. Any
- * setup that was started and never finished is removed first. It only
- * counts once confirmTwoFactorEnrollment checks a first code.
+ * with its QR code (SVG markup) and key for the authenticator app. Needs
+ * the account's password, re-checked (checkPassword) and limited per
+ * account and per client. An account without a password (Google sign-in
+ * only) is refused: it could never turn two-factor off again itself.
+ * Any setup that was started and never finished is removed first. It
+ * only counts once confirmTwoFactorEnrollment checks a first code.
  */
-export async function startTwoFactorEnrollment(): Promise<
+export async function startTwoFactorEnrollment(password: unknown): Promise<
   { factorId: string; qrSvg: string; secret: string } | { error: string }
 > {
+  if (typeof password !== "string" || !password) {
+    return { error: "Enter your password to turn on two-factor." };
+  }
   const session = await getVerifiedSession();
   if (!session) return SIGN_IN_AGAIN;
   if (session.hasVerifiedTotp) return { error: "Two-factor sign-in is already on." };
+  if (!(await hasPasswordSignIn(session.user.id))) {
+    return {
+      error:
+        "Your account signs in with Google, so two-factor here needs a password first: set one with \u201cForgot password\u201d on the log-in page.",
+    };
+  }
+  if (await tooManyPasswords(session.user.id)) return RATE_LIMITED;
+  const checked = await checkPassword(session.user.email, password);
+  if (checked === "wrong") return { error: "That password isn't right." };
+  if (checked === "error") return SOMETHING_WENT_WRONG;
 
   const supabase = await createServerSupabase();
   const { data: factors, error: listError } = await supabase.auth.mfa.listFactors();
