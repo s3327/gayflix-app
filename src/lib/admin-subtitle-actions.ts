@@ -1,9 +1,11 @@
 "use server";
 
+import type { Kysely, Transaction } from "kysely";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
 import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
 import { canChange, GONE, ownerOf } from "@/lib/catalog-owner";
+import { database } from "@/lib/database";
+import type { DB } from "./db-types";
 import type { FormState } from "@/lib/title-form";
 import {
   decodeSubtitleFile,
@@ -24,6 +26,12 @@ import {
  * argument, the ones bound in the page included.
  */
 
+function getExecutor(val: unknown): Kysely<DB> {
+  return typeof val === "object" && val !== null && "selectFrom" in val
+    ? (val as Kysely<DB>)
+    : database;
+}
+
 /** A file name to show in the admin panel, from what the browser sent. */
 function cleanFileName(file: File): string {
   const name = file.name.replace(/[\u0000-\u001f\u007f]/g, "").trim();
@@ -38,14 +46,16 @@ export async function uploadSubtitle(
   ownerKind: unknown,
   ownerId: unknown,
   _state: FormState,
-  form: FormData
+  form: FormData,
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<FormState> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   const language = form.get("language");
   const values = { language: typeof language === "string" ? language : "" };
   if (!allowed) return { message: FORBIDDEN_CATALOG, values, version: Date.now() };
   const owner = ownerOf(ownerKind, ownerId);
-  if (!(await canChange(owner))) return { message: GONE, values, version: Date.now() };
+  if (!(await canChange(owner, executor))) return { message: GONE, values, version: Date.now() };
 
   const errors: Record<string, string> = {};
   if (!isSubtitleLanguage(language)) errors.language = "Choose the subtitles' language.";
@@ -62,16 +72,36 @@ export async function uploadSubtitle(
     return { errors, values, version: Date.now() };
   }
 
-  const saved = await db.$transaction(async (tx) => {
-    const existing = await tx.subtitle.findMany({ where: owner, select: { id: true, language: true } });
+  const runUpload = async (tx: Transaction<DB> | Kysely<DB>) => {
+    let query = tx.selectFrom("subtitle").select(["id", "language"]);
+    if ("mediaId" in owner) {
+      query = query.where("mediaId", "=", owner.mediaId);
+    } else {
+      query = query.where("episodeId", "=", owner.episodeId);
+    }
+    const existing = await query.execute();
     const replaced = existing.find((row) => row.language === language);
     if (!replaced && existing.length >= MAX_SUBTITLES) return false;
-    if (replaced) await tx.subtitle.delete({ where: { id: replaced.id } });
-    await tx.subtitle.create({
-      data: { ...owner, language, content, fileName: cleanFileName(file as File) },
-    });
+    if (replaced) {
+      await tx.deleteFrom("subtitle").where("id", "=", replaced.id).execute();
+    }
+    await tx
+      .insertInto("subtitle")
+      .values({
+        mediaId: "mediaId" in owner ? owner.mediaId : null,
+        episodeId: "episodeId" in owner ? owner.episodeId : null,
+        language,
+        content,
+        fileName: cleanFileName(file as File),
+      })
+      .execute();
     return true;
-  });
+  };
+
+  const saved = executor.isTransaction
+    ? await runUpload(executor)
+    : await executor.transaction().execute(runUpload);
+
   if (!saved) {
     return {
       message: `There can be ${MAX_SUBTITLES} languages at most. Delete one first.`,
@@ -84,17 +114,22 @@ export async function uploadSubtitle(
 }
 
 /** Deletes one language's subtitles, after the page's confirmation. */
-export async function deleteSubtitle(idArg: unknown): Promise<void> {
+export async function deleteSubtitle(
+  idArg: unknown,
+  executorOrUnknown?: Kysely<DB> | unknown
+): Promise<void> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) return;
   if (typeof idArg !== "string" || !SUBTITLE_ID.test(idArg)) throw new Error("Invalid subtitle");
-  const row = await db.subtitle.findUnique({
-    where: { id: idArg },
-    select: { mediaId: true, episodeId: true },
-  });
+  const row = await executor
+    .selectFrom("subtitle")
+    .select(["mediaId", "episodeId"])
+    .where("id", "=", idArg)
+    .executeTakeFirst();
   if (!row) return;
   const owner = row.mediaId ? { mediaId: row.mediaId } : { episodeId: row.episodeId! };
-  if (!(await canChange(owner))) return;
-  await db.subtitle.deleteMany({ where: { id: idArg } });
+  if (!(await canChange(owner, executor))) return;
+  await executor.deleteFrom("subtitle").where("id", "=", idArg).execute();
   revalidatePath("/", "layout");
 }

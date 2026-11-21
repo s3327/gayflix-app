@@ -1220,20 +1220,50 @@ export async function findViewTarget(id: string): Promise<string | null> {
  * drafts and trashed titles included.
  */
 export async function getVideoSources(
-  target: { mediaId: string } | { episodeId: string }
+  target: { mediaId: string } | { episodeId: string },
+  executor: Kysely<DB> = database
 ): Promise<VideoSourceEntry[]> {
   await connection();
   const id = "mediaId" in target ? target.mediaId : target.episodeId;
   if (!isMediaId(id)) return [];
-  const published = { ...PUBLISHED, trashedAt: null };
-  const rows = await db.videoSource.findMany({
-    where:
-      "mediaId" in target
-        ? { mediaId: id, enabled: true, media: { ...published, type: "movie" } }
-        : { episodeId: id, enabled: true, episode: { media: published } },
-    orderBy: VIDEO_ORDER,
-    select: { id: true, label: true, kind: true, url: true },
-  });
+
+  const rows =
+    "mediaId" in target
+      ? await executor
+          .selectFrom("video_source")
+          .innerJoin("media", "media.id", "video_source.mediaId")
+          .select([
+            "video_source.id",
+            "video_source.label",
+            "video_source.kind",
+            "video_source.url",
+          ])
+          .where("video_source.mediaId", "=", id)
+          .where("video_source.enabled", "=", true)
+          .where("media.status", "=", "published")
+          .where("media.trashedAt", "is", null)
+          .where("media.type", "=", "movie")
+          .orderBy("video_source.position", "asc")
+          .orderBy("video_source.id", "asc")
+          .execute()
+      : await executor
+          .selectFrom("video_source")
+          .innerJoin("episode", "episode.id", "video_source.episodeId")
+          .innerJoin("media", "media.id", "episode.mediaId")
+          .select([
+            "video_source.id",
+            "video_source.label",
+            "video_source.kind",
+            "video_source.url",
+          ])
+          .where("video_source.episodeId", "=", id)
+          .where("video_source.enabled", "=", true)
+          .where("media.status", "=", "published")
+          .where("media.trashedAt", "is", null)
+          .orderBy("video_source.position", "asc")
+          .orderBy("video_source.id", "asc")
+          .execute();
+
   const hosts = videoHosts();
   return rows.filter((row) => videoUrlAllowed(row.url, hosts));
 }
@@ -1243,39 +1273,73 @@ export async function getVideoSources(
  * language, named for its menu, A to Z. Only a published title's.
  */
 export async function getSubtitles(
-  target: { mediaId: string } | { episodeId: string }
+  target: { mediaId: string } | { episodeId: string },
+  executor: Kysely<DB> = database
 ): Promise<SubtitleTrack[]> {
   await connection();
   const id = "mediaId" in target ? target.mediaId : target.episodeId;
   if (!isMediaId(id)) return [];
-  const published = { ...PUBLISHED, trashedAt: null };
-  const rows = await db.subtitle.findMany({
-    where:
-      "mediaId" in target
-        ? { mediaId: id, media: { ...published, type: "movie" } }
-        : { episodeId: id, episode: { media: published } },
-    select: { id: true, language: true },
-  });
+
+  const rows =
+    "mediaId" in target
+      ? await executor
+          .selectFrom("subtitle")
+          .innerJoin("media", "media.id", "subtitle.mediaId")
+          .select(["subtitle.id", "subtitle.language", "subtitle.fileName"])
+          .where("subtitle.mediaId", "=", id)
+          .where("media.status", "=", "published")
+          .where("media.trashedAt", "is", null)
+          .where("media.type", "=", "movie")
+          .orderBy("subtitle.language", "asc")
+          .execute()
+      : await executor
+          .selectFrom("subtitle")
+          .innerJoin("episode", "episode.id", "subtitle.episodeId")
+          .innerJoin("media", "media.id", "episode.mediaId")
+          .select(["subtitle.id", "subtitle.language", "subtitle.fileName"])
+          .where("subtitle.episodeId", "=", id)
+          .where("media.status", "=", "published")
+          .where("media.trashedAt", "is", null)
+          .orderBy("subtitle.language", "asc")
+          .execute();
+
   return rows
-    .map((row) => ({ ...row, label: languageName(row.language) }))
+    .map((row) => ({ id: row.id, language: row.language, label: languageName(row.language) }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 /** A subtitle file as WebVTT (src/app/subtitles/[id]), if its title is published. */
-export async function getSubtitleFile(id: string): Promise<string | null> {
+export async function getSubtitleFile(
+  id: string,
+  executor: Kysely<DB> = database
+): Promise<string | null> {
   await connection();
   if (!SUBTITLE_ID.test(id)) return null;
-  const published = { ...PUBLISHED, trashedAt: null };
-  const row = await db.subtitle.findFirst({
-    where: {
-      id,
-      OR: [
-        { media: { ...published, type: "movie" } },
-        { episode: { media: published } },
-      ],
-    },
-    select: { content: true },
-  });
+
+  const row = await executor
+    .selectFrom("subtitle")
+    .leftJoin("media as movie", "movie.id", "subtitle.mediaId")
+    .leftJoin("episode", "episode.id", "subtitle.episodeId")
+    .leftJoin("media as series", "series.id", "episode.mediaId")
+    .select("subtitle.content")
+    .where("subtitle.id", "=", id)
+    .where((eb) =>
+      eb.or([
+        eb.and([
+          eb("subtitle.mediaId", "is not", null),
+          eb("movie.status", "=", "published"),
+          eb("movie.trashedAt", "is", null),
+          eb("movie.type", "=", "movie"),
+        ]),
+        eb.and([
+          eb("subtitle.episodeId", "is not", null),
+          eb("series.status", "=", "published"),
+          eb("series.trashedAt", "is", null),
+        ]),
+      ])
+    )
+    .executeTakeFirst();
+
   return row?.content ?? null;
 }
 
