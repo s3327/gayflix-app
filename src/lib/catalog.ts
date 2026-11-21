@@ -1,8 +1,12 @@
 import { stripHtmlAndEntities } from "@/lib/sanitize-text";
 import { connection } from "next/server";
 import { cache } from "react";
+import type { Kysely } from "kysely";
+import { jsonArrayFrom, jsonObjectFrom } from "kysely/helpers/postgres";
 import { Prisma } from "@/generated/prisma/client";
+import { database } from "@/lib/database";
 import { db } from "@/lib/db";
+import type { DB } from "@/lib/db-types";
 import { isMediaId } from "@/lib/library-types";
 import type {
   Episode,
@@ -107,7 +111,23 @@ const CARD_COLUMNS = Prisma.sql`id, type::text AS type, title, year, duration, g
 // Dates are stored as calendar days (UTC midnight), so they're shown in UTC.
 const longDate = new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeZone: "UTC" });
 
-function toMedia(row: CardRow): Media {
+function toMedia(
+  row:
+    | CardRow
+    | {
+        id: string;
+        type: MediaType;
+        title: string;
+        year: number;
+        duration: string;
+        genres: string[] | null;
+        posterUrl: string;
+        gradient: string | null;
+        category: string | null;
+        createdAt: Date | string;
+        publishedAt?: Date | string | null;
+      }
+): Media {
   return {
     id: row.id,
     type: row.type,
@@ -118,8 +138,12 @@ function toMedia(row: CardRow): Media {
     category: row.category ?? undefined,
     posterUrl: row.posterUrl,
     gradient: row.gradient ?? undefined,
-    createdAt: row.createdAt.toISOString(),
-    publishedAt: row.publishedAt ? row.publishedAt.toISOString() : undefined,
+    createdAt: typeof row.createdAt === "string" ? row.createdAt : row.createdAt.toISOString(),
+    publishedAt: row.publishedAt
+      ? typeof row.publishedAt === "string"
+        ? row.publishedAt
+        : row.publishedAt.toISOString()
+      : undefined,
   };
 }
 
@@ -894,109 +918,212 @@ export type CollectionCard = {
 /** Home shows this many collection rows at most. */
 const HOME_COLLECTIONS = 3;
 
-/** Collections showing today: published, and within their dates if they have any. */
-function showingCollections(): Prisma.CollectionWhereInput {
+async function collectionCards(
+  options: {
+    id?: string;
+    onHome?: boolean;
+    take?: number;
+    titles?: number;
+  } = {},
+  executor: Kysely<DB> = database
+): Promise<CollectionCard[]> {
   const now = new Date();
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  return {
-    published: true,
-    AND: [
-      { OR: [{ startsAt: null }, { startsAt: { lte: today } }] },
-      { OR: [{ endsAt: null }, { endsAt: { gte: today } }] },
-    ],
-  };
-}
 
-async function collectionCards(
-  where: Prisma.CollectionWhereInput,
-  { take, titles }: { take?: number; titles?: number } = {}
-): Promise<CollectionCard[]> {
-  const rows = await db.collection.findMany({
-    where: { ...where, items: { some: { media: PUBLISHED } } },
-    orderBy: [{ position: "asc" }, { title: "asc" }],
-    take,
-    select: {
-      id: true,
-      title: true,
-      description: true,
-      items: {
-        where: { media: PUBLISHED },
-        orderBy: [{ position: "asc" }, { addedAt: "asc" }],
-        take: titles,
-        select: { media: { select: CARD } },
-      },
-    },
-  });
-  return rows.map(({ items, ...row }) => ({ ...row, media: items.map((item) => toMedia(item.media)) }));
+  let query = executor
+    .selectFrom("collection")
+    .select([
+      "collection.id",
+      "collection.title",
+      "collection.description",
+    ])
+    .select((eb) => [
+      jsonArrayFrom(
+        eb
+          .selectFrom("collection_item")
+          .innerJoin("media", "media.id", "collection_item.mediaId")
+          .select([
+            "media.id",
+            "media.type",
+            "media.title",
+            "media.year",
+            "media.duration",
+            "media.genres",
+            "media.posterUrl",
+            "media.gradient",
+            "media.category",
+            "media.createdAt",
+            "media.publishedAt",
+          ])
+          .whereRef("collection_item.collectionId", "=", "collection.id")
+          .where("media.status", "=", "published")
+          .where("media.trashedAt", "is", null)
+          .orderBy("collection_item.position", "asc")
+          .orderBy("collection_item.addedAt", "asc")
+          .$if(options.titles !== undefined, (qb) => qb.limit(options.titles!))
+      ).as("items"),
+    ])
+    .where("collection.published", "=", true)
+    .where((eb) =>
+      eb.or([
+        eb("collection.startsAt", "is", null),
+        eb("collection.startsAt", "<=", today),
+      ])
+    )
+    .where((eb) =>
+      eb.or([
+        eb("collection.endsAt", "is", null),
+        eb("collection.endsAt", ">=", today),
+      ])
+    )
+    .where((eb) =>
+      eb.exists(
+        eb
+          .selectFrom("collection_item")
+          .innerJoin("media", "media.id", "collection_item.mediaId")
+          .whereRef("collection_item.collectionId", "=", "collection.id")
+          .where("media.status", "=", "published")
+          .where("media.trashedAt", "is", null)
+      )
+    )
+    .orderBy("collection.position", "asc")
+    .orderBy("collection.title", "asc");
+
+  if (options.id) {
+    query = query.where("collection.id", "=", options.id);
+  }
+  if (options.onHome !== undefined) {
+    query = query.where("collection.onHome", "=", options.onHome);
+  }
+  if (options.take !== undefined) {
+    query = query.limit(options.take);
+  }
+
+  const rows = await query.execute();
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    media: (row.items ?? []).map((m) => toMedia(m as unknown as CardRow)),
+  }));
 }
 
 /** /collections: every collection showing today with a published title, in the admins' order. */
-export async function listCollections(): Promise<CollectionCard[]> {
+export async function listCollections(executor: Kysely<DB> = database): Promise<CollectionCard[]> {
   await connection();
-  return collectionCards(showingCollections(), { titles: 4 });
+  return collectionCards({ titles: 4 }, executor);
 }
 
 /** The home page's collection rows: those marked for it, showing today. */
-export async function listHomeCollections(): Promise<CollectionCard[]> {
+export async function listHomeCollections(executor: Kysely<DB> = database): Promise<CollectionCard[]> {
   await connection();
-  return collectionCards({ ...showingCollections(), onHome: true }, { take: HOME_COLLECTIONS, titles: ROW_SIZE });
+  return collectionCards({ onHome: true, take: HOME_COLLECTIONS, titles: ROW_SIZE }, executor);
 }
 
 /** /collections/[id]: a collection showing today, with its published titles, or null. */
-export async function getCollection(id: string): Promise<CollectionCard | null> {
+export async function getCollection(id: string, executor: Kysely<DB> = database): Promise<CollectionCard | null> {
   await connection();
   if (!isMediaId(id)) return null;
-  const [collection] = await collectionCards({ ...showingCollections(), id });
+  const [collection] = await collectionCards({ id }, executor);
   return collection ?? null;
 }
 
 /** Every showing collection's address, for the sitemap. */
-export async function listCollectionIds(): Promise<string[]> {
+export async function listCollectionIds(executor: Kysely<DB> = database): Promise<string[]> {
   await connection();
-  return (await listCollections()).map((collection) => collection.id);
+  return (await listCollections(executor)).map((collection) => collection.id);
 }
 
 /** Admin: every collection, with how many titles it holds. */
-export async function listCollectionsForAdmin() {
+export async function listCollectionsForAdmin(executor: Kysely<DB> = database) {
   await connection();
   await requireAdmin();
-  return db.collection.findMany({
-    orderBy: [{ position: "asc" }, { title: "asc" }],
-    include: { _count: { select: { items: true } } },
+  const rows = await executor
+    .selectFrom("collection")
+    .selectAll("collection")
+    .select((eb) => [
+      eb
+        .selectFrom("collection_item")
+        .select((ib) => ib.fn.countAll().as("count"))
+        .whereRef("collection_item.collectionId", "=", "collection.id")
+        .as("itemCount"),
+    ])
+    .orderBy("position", "asc")
+    .orderBy("title", "asc")
+    .execute();
+
+  return rows.map((row) => {
+    const { itemCount, ...rest } = row;
+    const count = Number(itemCount ?? 0);
+    return {
+      ...rest,
+      _count: { items: count },
+      itemCount: count,
+    };
   });
 }
 
 /** Admin: one collection with all its titles (drafts and trashed ones too), in order. */
-export async function getCollectionForEdit(id: string) {
+export async function getCollectionForEdit(id: string, executor: Kysely<DB> = database) {
   await connection();
   await requireAdmin();
   if (!isMediaId(id)) return null;
-  return db.collection.findUnique({
-    where: { id },
-    include: {
-      items: {
-        orderBy: [{ position: "asc" }, { addedAt: "asc" }],
-        select: {
-          mediaId: true,
-          media: { select: { id: true, title: true, year: true, type: true, status: true, trashedAt: true } },
-        },
-      },
-    },
-  });
+
+  const collection = await executor
+    .selectFrom("collection")
+    .selectAll("collection")
+    .select((eb) => [
+      jsonArrayFrom(
+        eb
+          .selectFrom("collection_item")
+          .select((ib) => [
+            "collection_item.mediaId",
+            jsonObjectFrom(
+              ib
+                .selectFrom("media")
+                .select([
+                  "media.id",
+                  "media.title",
+                  "media.year",
+                  "media.type",
+                  "media.status",
+                  "media.trashedAt",
+                ])
+                .whereRef("media.id", "=", "collection_item.mediaId")
+            ).as("media"),
+          ])
+          .whereRef("collection_item.collectionId", "=", "collection.id")
+          .orderBy("collection_item.position", "asc")
+          .orderBy("collection_item.addedAt", "asc")
+      ).as("items"),
+    ])
+    .where("collection.id", "=", id)
+    .executeTakeFirst();
+
+  if (!collection) return null;
+
+  return {
+    ...collection,
+    items: collection.items
+      .filter((item): item is typeof item & { media: NonNullable<typeof item.media> } => item.media !== null),
+  };
 }
 
 /** Admin: titles (not in the trash) whose name has `query`, to add to a collection. */
-export async function searchTitlesForCollection(query: string) {
+export async function searchTitlesForCollection(query: string, executor: Kysely<DB> = database) {
   await connection();
   await requireAdmin();
   const text = query.trim().slice(0, 100);
   if (!text) return [];
-  return db.media.findMany({
-    where: { trashedAt: null, title: { contains: text, mode: "insensitive" } },
-    orderBy: [{ title: "asc" }, { year: "desc" }],
-    take: 20,
-    select: { id: true, title: true, year: true, type: true, status: true },
-  });
+  return executor
+    .selectFrom("media")
+    .select(["id", "title", "year", "type", "status"])
+    .where("trashedAt", "is", null)
+    .where("title", "ilike", `%${escapeLike(text)}%`)
+    .orderBy("title", "asc")
+    .orderBy("year", "desc")
+    .limit(20)
+    .execute();
 }
 
 // --- Reports -----------------------------------------------------------------
