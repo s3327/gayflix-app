@@ -22,14 +22,14 @@ const SUPABASE_HOST = /\.supabase\.(com|co)$/i;
 const SSL_PARAMS = ["sslmode", "sslcert", "sslkey", "sslrootcert", "uselibpqcompat", "pgbouncer"];
 
 /**
- * @param {string | undefined} connectionString
- * @param {string | undefined} caCert PEM text; literal "\n"s are allowed.
- * @param {Record<string, string | undefined>} env
+ * @param {string | undefined} [connectionString]
+ * @param {string | undefined} [caCert] PEM text; literal "\n"s are allowed.
+ * @param {Record<string, string | undefined>} [env]
  * @returns {{ connectionString: string | undefined, ssl?: { ca?: string, rejectUnauthorized: boolean } }}
  */
 export function postgresConfig(
-  connectionString,
-  caCert,
+  connectionString = undefined,
+  caCert = undefined,
   env = process.env
 ) {
   const urlString = connectionString !== undefined ? connectionString : env.DATABASE_URL;
