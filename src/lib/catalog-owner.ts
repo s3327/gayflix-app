@@ -1,4 +1,6 @@
-import { db } from "@/lib/db";
+import type { Kysely } from "kysely";
+import { database } from "@/lib/database";
+import type { DB } from "./db-types";
 import { isMediaId } from "@/lib/library-types";
 
 /*
@@ -21,17 +23,20 @@ export function ownerOf(kindArg: unknown, idArg: unknown): Owner {
 }
 
 /** Whether a movie, or an episode's series, exists and isn't in the trash. */
-export async function canChange(owner: Owner): Promise<boolean> {
+export async function canChange(owner: Owner, executor: Kysely<DB> = database): Promise<boolean> {
   if ("mediaId" in owner) {
-    const movie = await db.media.findUnique({
-      where: { id: owner.mediaId },
-      select: { type: true, trashedAt: true },
-    });
+    const movie = await executor
+      .selectFrom("media")
+      .select(["type", "trashedAt"])
+      .where("id", "=", owner.mediaId)
+      .executeTakeFirst();
     return movie?.type === "movie" && !movie.trashedAt;
   }
-  const episode = await db.episode.findUnique({
-    where: { id: owner.episodeId },
-    select: { media: { select: { trashedAt: true } } },
-  });
-  return episode !== null && !episode.media.trashedAt;
+  const episode = await executor
+    .selectFrom("episode")
+    .innerJoin("media", "media.id", "episode.mediaId")
+    .select("media.trashedAt")
+    .where("episode.id", "=", owner.episodeId)
+    .executeTakeFirst();
+  return episode !== undefined && !episode.trashedAt;
 }

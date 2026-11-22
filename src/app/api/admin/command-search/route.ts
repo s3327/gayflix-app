@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
-import { db } from "@/lib/db";
+import { jsonObjectFrom } from "kysely/helpers/postgres";
+import { database } from "@/lib/database";
 import { requireAdmin } from "@/lib/session";
 import { canManageUsers } from "@/lib/admin-roles";
 import { searchUsers } from "@/lib/user-admin-store";
@@ -16,29 +17,33 @@ export async function GET(request: Request) {
       return NextResponse.json({ titles: [], episodes: [], users: [] });
     }
 
-    const like = { contains: escapeLike(q), mode: "insensitive" as const };
     const allowUsers = canManageUsers(session.user.role);
 
     const [titles, episodes, users] = await Promise.all([
-      db.media.findMany({
-        where: { title: like, trashedAt: null },
-        take: 6,
-        select: { id: true, title: true, type: true, year: true, status: true },
-      }),
-      db.episode.findMany({
-        where: {
-          title: like,
-          media: { trashedAt: null },
-        },
-        take: 4,
-        select: {
-          id: true,
-          title: true,
-          seasonNumber: true,
-          episodeNumber: true,
-          media: { select: { title: true } },
-        },
-      }),
+      database
+        .selectFrom("media")
+        .select(["id", "title", "type", "year", "status"])
+        .where("title", "ilike", `%${escapeLike(q)}%`)
+        .where("trashedAt", "is", null)
+        .limit(6)
+        .execute(),
+      database
+        .selectFrom("episode")
+        .innerJoin("media", "media.id", "episode.mediaId")
+        .select([
+          "episode.id",
+          "episode.title",
+          "episode.seasonNumber",
+          "episode.episodeNumber",
+          (eb) =>
+            jsonObjectFrom(
+              eb.selectFrom("media as m").select("m.title").whereRef("m.id", "=", "episode.mediaId")
+            ).as("media"),
+        ])
+        .where("episode.title", "ilike", `%${escapeLike(q)}%`)
+        .where("media.trashedAt", "is", null)
+        .limit(4)
+        .execute(),
       allowUsers
         ? searchUsers({ search: q, filter: "all", limit: 4 }).then(({ items }) =>
             items.map(({ id, name, email, role }) => ({ id, name: name ?? email, email, role }))
@@ -52,4 +57,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 }
-

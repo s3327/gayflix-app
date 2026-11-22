@@ -14,16 +14,29 @@ const mockMediaUpdate = vi.fn();
 const mockEpisodeFindMany = vi.fn();
 const mockEpisodeUpdate = vi.fn();
 
-vi.mock("@/lib/db", () => ({
-  db: {
-    media: {
-      findMany: (...args: unknown[]) => mockMediaFindMany(...args),
-      update: (...args: unknown[]) => mockMediaUpdate(...args),
-    },
-    episode: {
-      findMany: (...args: unknown[]) => mockEpisodeFindMany(...args),
-      update: (...args: unknown[]) => mockEpisodeUpdate(...args),
-    },
+vi.mock("@/lib/database", () => ({
+  database: {
+    selectFrom: vi.fn((table: string) => ({
+      select: vi.fn(() => ({
+        where: vi.fn(() => ({
+          execute: vi.fn(async () => {
+            if (table === "media") return mockMediaFindMany();
+            if (table === "episode") return mockEpisodeFindMany();
+            return [];
+          }),
+        })),
+      })),
+    })),
+    updateTable: vi.fn((table: string) => ({
+      set: vi.fn((data: unknown) => ({
+        where: vi.fn((...args: unknown[]) => ({
+          execute: vi.fn(async () => {
+            if (table === "media") mockMediaUpdate({ where: { id: args[2] }, data });
+            if (table === "episode") mockEpisodeUpdate({ where: { id: args[2] }, data });
+          }),
+        })),
+      })),
+    })),
   },
 }));
 

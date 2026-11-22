@@ -1,10 +1,12 @@
 "use server";
 
+import type { Kysely } from "kysely";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/activity-logger";
 import { setAdminFlash } from "@/lib/admin-flash";
 import { FORBIDDEN_USERS, moderationSession } from "@/lib/admin-guard";
-import { db } from "@/lib/db";
+import { database } from "@/lib/database";
+import type { DB } from "./db-types";
 
 /*
  * Server functions behind /admin/community: moderating members' reviews
@@ -28,6 +30,12 @@ function requireListId(id: unknown): string {
   return id;
 }
 
+function getExecutor(val: unknown): Kysely<DB> {
+  return typeof val === "object" && val !== null && "selectFrom" in val
+    ? (val as Kysely<DB>)
+    : database;
+}
+
 /** The moderator's session, or null after telling them they can't. */
 async function moderator() {
   const { session, allowed } = await moderationSession();
@@ -38,11 +46,18 @@ async function moderator() {
   return session;
 }
 
-async function closeReports(target: Target, email: string) {
-  await db.contentReport.updateMany({
-    where: { ...target, resolvedAt: null },
-    data: { resolvedAt: new Date(), resolvedBy: email },
-  });
+async function closeReports(target: Target, email: string, executor: Kysely<DB> = database) {
+  let query = executor
+    .updateTable("content_report")
+    .set({ resolvedAt: new Date(), resolvedBy: email })
+    .where("resolvedAt", "is", null);
+
+  if ("reviewId" in target) {
+    query = query.where("reviewId", "=", target.reviewId);
+  } else {
+    query = query.where("listId", "=", target.listId);
+  }
+  await query.execute();
 }
 
 async function done(
@@ -65,64 +80,103 @@ async function done(
 }
 
 /** Hides a review from everyone but its author. */
-export async function hideReview(id: unknown): Promise<void> {
+export async function hideReview(
+  id: unknown,
+  executorOrFormData?: Kysely<DB> | FormData
+): Promise<void> {
   const session = await moderator();
   if (!session) return;
   const reviewId = requireReviewId(id);
-  await db.review.updateMany({
-    where: { id: reviewId, hiddenAt: null },
-    data: { hiddenAt: new Date(), hiddenBy: session.user.email },
-  });
-  await closeReports({ reviewId }, session.user.email);
+  const executor = getExecutor(executorOrFormData);
+  await executor
+    .updateTable("review")
+    .set({ hiddenAt: new Date(), hiddenBy: session.user.email })
+    .where("id", "=", reviewId)
+    .where("hiddenAt", "is", null)
+    .execute();
+  await closeReports({ reviewId }, session.user.email, executor);
   await done(session, "review.hide", { reviewId }, "Review hidden.");
 }
 
 /** Shows a hidden review again. */
-export async function restoreReview(id: unknown): Promise<void> {
+export async function restoreReview(
+  id: unknown,
+  executorOrFormData?: Kysely<DB> | FormData
+): Promise<void> {
   const session = await moderator();
   if (!session) return;
   const reviewId = requireReviewId(id);
-  await db.review.updateMany({ where: { id: reviewId }, data: { hiddenAt: null, hiddenBy: null } });
+  const executor = getExecutor(executorOrFormData);
+  await executor
+    .updateTable("review")
+    .set({ hiddenAt: null, hiddenBy: null })
+    .where("id", "=", reviewId)
+    .execute();
   await done(session, "review.restore", { reviewId }, "Review shown again.");
 }
 
 /** Deletes a review for good, with its reports. */
-export async function deleteReviewForGood(id: unknown): Promise<void> {
+export async function deleteReviewForGood(
+  id: unknown,
+  executorOrFormData?: Kysely<DB> | FormData
+): Promise<void> {
   const session = await moderator();
   if (!session) return;
   const reviewId = requireReviewId(id);
-  await db.review.deleteMany({ where: { id: reviewId } });
+  const executor = getExecutor(executorOrFormData);
+  await executor
+    .deleteFrom("review")
+    .where("id", "=", reviewId)
+    .execute();
   await done(session, "review.delete", { reviewId }, "Review deleted.");
 }
 
 /** Takes a list off Community Lists; its owner can't put it back. */
-export async function blockList(id: unknown): Promise<void> {
+export async function blockList(
+  id: unknown,
+  executorOrFormData?: Kysely<DB> | FormData
+): Promise<void> {
   const session = await moderator();
   if (!session) return;
   const listId = requireListId(id);
-  await db.mediaList.updateMany({
-    where: { id: listId },
-    data: { inCommunity: false, communityBlocked: true },
-  });
-  await closeReports({ listId }, session.user.email);
+  const executor = getExecutor(executorOrFormData);
+  await executor
+    .updateTable("media_list")
+    .set({ inCommunity: false, communityBlocked: true })
+    .where("id", "=", listId)
+    .execute();
+  await closeReports({ listId }, session.user.email, executor);
   await done(session, "list.block", { listId }, "List taken off Community Lists.");
 }
 
 /** Lets a list's owner put it on Community Lists again. */
-export async function unblockList(id: unknown): Promise<void> {
+export async function unblockList(
+  id: unknown,
+  executorOrFormData?: Kysely<DB> | FormData
+): Promise<void> {
   const session = await moderator();
   if (!session) return;
   const listId = requireListId(id);
-  await db.mediaList.updateMany({ where: { id: listId }, data: { communityBlocked: false } });
+  const executor = getExecutor(executorOrFormData);
+  await executor
+    .updateTable("media_list")
+    .set({ communityBlocked: false })
+    .where("id", "=", listId)
+    .execute();
   await done(session, "list.unblock", { listId }, "The owner can put the list on Community Lists again.");
 }
 
 /** Closes the open reports on a review or a list, leaving it as it is. */
-export async function dismissReports(kind: unknown, id: unknown): Promise<void> {
+export async function dismissReports(
+  kind: unknown,
+  id: unknown,
+  executorOrFormData?: Kysely<DB> | FormData
+): Promise<void> {
   const session = await moderator();
   if (!session) return;
   const target: Target =
     kind === "review" ? { reviewId: requireReviewId(id) } : { listId: requireListId(id) };
-  await closeReports(target, session.user.email);
+  const executor = getExecutor(executorOrFormData);
+  await closeReports(target, session.user.email, executor);
   await done(session, "content_report.dismiss", target, "Reports dismissed.");
 }

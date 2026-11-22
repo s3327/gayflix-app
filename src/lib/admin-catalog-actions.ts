@@ -1,27 +1,27 @@
 "use server";
 
+import type { Kysely, Transaction } from "kysely";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
+import { setAdminFlash } from "@/lib/admin-flash";
+import { logActivity } from "@/lib/activity-logger";
 import { findImported } from "@/lib/catalog";
-import { db } from "@/lib/db";
+import { database } from "@/lib/database";
+import type { DB } from "./db-types";
+import { buildDefaultEpisodeEmbedUrl } from "@/lib/embed-builder";
+import { imageHosts } from "@/lib/image-hosts.mjs";
 import { isImdbId, isTmdbId, parseTmdbRef, tmdbEpisodeSynopsis, tmdbStill } from "@/lib/import-mapping";
 import { isMediaId } from "@/lib/library-types";
 import type { MediaStatus, MediaType } from "@/lib/media";
-import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
-import { setAdminFlash } from "@/lib/admin-flash";
-import { imageHosts } from "@/lib/image-hosts.mjs";
-import { createTitleRevision } from "@/lib/title-revisions";
-import { logActivity } from "@/lib/activity-logger";
-import { getTmdbDetails, getTmdbSeasonDetails } from "@/lib/tmdb";
-import { videoHosts, videoUrlAllowed } from "@/lib/video-hosts";
-import { buildDefaultEpisodeEmbedUrl } from "@/lib/embed-builder";
+import { countOf } from "@/lib/sql-helpers";
 import {
   EPISODE_FIELDS,
   TITLE_FIELDS,
+  bulkTagsProblem,
   episodeDuration,
   episodeId,
   formValues,
-  bulkTagsProblem,
   libraryPath,
   parseBulkTags,
   parseEpisode,
@@ -32,6 +32,7 @@ import {
   splitList,
   type FormState,
 } from "@/lib/title-form";
+import { createTitleRevision } from "@/lib/title-revisions";
 import {
   freeId,
   insertTitle,
@@ -41,6 +42,8 @@ import {
   type SourceIds,
   type Tx,
 } from "@/lib/title-store";
+import { getTmdbDetails, getTmdbSeasonDetails } from "@/lib/tmdb";
+import { videoHosts, videoUrlAllowed } from "@/lib/video-hosts";
 
 /*
  * Server functions behind the admin title editor. Each one checks for an
@@ -48,6 +51,12 @@ import {
  * every argument, the ones bound in the page included: the browser sends
  * those back too.
  */
+
+function getExecutor(val: unknown): Kysely<DB> | Transaction<DB> {
+  return typeof val === "object" && val !== null && "selectFrom" in val
+    ? (val as Kysely<DB> | Transaction<DB>)
+    : database;
+}
 
 /** A page of the library holds 50 titles; more than this isn't a real selection. */
 const MAX_SELECTED = 100;
@@ -104,8 +113,10 @@ function sourceIds(form: FormData): SourceIds {
 export async function createTitle(
   typeArg: unknown,
   _state: FormState,
-  form: FormData
+  form: FormData,
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<FormState> {
+  const executor = getExecutor(executorOrUnknown);
   const { session, allowed } = await catalogSession();
   const values = formValues(form, TITLE_FIELDS);
   if (!allowed) {
@@ -125,7 +136,7 @@ export async function createTitle(
       return { message: "This title is already in the library.", values, version: Date.now() };
     }
   }
-  const id = await insertTitle(type, parsed.data, sources);
+  const id = await insertTitle(type, parsed.data, sources, executor);
   if (!id) {
     return { message: "Another title took that address just now. Add it again.", values, version: Date.now() };
   }
@@ -147,8 +158,10 @@ export async function createTitle(
 export async function updateTitle(
   idArg: unknown,
   _state: FormState,
-  form: FormData
+  form: FormData,
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<FormState> {
+  const executor = getExecutor(executorOrUnknown);
   const { session, allowed } = await catalogSession();
   const values = formValues(form, TITLE_FIELDS);
   if (!allowed) {
@@ -157,15 +170,17 @@ export async function updateTitle(
   const id = itemId(idArg);
   const loadedAt = form.get("loadedAt");
   const gone = { message: "This title is in the trash or was deleted.", values, version: Date.now() };
-  const existing = await db.media.findUnique({
-    where: { id },
-    select: { type: true, status: true, publishedAt: true, trashedAt: true, updatedAt: true },
-  });
+  const existing = await executor
+    .selectFrom("media")
+    .select(["type", "status", "publishedAt", "trashedAt", "updatedAt"])
+    .where("id", "=", id)
+    .executeTakeFirst();
   if (!existing || existing.trashedAt) return gone;
 
   if (typeof loadedAt === "string" && loadedAt) {
     const loadedDate = new Date(loadedAt);
-    if (!isNaN(loadedDate.getTime()) && existing.updatedAt.getTime() > loadedDate.getTime()) {
+    const existingUpdatedAt = new Date(existing.updatedAt);
+    if (!isNaN(loadedDate.getTime()) && existingUpdatedAt.getTime() > loadedDate.getTime()) {
       return {
         ok: false,
         message:
@@ -180,31 +195,42 @@ export async function updateTitle(
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
 
   // Create point-in-time snapshot before modifying
-  await createTitleRevision({
-    mediaId: id,
-    actorId: session.user.id,
-    actorEmail: session.user.email,
-    summary: `Updated title metadata for "${parsed.data.title}"`,
-  });
+  await createTitleRevision(
+    {
+      mediaId: id,
+      actorId: session.user.id,
+      actorEmail: session.user.email,
+      summary: `Updated title metadata for "${parsed.data.title}"`,
+    },
+    executor as Kysely<DB>
+  );
 
   // Kept from the first time it was published.
   const shouldSetPublishedAt = parsed.data.status === "published" && existing.publishedAt === null;
 
-  const saved = await db.$transaction(async (tx) => {
+  const runSave = async (tx: Transaction<DB> | Kysely<DB>) => {
     // Not if it was trashed meanwhile: a trashed title must stay a draft.
-    const { count } = await tx.media.updateMany({
-      where: { id, trashedAt: null },
-      data: {
+    const result = await tx
+      .updateTable("media")
+      .set({
         ...titleData(existing.type, parsed.data),
         ...(shouldSetPublishedAt ? { publishedAt: new Date() } : {}),
         ...(parsed.data.status === "published" ? { publishAt: null } : {}),
-      },
-    });
+        updatedAt: new Date(),
+      })
+      .where("id", "=", id)
+      .where("trashedAt", "is", null)
+      .executeTakeFirst();
+    const count = Number(result.numUpdatedRows);
     if (count > 0 && parsed.data.featured && parsed.data.status === "published") {
       await unfeatureOthers(tx, id);
     }
     return count > 0;
-  });
+  };
+
+  const saved = executor.isTransaction
+    ? await runSave(executor)
+    : await executor.transaction().execute(runSave);
   if (!saved) return gone;
 
   await logActivity({
@@ -223,48 +249,82 @@ export async function updateTitle(
 }
 
 /**
- * Publishes or unpublishes titles that aren't in the trash. A title keeps
- * the date it was first published.
- */
-/**
  * Sets the status of titles not in the trash, and returns the ids whose
  * status changed: an Undo puts back only those.
  */
 export async function updateMediaStatusBatch(
   idsArg: unknown,
-  statusArg: unknown
+  statusArg: unknown,
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<string[]> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   const ids = mediaIds(idsArg);
   if (!allowed || ids.length === 0) return [];
   const status = mediaStatus(statusArg);
-  const changed = await db.$transaction(async (tx) => {
-    const changing = await tx.media.findMany({
-      where: { id: { in: ids }, trashedAt: null, status: { not: status } },
-      select: { id: true },
-    });
-    const where = { id: { in: ids }, trashedAt: null };
+
+  const runBatch = async (tx: Transaction<DB> | Kysely<DB>) => {
+    const changing = await tx
+      .selectFrom("media")
+      .select("id")
+      .where("id", "in", ids)
+      .where("trashedAt", "is", null)
+      .where("status", "!=", status)
+      .execute();
+
     if (status === "published") {
-      await tx.media.updateMany({ where, data: { status, publishAt: null } });
-      await tx.media.updateMany({ where: { ...where, publishedAt: null }, data: { publishedAt: new Date() } });
-      const featured = await tx.media.findFirst({
-        where: { ...where, featured: true },
-        select: { id: true },
-      });
+      await tx
+        .updateTable("media")
+        .set({ status, publishAt: null, updatedAt: new Date() })
+        .where("id", "in", ids)
+        .where("trashedAt", "is", null)
+        .execute();
+
+      await tx
+        .updateTable("media")
+        .set({ publishedAt: new Date(), updatedAt: new Date() })
+        .where("id", "in", ids)
+        .where("trashedAt", "is", null)
+        .where("publishedAt", "is", null)
+        .execute();
+
+      const featured = await tx
+        .selectFrom("media")
+        .select("id")
+        .where("id", "in", ids)
+        .where("trashedAt", "is", null)
+        .where("featured", "=", true)
+        .executeTakeFirst();
+
       if (featured) {
         await unfeatureOthers(tx, featured.id);
       }
     } else {
-      await tx.media.updateMany({ where, data: { status } });
+      await tx
+        .updateTable("media")
+        .set({ status, updatedAt: new Date() })
+        .where("id", "in", ids)
+        .where("trashedAt", "is", null)
+        .execute();
     }
     return changing.map((item) => item.id);
-  });
+  };
+
+  const changed = executor.isTransaction
+    ? await runBatch(executor)
+    : await executor.transaction().execute(runBatch);
+
   refreshPages();
   return changed;
 }
 
 /** Publish or unpublish one title (a library row's button). */
-export async function setTitleStatus(idArg: unknown, statusArg: unknown): Promise<void> {
+export async function setTitleStatus(
+  idArg: unknown,
+  statusArg: unknown,
+  executorOrUnknown?: Kysely<DB> | unknown
+): Promise<void> {
+  const executor = getExecutor(executorOrUnknown);
   const { session, allowed } = await catalogSession();
   if (!allowed) {
     await setAdminFlash({ message: FORBIDDEN_CATALOG });
@@ -272,7 +332,7 @@ export async function setTitleStatus(idArg: unknown, statusArg: unknown): Promis
   }
   const id = itemId(idArg);
   const status = mediaStatus(statusArg);
-  const changed = await updateMediaStatusBatch([id], status);
+  const changed = await updateMediaStatusBatch([id], status, executor);
   const isPub = status === "published";
   await logActivity({
     actorId: session.user.id,
@@ -292,7 +352,12 @@ export async function setTitleStatus(idArg: unknown, statusArg: unknown): Promis
 }
 
 /** Publish or unpublish the checked rows. */
-export async function setSelectedStatus(statusArg: unknown, form: FormData): Promise<void> {
+export async function setSelectedStatus(
+  statusArg: unknown,
+  form: FormData,
+  executorOrUnknown?: Kysely<DB> | unknown
+): Promise<void> {
+  const executor = getExecutor(executorOrUnknown);
   const { session, allowed } = await catalogSession();
   if (!allowed) {
     await setAdminFlash({ message: FORBIDDEN_CATALOG });
@@ -302,7 +367,7 @@ export async function setSelectedStatus(statusArg: unknown, form: FormData): Pro
   if (ids.length === 0) return;
   const status = mediaStatus(statusArg);
   // Undo puts back only the titles this changed, not ones already in that state.
-  const changed = await updateMediaStatusBatch(ids, status);
+  const changed = await updateMediaStatusBatch(ids, status, executor);
   const isPub = status === "published";
   await logActivity({
     actorId: session.user.id,
@@ -326,37 +391,48 @@ export async function setSelectedStatus(statusArg: unknown, form: FormData): Pro
  * and stop being featured. They can be restored (as drafts) or deleted
  * for good from /admin/trash.
  */
-async function moveToTrash(ids: string[]) {
+async function moveToTrash(ids: string[], executor: Kysely<DB> | Transaction<DB> = database) {
   if (ids.length === 0) return;
-  await db.$transaction(async (tx) => {
-    const items = await tx.media.findMany({
-      where: { id: { in: ids }, trashedAt: null },
-      select: { id: true, status: true, featured: true },
-    });
+  const runMove = async (tx: Transaction<DB> | Kysely<DB>) => {
+    const items = await tx
+      .selectFrom("media")
+      .select(["id", "status", "featured"])
+      .where("id", "in", ids)
+      .where("trashedAt", "is", null)
+      .execute();
     for (const item of items) {
-      await tx.media.update({
-        where: { id: item.id },
-        data: {
+      await tx
+        .updateTable("media")
+        .set({
           statusBeforeTrash: item.status,
           featuredBeforeTrash: item.featured,
           status: "draft",
           featured: false,
           trashedAt: new Date(),
-        },
-      });
+          updatedAt: new Date(),
+        })
+        .where("id", "=", item.id)
+        .execute();
     }
-  });
+  };
+
+  if (executor.isTransaction) {
+    await runMove(executor);
+  } else {
+    await executor.transaction().execute(runMove);
+  }
   refreshPages();
 }
 
-export async function trashTitle(idArg: unknown): Promise<void> {
+export async function trashTitle(idArg: unknown, executorOrUnknown?: Kysely<DB> | unknown): Promise<void> {
+  const executor = getExecutor(executorOrUnknown);
   const { session, allowed } = await catalogSession();
   if (!allowed) {
     await setAdminFlash({ message: FORBIDDEN_CATALOG });
     return;
   }
   const id = itemId(idArg);
-  await moveToTrash([id]);
+  await moveToTrash([id], executor);
   await logActivity({
     actorId: session.user.id,
     actorEmail: session.user.email,
@@ -372,7 +448,8 @@ export async function trashTitle(idArg: unknown): Promise<void> {
   });
 }
 
-export async function trashSelected(form: FormData): Promise<void> {
+export async function trashSelected(form: FormData, executorOrUnknown?: Kysely<DB> | unknown): Promise<void> {
+  const executor = getExecutor(executorOrUnknown);
   const { session, allowed } = await catalogSession();
   if (!allowed) {
     await setAdminFlash({ message: FORBIDDEN_CATALOG });
@@ -380,7 +457,7 @@ export async function trashSelected(form: FormData): Promise<void> {
   }
   const ids = selectedIds(form);
   if (ids.length === 0) return;
-  await moveToTrash(ids);
+  await moveToTrash(ids, executor);
   await logActivity({
     actorId: session.user.id,
     actorEmail: session.user.email,
@@ -397,37 +474,48 @@ export async function trashSelected(form: FormData): Promise<void> {
 }
 
 /** Back from the trash, restoring its previous status and featured flag. */
-export async function restoreTitle(idArg: unknown): Promise<void> {
+export async function restoreTitle(idArg: unknown, executorOrUnknown?: Kysely<DB> | unknown): Promise<void> {
+  const executor = getExecutor(executorOrUnknown);
   const { session, allowed } = await catalogSession();
   if (!allowed) {
     await setAdminFlash({ message: FORBIDDEN_CATALOG });
     return;
   }
   const id = itemId(idArg);
-  await db.$transaction(async (tx) => {
-    const item = await tx.media.findUnique({
-      where: { id },
-      select: { statusBeforeTrash: true, featuredBeforeTrash: true, trashedAt: true },
-    });
+  const runRestore = async (tx: Transaction<DB> | Kysely<DB>) => {
+    const item = await tx
+      .selectFrom("media")
+      .select(["statusBeforeTrash", "featuredBeforeTrash", "trashedAt"])
+      .where("id", "=", id)
+      .executeTakeFirst();
     if (!item || !item.trashedAt) return;
     const restoredStatus = item.statusBeforeTrash ?? "draft";
     const restoredFeatured = item.featuredBeforeTrash ?? false;
 
-    await tx.media.update({
-      where: { id },
-      data: {
+    await tx
+      .updateTable("media")
+      .set({
         status: restoredStatus,
         featured: restoredFeatured,
         statusBeforeTrash: null,
         featuredBeforeTrash: null,
         trashedAt: null,
-      },
-    });
+        updatedAt: new Date(),
+      })
+      .where("id", "=", id)
+      .execute();
 
     if (restoredFeatured && restoredStatus === "published") {
       await unfeatureOthers(tx, id);
     }
-  });
+  };
+
+  if (executor.isTransaction) {
+    await runRestore(executor);
+  } else {
+    await executor.transaction().execute(runRestore);
+  }
+
   await logActivity({
     actorId: session.user.id,
     actorEmail: session.user.email,
@@ -442,14 +530,19 @@ export async function restoreTitle(idArg: unknown): Promise<void> {
 }
 
 /** For good, with its episodes. Only titles already in the trash. */
-export async function deleteTitle(idArg: unknown): Promise<void> {
+export async function deleteTitle(idArg: unknown, executorOrUnknown?: Kysely<DB> | unknown): Promise<void> {
+  const executor = getExecutor(executorOrUnknown);
   const { session, allowed } = await catalogSession();
   if (!allowed) {
     await setAdminFlash({ message: FORBIDDEN_CATALOG });
     return;
   }
   const id = itemId(idArg);
-  await db.media.deleteMany({ where: { id, trashedAt: { not: null } } });
+  await executor
+    .deleteFrom("media")
+    .where("id", "=", id)
+    .where("trashedAt", "is not", null)
+    .execute();
   await logActivity({
     actorId: session.user.id,
     actorEmail: session.user.email,
@@ -464,7 +557,8 @@ export async function deleteTitle(idArg: unknown): Promise<void> {
 }
 
 /** Restore multiple checked titles from trash. */
-export async function bulkRestoreTrash(form: FormData): Promise<void> {
+export async function bulkRestoreTrash(form: FormData, executorOrUnknown?: Kysely<DB> | unknown): Promise<void> {
+  const executor = getExecutor(executorOrUnknown);
   const { session, allowed } = await catalogSession();
   if (!allowed) {
     await setAdminFlash({ message: FORBIDDEN_CATALOG });
@@ -472,35 +566,43 @@ export async function bulkRestoreTrash(form: FormData): Promise<void> {
   }
   const ids = selectedIds(form);
   if (ids.length === 0) return;
-  const restored = await db.$transaction(async (tx) => {
+  const runBulkRestore = async (tx: Transaction<DB> | Kysely<DB>) => {
     const done: string[] = [];
     for (const id of ids) {
-      const item = await tx.media.findUnique({
-        where: { id },
-        select: { statusBeforeTrash: true, featuredBeforeTrash: true, trashedAt: true },
-      });
+      const item = await tx
+        .selectFrom("media")
+        .select(["statusBeforeTrash", "featuredBeforeTrash", "trashedAt"])
+        .where("id", "=", id)
+        .executeTakeFirst();
       if (!item || !item.trashedAt) continue;
       done.push(id);
       const restoredStatus = item.statusBeforeTrash ?? "draft";
       const restoredFeatured = item.featuredBeforeTrash ?? false;
 
-      await tx.media.update({
-        where: { id },
-        data: {
+      await tx
+        .updateTable("media")
+        .set({
           status: restoredStatus,
           featured: restoredFeatured,
           statusBeforeTrash: null,
           featuredBeforeTrash: null,
           trashedAt: null,
-        },
-      });
+          updatedAt: new Date(),
+        })
+        .where("id", "=", id)
+        .execute();
 
       if (restoredFeatured && restoredStatus === "published") {
         await unfeatureOthers(tx, id);
       }
     }
     return done;
-  });
+  };
+
+  const restored = executor.isTransaction
+    ? await runBulkRestore(executor)
+    : await executor.transaction().execute(runBulkRestore);
+
   refreshPages();
   if (restored.length > 0) {
     await logActivity({
@@ -523,14 +625,16 @@ export async function bulkRestoreTrash(form: FormData): Promise<void> {
 }
 
 /** Undo of a restore: back to the trash. */
-export async function trashTitles(idsArg: unknown): Promise<void> {
+export async function trashTitles(idsArg: unknown, executorOrUnknown?: Kysely<DB> | unknown): Promise<void> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) return;
-  await moveToTrash(mediaIds(idsArg));
+  await moveToTrash(mediaIds(idsArg), executor);
 }
 
 /** Permanently delete multiple checked titles from trash. */
-export async function bulkDeleteForGoodTrash(form: FormData): Promise<void> {
+export async function bulkDeleteForGoodTrash(form: FormData, executorOrUnknown?: Kysely<DB> | unknown): Promise<void> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) {
     await setAdminFlash({ message: FORBIDDEN_CATALOG });
@@ -538,7 +642,11 @@ export async function bulkDeleteForGoodTrash(form: FormData): Promise<void> {
   }
   const ids = selectedIds(form);
   if (ids.length === 0) return;
-  await db.media.deleteMany({ where: { id: { in: ids }, trashedAt: { not: null } } });
+  await executor
+    .deleteFrom("media")
+    .where("id", "in", ids)
+    .where("trashedAt", "is not", null)
+    .execute();
   refreshPages();
   await setAdminFlash({
     message: `${ids.length} ${ids.length === 1 ? "title" : "titles"} deleted permanently.`,
@@ -546,32 +654,37 @@ export async function bulkDeleteForGoodTrash(form: FormData): Promise<void> {
 }
 
 /** Quick inline metadata update without leaving the library page. */
-export async function quickUpdateTitle(input: unknown): Promise<{ ok: boolean; message?: string }> {
+export async function quickUpdateTitle(input: unknown, executorOrUnknown?: Kysely<DB> | unknown): Promise<{ ok: boolean; message?: string }> {
+  const executor = getExecutor(executorOrUnknown);
   const { session, allowed } = await catalogSession();
   if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   const id = typeof input === "object" && input !== null ? (input as { id?: unknown }).id : undefined;
   if (!isMediaId(id)) return { ok: false, message: "Invalid title ID" };
-  const existing = await db.media.findUnique({
-    where: { id },
-    select: { type: true, featured: true, publishedAt: true, trashedAt: true },
-  });
+  const existing = await executor
+    .selectFrom("media")
+    .select(["type", "featured", "publishedAt", "trashedAt"])
+    .where("id", "=", id)
+    .executeTakeFirst();
   if (!existing || existing.trashedAt) return { ok: false, message: "Title not found or in trash" };
   const parsed = parseQuickEdit(input, existing.type);
   if (!parsed.ok) return { ok: false, message: parsed.message };
   const { title, year, status, duration, genres, tagline, rating } = parsed.data;
 
   // Save revision snapshot before applying quick updates
-  await createTitleRevision({
-    mediaId: id,
-    actorId: session.user.id,
-    actorEmail: session.user.email,
-    summary: `Quick edited metadata for "${title}"`,
-  });
+  await createTitleRevision(
+    {
+      mediaId: id,
+      actorId: session.user.id,
+      actorEmail: session.user.email,
+      summary: `Quick edited metadata for "${title}"`,
+    },
+    executor as Kysely<DB>
+  );
 
-  await db.$transaction(async (tx) => {
-    const { count } = await tx.media.updateMany({
-      where: { id, trashedAt: null },
-      data: {
+  const runQuick = async (tx: Transaction<DB> | Kysely<DB>) => {
+    const result = await tx
+      .updateTable("media")
+      .set({
         title,
         year,
         status,
@@ -582,10 +695,20 @@ export async function quickUpdateTitle(input: unknown): Promise<{ ok: boolean; m
         // Kept from the first time it was published.
         ...(status === "published" && existing.publishedAt === null ? { publishedAt: new Date() } : {}),
         ...(status === "published" ? { publishAt: null } : {}),
-      },
-    });
+        updatedAt: new Date(),
+      })
+      .where("id", "=", id)
+      .where("trashedAt", "is", null)
+      .executeTakeFirst();
+    const count = Number(result.numUpdatedRows);
     if (count > 0 && existing.featured && status === "published") await unfeatureOthers(tx, id);
-  });
+  };
+
+  if (executor.isTransaction) {
+    await runQuick(executor);
+  } else {
+    await executor.transaction().execute(runQuick);
+  }
 
   await logActivity({
     actorId: session.user.id,
@@ -603,7 +726,8 @@ export async function quickUpdateTitle(input: unknown): Promise<{ ok: boolean; m
 }
 
 /** Batch add or remove tags and genres across multiple selected titles. */
-export async function bulkTagTitles(input: unknown): Promise<{ ok: boolean; count: number; message?: string }> {
+export async function bulkTagTitles(input: unknown, executorOrUnknown?: Kysely<DB> | unknown): Promise<{ ok: boolean; count: number; message?: string }> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) return { ok: false, count: 0, message: FORBIDDEN_CATALOG };
   const raw = typeof input === "object" && input !== null ? (input as { ids?: unknown }) : {};
@@ -616,25 +740,37 @@ export async function bulkTagTitles(input: unknown): Promise<{ ok: boolean; coun
   const removeTagSet = removing(removeTags);
   const removeGenreSet = removing(removeGenres);
 
-  const items = await db.media.findMany({
-    where: { id: { in: ids }, trashedAt: null },
-    select: { id: true, title: true, tags: true, genres: true },
-  });
+  const items = await executor
+    .selectFrom("media")
+    .select(["id", "title", "tags", "genres"])
+    .where("id", "in", ids)
+    .where("trashedAt", "is", null)
+    .execute();
   const changes = items.map((item) => ({
     item,
-    tags: splitList([...item.tags, ...addTags].join(",")).filter((t) => !removeTagSet.has(t.toLowerCase())),
-    genres: splitList([...item.genres, ...addGenres].join(",")).filter((g) => !removeGenreSet.has(g.toLowerCase())),
+    tags: splitList([...(item.tags ?? []), ...addTags].join(",")).filter((t) => !removeTagSet.has(t.toLowerCase())),
+    genres: splitList([...(item.genres ?? []), ...addGenres].join(",")).filter((g) => !removeGenreSet.has(g.toLowerCase())),
   }));
   for (const { item, tags, genres } of changes) {
     const problem = bulkTagsProblem(tags, genres);
     if (problem) return { ok: false, count: 0, message: `${item.title}: ${problem}` };
   }
 
-  await db.$transaction(async (tx) => {
+  const runBulkTag = async (tx: Transaction<DB> | Kysely<DB>) => {
     for (const { item, tags, genres } of changes) {
-      await tx.media.update({ where: { id: item.id }, data: { tags, genres } });
+      await tx
+        .updateTable("media")
+        .set({ tags, genres, updatedAt: new Date() })
+        .where("id", "=", item.id)
+        .execute();
     }
-  });
+  };
+
+  if (executor.isTransaction) {
+    await runBulkTag(executor);
+  } else {
+    await executor.transaction().execute(runBulkTag);
+  }
 
   refreshPages();
   await setAdminFlash({
@@ -690,8 +826,17 @@ export async function verifyVideoUrl(
 
 /** A series' card shows how many seasons it has episodes in. */
 async function refreshSeasons(tx: Tx, seriesId: string) {
-  const seasons = await tx.episode.groupBy({ by: ["seasonNumber"], where: { mediaId: seriesId } });
-  await tx.media.update({ where: { id: seriesId }, data: { duration: seriesDuration(seasons.length) } });
+  const row = await tx
+    .selectFrom("episode")
+    .select((eb) => eb.fn.count<number>("seasonNumber").distinct().as("count"))
+    .where("mediaId", "=", seriesId)
+    .executeTakeFirst();
+  const count = row ? countOf(row) : 0;
+  await tx
+    .updateTable("media")
+    .set({ duration: seriesDuration(count), updatedAt: new Date() })
+    .where("id", "=", seriesId)
+    .execute();
 }
 
 const SERIES_IN_TRASH = "Its series is in the trash. Restore the series to change its episodes.";
@@ -704,7 +849,12 @@ function takenMessage(season: number, episode: number) {
  * "Add an episode". Stays on the form, ready for the next episode of the
  * same season.
  */
-export async function createEpisode(_state: FormState, form: FormData): Promise<FormState> {
+export async function createEpisode(
+  _state: FormState,
+  form: FormData,
+  executorOrUnknown?: Kysely<DB> | unknown
+): Promise<FormState> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   const values = formValues(form, EPISODE_FIELDS);
   if (!allowed) {
@@ -714,26 +864,31 @@ export async function createEpisode(_state: FormState, form: FormData): Promise<
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
   const { seriesId, seasonNumber, episodeNumber, title, minutes, airDate, synopsis } = parsed.data;
 
-  const series = await db.media.findUnique({
-    where: { id: seriesId },
-    select: { type: true, trashedAt: true, imdbId: true, tmdbId: true },
-  });
+  const series = await executor
+    .selectFrom("media")
+    .select(["type", "trashedAt", "imdbId", "tmdbId"])
+    .where("id", "=", seriesId)
+    .executeTakeFirst();
   if (series?.type !== "series" || series.trashedAt) {
     return { errors: { series: "Choose the series." }, values, version: Date.now() };
   }
-  const taken = await db.episode.findUnique({
-    where: { mediaId_seasonNumber_episodeNumber: { mediaId: seriesId, seasonNumber, episodeNumber } },
-    select: { id: true },
-  });
+  const taken = await executor
+    .selectFrom("episode")
+    .select("id")
+    .where("mediaId", "=", seriesId)
+    .where("seasonNumber", "=", seasonNumber)
+    .where("episodeNumber", "=", episodeNumber)
+    .executeTakeFirst();
   if (taken) {
     return { errors: { episode: takenMessage(seasonNumber, episodeNumber) }, values, version: Date.now() };
   }
 
-  const id = await freeId(episodeId(seriesId, seasonNumber, episodeNumber));
+  const id = await freeId(episodeId(seriesId, seasonNumber, episodeNumber), executor);
   try {
-    await db.$transaction(async (tx) => {
-      await tx.episode.create({
-        data: {
+    const runCreate = async (tx: Transaction<DB> | Kysely<DB>) => {
+      await tx
+        .insertInto("episode")
+        .values({
           id,
           mediaId: seriesId,
           seasonNumber,
@@ -742,8 +897,8 @@ export async function createEpisode(_state: FormState, form: FormData): Promise<
           duration: episodeDuration(minutes),
           airDate,
           synopsis,
-        },
-      });
+        })
+        .execute();
 
       const defaultEmbedUrl = buildDefaultEpisodeEmbedUrl({
         imdbId: series.imdbId,
@@ -752,20 +907,27 @@ export async function createEpisode(_state: FormState, form: FormData): Promise<
         episodeNumber,
       });
       if (defaultEmbedUrl) {
-        await tx.videoSource.create({
-          data: {
+        await tx
+          .insertInto("video_source")
+          .values({
             episodeId: id,
             label: "Server 1",
             kind: "embed",
             url: defaultEmbedUrl,
             position: 1,
             enabled: true,
-          },
-        });
+          })
+          .execute();
       }
 
       await refreshSeasons(tx, seriesId);
-    });
+    };
+
+    if (executor.isTransaction) {
+      await runCreate(executor);
+    } else {
+      await executor.transaction().execute(runCreate);
+    }
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;
     return { errors: { episode: takenMessage(seasonNumber, episodeNumber) }, values, version: Date.now() };
@@ -783,32 +945,50 @@ export async function createEpisode(_state: FormState, form: FormData): Promise<
 export async function updateEpisode(
   idArg: unknown,
   _state: FormState,
-  form: FormData
+  form: FormData,
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<FormState> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   const id = itemId(idArg);
-  const existing = await db.episode.findUnique({
-    where: { id },
-    select: { mediaId: true, media: { select: { trashedAt: true } } },
-  });
+  const existing = await executor
+    .selectFrom("episode")
+    .innerJoin("media", "media.id", "episode.mediaId")
+    .select(["episode.mediaId as mediaId", "media.trashedAt as mediaTrashedAt"])
+    .where("episode.id", "=", id)
+    .executeTakeFirst();
   const values = { ...formValues(form, EPISODE_FIELDS), series: existing?.mediaId ?? "" };
   if (!allowed) {
     return { message: FORBIDDEN_CATALOG, values, version: Date.now() };
   }
   if (!existing) return { message: "This episode was deleted.", values, version: Date.now() };
-  if (existing.media.trashedAt) return { message: SERIES_IN_TRASH, values, version: Date.now() };
+  if (existing.mediaTrashedAt) return { message: SERIES_IN_TRASH, values, version: Date.now() };
 
   const parsed = parseEpisode(values);
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
   const { seasonNumber, episodeNumber, title, minutes, airDate, synopsis } = parsed.data;
   try {
-    await db.$transaction(async (tx) => {
-      await tx.episode.update({
-        where: { id },
-        data: { seasonNumber, episodeNumber, title, duration: episodeDuration(minutes), airDate, synopsis },
-      });
+    const runUpdate = async (tx: Transaction<DB> | Kysely<DB>) => {
+      await tx
+        .updateTable("episode")
+        .set({
+          seasonNumber,
+          episodeNumber,
+          title,
+          duration: episodeDuration(minutes),
+          airDate,
+          synopsis,
+        })
+        .where("id", "=", id)
+        .execute();
       await refreshSeasons(tx, existing.mediaId);
-    });
+    };
+
+    if (executor.isTransaction) {
+      await runUpdate(executor);
+    } else {
+      await executor.transaction().execute(runUpdate);
+    }
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;
     return { errors: { episode: takenMessage(seasonNumber, episodeNumber) }, values, version: Date.now() };
@@ -818,24 +998,32 @@ export async function updateEpisode(
 }
 
 /** Deletes an episode for good, then opens its series' edit page. */
-export async function deleteEpisode(idArg: unknown): Promise<void> {
+export async function deleteEpisode(idArg: unknown, executorOrUnknown?: Kysely<DB> | unknown): Promise<void> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) {
     await setAdminFlash({ message: FORBIDDEN_CATALOG });
     return;
   }
   const id = itemId(idArg);
-  const episode = await db.episode.findUnique({
-    where: { id },
-    select: { mediaId: true, media: { select: { trashedAt: true } } },
-  });
+  const episode = await executor
+    .selectFrom("episode")
+    .innerJoin("media", "media.id", "episode.mediaId")
+    .select(["episode.mediaId as mediaId", "media.trashedAt as mediaTrashedAt"])
+    .where("episode.id", "=", id)
+    .executeTakeFirst();
   if (!episode) redirect("/admin/library/episodes");
   // Like the series itself: restored before it's changed.
-  if (episode.media.trashedAt) redirect(`/admin/library/episodes/${id}`);
-  await db.$transaction(async (tx) => {
-    await tx.episode.delete({ where: { id } });
+  if (episode.mediaTrashedAt) redirect(`/admin/library/episodes/${id}`);
+  const runDelete = async (tx: Transaction<DB> | Kysely<DB>) => {
+    await tx.deleteFrom("episode").where("id", "=", id).execute();
     await refreshSeasons(tx, episode.mediaId);
-  });
+  };
+  if (executor.isTransaction) {
+    await runDelete(executor);
+  } else {
+    await executor.transaction().execute(runDelete);
+  }
   refreshPages();
   await setAdminFlash({ message: "Episode deleted." });
   redirect(`/admin/library/series/${episode.mediaId}`);
@@ -850,14 +1038,17 @@ export type TmdbSeasonInfo = {
 };
 
 export async function getSeriesTmdbSeasonsAction(
-  seriesId: string
+  seriesId: string,
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<{ ok: boolean; seasons?: TmdbSeasonInfo[]; message?: string }> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
-  const series = await db.media.findUnique({
-    where: { id: seriesId },
-    select: { tmdbId: true },
-  });
+  const series = await executor
+    .selectFrom("media")
+    .select("tmdbId")
+    .where("id", "=", seriesId)
+    .executeTakeFirst();
   if (!series?.tmdbId) return { ok: false, message: "Series has no TMDB ID." };
   const ref = parseTmdbRef(series.tmdbId);
   if (!ref || ref.kind !== "tv") return { ok: false, message: "Invalid TMDB reference." };
@@ -887,18 +1078,21 @@ export async function getSeriesTmdbSeasonsAction(
 
 export async function getTmdbSeasonPreviewAction(
   seriesId: string,
-  seasonNumber: number
+  seasonNumber: number,
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<{
   ok: boolean;
   episodes?: { episodeNumber: number; title: string; runtime: string; stillUrl: string | null }[];
   message?: string;
 }> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
-  const series = await db.media.findUnique({
-    where: { id: seriesId },
-    select: { tmdbId: true },
-  });
+  const series = await executor
+    .selectFrom("media")
+    .select("tmdbId")
+    .where("id", "=", seriesId)
+    .executeTakeFirst();
   if (!series?.tmdbId) return { ok: false, message: "Series has no TMDB ID." };
   const ref = parseTmdbRef(series.tmdbId);
   if (!ref || ref.kind !== "tv") return { ok: false, message: "Invalid TMDB reference." };
@@ -925,17 +1119,20 @@ export async function getTmdbSeasonPreviewAction(
 
 export async function importSeriesSeasonsAction(
   seriesId: string,
-  seasonNumbers: number[]
+  seasonNumbers: number[],
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<{ ok: boolean; count?: number; message?: string }> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   if (!Array.isArray(seasonNumbers) || seasonNumbers.length === 0) {
     return { ok: false, message: "Select at least one season." };
   }
-  const series = await db.media.findUnique({
-    where: { id: seriesId },
-    select: { id: true, type: true, tmdbId: true, imdbId: true, trashedAt: true },
-  });
+  const series = await executor
+    .selectFrom("media")
+    .select(["id", "type", "tmdbId", "imdbId", "trashedAt"])
+    .where("id", "=", seriesId)
+    .executeTakeFirst();
   if (!series || series.type !== "series" || series.trashedAt) {
     return { ok: false, message: "Series not found or is in trash." };
   }
@@ -948,10 +1145,12 @@ export async function importSeriesSeasonsAction(
       const seasonData = await getTmdbSeasonDetails(ref.id, sNum);
       if (!seasonData || !Array.isArray(seasonData.episodes)) continue;
 
-      const existingEpisodes = await db.episode.findMany({
-        where: { mediaId: seriesId, seasonNumber: sNum },
-        select: { episodeNumber: true },
-      });
+      const existingEpisodes = await executor
+        .selectFrom("episode")
+        .select("episodeNumber")
+        .where("mediaId", "=", seriesId)
+        .where("seasonNumber", "=", sNum)
+        .execute();
       const existingSet = new Set(existingEpisodes.map((e) => e.episodeNumber));
 
       const missing = seasonData.episodes.filter((ep) => !existingSet.has(ep.episode_number));
@@ -959,8 +1158,9 @@ export async function importSeriesSeasonsAction(
       for (const ep of missing) {
         const id = `${seriesId}-season-${sNum}-episode-${ep.episode_number}`;
         const runtime = ep.runtime && ep.runtime > 0 ? ep.runtime : 45;
-        await db.episode.create({
-          data: {
+        await executor
+          .insertInto("episode")
+          .values({
             id,
             mediaId: seriesId,
             seasonNumber: sNum,
@@ -970,8 +1170,8 @@ export async function importSeriesSeasonsAction(
             airDate: ep.air_date ? new Date(`${ep.air_date}T00:00:00.000Z`) : null,
             stillUrl: tmdbStill(ep.still_path),
             synopsis: tmdbEpisodeSynopsis(ep.overview),
-          },
-        });
+          })
+          .execute();
 
         const defaultEmbedUrl = buildDefaultEpisodeEmbedUrl({
           imdbId: series.imdbId,
@@ -980,25 +1180,32 @@ export async function importSeriesSeasonsAction(
           episodeNumber: ep.episode_number,
         });
         if (defaultEmbedUrl) {
-          await db.videoSource.create({
-            data: {
+          await executor
+            .insertInto("video_source")
+            .values({
               episodeId: id,
               label: "Server 1",
               kind: "embed",
               url: defaultEmbedUrl,
               position: 1,
               enabled: true,
-            },
-          });
+            })
+            .execute();
         }
 
         importedCount++;
       }
     }
 
-    await db.$transaction(async (tx) => {
+    const runRefresh = async (tx: Transaction<DB> | Kysely<DB>) => {
       await refreshSeasons(tx, seriesId);
-    });
+    };
+
+    if (executor.isTransaction) {
+      await runRefresh(executor);
+    } else {
+      await executor.transaction().execute(runRefresh);
+    }
 
     refreshPages();
     return {
@@ -1033,8 +1240,10 @@ export type SeasonEpisodeRow = {
 export async function saveSeasonEpisodesAction(
   seriesIdArg: unknown,
   seasonArg: unknown,
-  episodesArg: unknown
+  episodesArg: unknown,
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<{ ok: boolean; message?: string; errors?: Record<string, string> }> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   const seriesId = itemId(seriesIdArg);
@@ -1042,38 +1251,57 @@ export async function saveSeasonEpisodesAction(
   if (!parsed.ok) return { ok: false, message: parsed.message, errors: parsed.errors };
   const { seasonNumber, rows } = parsed;
 
-  const series = await db.media.findUnique({ where: { id: seriesId }, select: { type: true, trashedAt: true } });
+  const series = await executor
+    .selectFrom("media")
+    .select(["type", "trashedAt"])
+    .where("id", "=", seriesId)
+    .executeTakeFirst();
   if (!series || series.type !== "series") return { ok: false, message: "This series was deleted." };
   if (series.trashedAt) return { ok: false, message: SERIES_IN_TRASH };
 
   const OUT_OF_DATE = "This season changed since the page loaded. Reload the page and try again.";
   try {
-    await db.$transaction(async (tx) => {
-      const existing = await tx.episode.findMany({
-        where: { mediaId: seriesId, seasonNumber, id: { in: rows.map((row) => row.id) } },
-        select: { id: true },
-      });
+    const runSave = async (tx: Transaction<DB> | Kysely<DB>) => {
+      const rowIds = rows.map((row) => row.id);
+      const existing = await tx
+        .selectFrom("episode")
+        .select("id")
+        .where("mediaId", "=", seriesId)
+        .where("seasonNumber", "=", seasonNumber)
+        .where("id", "in", rowIds)
+        .execute();
       if (existing.length !== rows.length) throw new Error(OUT_OF_DATE);
 
       // Out of the way first (negative numbers no episode uses), so a swap
       // or a shift doesn't trip over the one-number-per-episode rule.
       for (const [index, row] of rows.entries()) {
-        await tx.episode.update({ where: { id: row.id }, data: { episodeNumber: -(index + 1) } });
+        await tx
+          .updateTable("episode")
+          .set({ episodeNumber: -(index + 1) })
+          .where("id", "=", row.id)
+          .execute();
       }
       for (const row of rows) {
-        await tx.episode.update({
-          where: { id: row.id },
-          data: {
+        await tx
+          .updateTable("episode")
+          .set({
             episodeNumber: row.episodeNumber,
             title: row.title,
             duration: episodeDuration(row.minutes),
             airDate: row.airDate,
             stillUrl: row.stillUrl,
-          },
-        });
+          })
+          .where("id", "=", row.id)
+          .execute();
       }
       await refreshSeasons(tx, seriesId);
-    });
+    };
+
+    if (executor.isTransaction) {
+      await runSave(executor);
+    } else {
+      await executor.transaction().execute(runSave);
+    }
   } catch (error) {
     if (error instanceof Error && error.message === OUT_OF_DATE) return { ok: false, message: OUT_OF_DATE };
     if (!isUniqueViolation(error)) throw error;

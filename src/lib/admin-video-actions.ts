@@ -1,9 +1,11 @@
 "use server";
 
+import type { Kysely, Transaction } from "kysely";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
 import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
 import { canChange, GONE, ownerOf, type Owner } from "@/lib/catalog-owner";
+import { database } from "@/lib/database";
+import type { DB } from "./db-types";
 import { formValues, type FormState } from "@/lib/title-form";
 import { videoHosts } from "@/lib/video-hosts";
 import { MAX_VIDEO_SOURCES, parseVideoSource, VIDEO_SOURCE_FIELDS } from "@/lib/video-source";
@@ -18,20 +20,27 @@ import { MAX_VIDEO_SOURCES, parseVideoSource, VIDEO_SOURCE_FIELDS } from "@/lib/
 /** Prisma's cuid(). */
 const SOURCE_ID = /^[a-z0-9]{20,40}$/;
 
+function getExecutor(val: unknown): Kysely<DB> {
+  return typeof val === "object" && val !== null && "selectFrom" in val
+    ? (val as Kysely<DB>)
+    : database;
+}
+
 function sourceId(value: unknown): string {
   if (typeof value !== "string" || !SOURCE_ID.test(value)) throw new Error("Invalid source");
   return value;
 }
 
 /** A source and what it belongs to, when that can be changed. */
-async function changeableSource(id: string) {
-  const source = await db.videoSource.findUnique({
-    where: { id },
-    select: { id: true, mediaId: true, episodeId: true },
-  });
+async function changeableSource(id: string, executor: Kysely<DB> = database) {
+  const source = await executor
+    .selectFrom("video_source")
+    .select(["id", "mediaId", "episodeId"])
+    .where("id", "=", id)
+    .executeTakeFirst();
   if (!source) return null;
   const owner: Owner = source.mediaId ? { mediaId: source.mediaId } : { episodeId: source.episodeId! };
-  return (await canChange(owner)) ? { ...source, owner } : null;
+  return (await canChange(owner, executor)) ? { ...source, owner } : null;
 }
 
 /** The watch pages and the admin panel both show sources. */
@@ -44,24 +53,47 @@ export async function addVideoSource(
   ownerKind: unknown,
   ownerId: unknown,
   _state: FormState,
-  form: FormData
+  form: FormData,
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<FormState> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   const values = formValues(form, VIDEO_SOURCE_FIELDS);
   if (!allowed) return { message: FORBIDDEN_CATALOG, values, version: Date.now() };
   const owner = ownerOf(ownerKind, ownerId);
-  if (!(await canChange(owner))) return { message: GONE, values, version: Date.now() };
+  if (!(await canChange(owner, executor))) return { message: GONE, values, version: Date.now() };
 
   const parsed = parseVideoSource(values, videoHosts());
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
 
-  const added = await db.$transaction(async (tx) => {
-    const sources = await tx.videoSource.findMany({ where: owner, select: { position: true } });
+  const runAdd = async (tx: Transaction<DB> | Kysely<DB>) => {
+    let query = tx.selectFrom("video_source").select("position");
+    if ("mediaId" in owner) {
+      query = query.where("mediaId", "=", owner.mediaId);
+    } else {
+      query = query.where("episodeId", "=", owner.episodeId);
+    }
+    const sources = await query.execute();
     if (sources.length >= MAX_VIDEO_SOURCES) return null;
     const last = Math.max(0, ...sources.map((source) => source.position));
-    await tx.videoSource.create({ data: { ...owner, ...parsed.data, position: last + 1 } });
+    await tx
+      .insertInto("video_source")
+      .values({
+        mediaId: "mediaId" in owner ? owner.mediaId : null,
+        episodeId: "episodeId" in owner ? owner.episodeId : null,
+        label: parsed.data.label,
+        kind: parsed.data.kind,
+        url: parsed.data.url,
+        position: last + 1,
+      })
+      .execute();
     return sources.length + 1;
-  });
+  };
+
+  const added = executor.isTransaction
+    ? await runAdd(executor)
+    : await executor.transaction().execute(runAdd);
+
   if (added === null) {
     return {
       message: `There can be ${MAX_VIDEO_SOURCES} sources at most. Delete one first.`,
@@ -82,69 +114,113 @@ export async function addVideoSource(
 export async function updateVideoSource(
   idArg: unknown,
   _state: FormState,
-  form: FormData
+  form: FormData,
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<FormState> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   const values = formValues(form, VIDEO_SOURCE_FIELDS);
   if (!allowed) return { message: FORBIDDEN_CATALOG, values, version: Date.now() };
   const id = sourceId(idArg);
-  if (!(await changeableSource(id))) return { message: GONE, values, version: Date.now() };
+  if (!(await changeableSource(id, executor))) return { message: GONE, values, version: Date.now() };
 
   const parsed = parseVideoSource(values, videoHosts());
   if (!parsed.ok) return { errors: parsed.errors, values, version: Date.now() };
-  const { count } = await db.videoSource.updateMany({ where: { id }, data: parsed.data });
-  if (count === 0) return { message: "This source was deleted.", values, version: Date.now() };
+  const result = await executor
+    .updateTable("video_source")
+    .set({
+      label: parsed.data.label,
+      kind: parsed.data.kind,
+      url: parsed.data.url,
+      updatedAt: new Date(),
+    })
+    .where("id", "=", id)
+    .executeTakeFirst();
+  if (Number(result.numUpdatedRows) === 0) return { message: "This source was deleted.", values, version: Date.now() };
   refreshPages();
   // The link as it was saved: embed code becomes its link.
   return { ok: true, message: "Saved.", values: parsed.data, version: Date.now() };
 }
 
 /** Turn off: the player stops offering it, and it's kept for later. */
-export async function setVideoSourceEnabled(idArg: unknown, enabledArg: unknown): Promise<void> {
+export async function setVideoSourceEnabled(
+  idArg: unknown,
+  enabledArg: unknown,
+  executorOrUnknown?: Kysely<DB> | unknown
+): Promise<void> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) return;
   const id = sourceId(idArg);
   if (typeof enabledArg !== "boolean") throw new Error("Invalid value");
-  if (!(await changeableSource(id))) return;
-  await db.videoSource.updateMany({ where: { id }, data: { enabled: enabledArg } });
+  if (!(await changeableSource(id, executor))) return;
+  await executor
+    .updateTable("video_source")
+    .set({ enabled: enabledArg })
+    .where("id", "=", id)
+    .execute();
   refreshPages();
 }
 
 /** Swaps a source with the one before ("up") or after ("down") it. */
-export async function moveVideoSource(idArg: unknown, directionArg: unknown): Promise<void> {
+export async function moveVideoSource(
+  idArg: unknown,
+  directionArg: unknown,
+  executorOrUnknown?: Kysely<DB> | unknown
+): Promise<void> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) return;
   const id = sourceId(idArg);
   if (directionArg !== "up" && directionArg !== "down") throw new Error("Invalid direction");
-  const source = await changeableSource(id);
+  const source = await changeableSource(id, executor);
   if (!source) return;
 
-  await db.$transaction(async (tx) => {
-    const ids = (
-      await tx.videoSource.findMany({
-        where: source.owner,
-        orderBy: [{ position: "asc" }, { id: "asc" }],
-        select: { id: true },
-      })
-    ).map((row) => row.id);
+  const updatePositions = async (tx: Transaction<DB> | Kysely<DB>) => {
+    let query = tx
+      .selectFrom("video_source")
+      .select("id")
+      .orderBy("position", "asc")
+      .orderBy("id", "asc");
+    if ("mediaId" in source.owner) {
+      query = query.where("mediaId", "=", source.owner.mediaId);
+    } else {
+      query = query.where("episodeId", "=", source.owner.episodeId);
+    }
+    const rows = await query.execute();
+    const ids = rows.map((row) => row.id);
     const from = ids.indexOf(id);
     const to = directionArg === "up" ? from - 1 : from + 1;
     if (from < 0 || to < 0 || to >= ids.length) return;
     [ids[from], ids[to]] = [ids[to], ids[from]];
     // Numbered afresh, so positions stay 1, 2, 3… whatever came before.
     for (const [index, rowId] of ids.entries()) {
-      await tx.videoSource.update({ where: { id: rowId }, data: { position: index + 1 } });
+      await tx
+        .updateTable("video_source")
+        .set({ position: index + 1 })
+        .where("id", "=", rowId)
+        .execute();
     }
-  });
+  };
+
+  if (executor.isTransaction) {
+    await updatePositions(executor);
+  } else {
+    await executor.transaction().execute(updatePositions);
+  }
   refreshPages();
 }
 
 /** Deletes a source for good, after the page's confirmation. */
-export async function deleteVideoSource(idArg: unknown): Promise<void> {
+export async function deleteVideoSource(
+  idArg: unknown,
+  executorOrUnknown?: Kysely<DB> | unknown
+): Promise<void> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) return;
   const id = sourceId(idArg);
-  if (!(await changeableSource(id))) return;
-  await db.videoSource.deleteMany({ where: { id } });
+  if (!(await changeableSource(id, executor))) return;
+  await executor.deleteFrom("video_source").where("id", "=", id).execute();
   refreshPages();
 }

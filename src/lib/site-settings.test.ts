@@ -26,14 +26,41 @@ vi.mock("next/cache", () => ({
 const mockFindUnique = vi.fn();
 const mockUpsert = vi.fn();
 
-vi.mock("@/lib/db", () => ({
-  db: {
-    siteSetting: {
-      findUnique: (...args: unknown[]) => mockFindUnique(...args),
-      upsert: (...args: unknown[]) => mockUpsert(...args),
-    },
-  },
-}));
+vi.mock("@/lib/database", () => {
+  const database = {
+    selectFrom: () => ({
+      selectAll: () => ({
+        where: () => ({
+          executeTakeFirst: () => mockFindUnique(),
+        }),
+      }),
+    }),
+    insertInto: () => ({
+      values: (values: unknown) => ({
+        onConflict: (
+          cb: (oc: { column: () => { doUpdateSet: (set: Record<string, unknown>) => void } }) => void
+        ) => {
+          let updatedFields: Record<string, unknown> = {};
+          cb({
+            column: () => ({
+              doUpdateSet: (set: Record<string, unknown>) => {
+                updatedFields = set;
+              },
+            }),
+          });
+          return {
+            returningAll: () => ({
+              executeTakeFirstOrThrow: async () => {
+                return mockUpsert({ create: values, update: updatedFields });
+              },
+            }),
+          };
+        },
+      }),
+    }),
+  };
+  return { database };
+});
 
 describe("site-settings", () => {
   beforeEach(() => {

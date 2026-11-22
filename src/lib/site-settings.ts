@@ -1,6 +1,8 @@
 import { cache } from "react";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
+import type { Kysely, Transaction } from "kysely";
+import { database } from "@/lib/database";
+import type { DB } from "./db-types";
 import { requireAdmin } from "@/lib/session";
 import { canManageSettings } from "@/lib/admin-roles";
 import { FORBIDDEN_SETTINGS } from "@/lib/admin-guard";
@@ -51,14 +53,19 @@ export const FAIL_SAFE_SETTINGS: SiteSettingsData = {
 };
 
 /** The stored settings (defaults before the first save). Throws when they can't be read. */
-export async function readSiteSettings(): Promise<SiteSettingsData> {
-  const row = await db.siteSetting.findUnique({
-    where: { id: "default" },
-  });
+export async function readSiteSettings(
+  executor: Kysely<DB> | Transaction<DB> = database
+): Promise<SiteSettingsData> {
+  const row = await executor
+    .selectFrom("site_setting")
+    .selectAll()
+    .where("id", "=", "default")
+    .executeTakeFirst();
   if (!row) return DEFAULT_SETTINGS;
   return {
     ...DEFAULT_SETTINGS,
     ...row,
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt),
   };
 }
 
@@ -66,30 +73,36 @@ export async function readSiteSettings(): Promise<SiteSettingsData> {
  * Cached per request. Falls back to FAIL_SAFE_SETTINGS, not the defaults,
  * when the settings can't be read.
  */
-export const getSiteSettings = cache(async (): Promise<SiteSettingsData> => {
-  try {
-    return await readSiteSettings();
-  } catch (err) {
-    if (process.env.NODE_ENV !== "test" && process.env.NEXT_PHASE !== "phase-production-build") {
-      console.warn("Site settings unavailable, failing safe:", (err as Error)?.message || err);
+export const getSiteSettings = cache(
+  async (executor: Kysely<DB> | Transaction<DB> = database): Promise<SiteSettingsData> => {
+    try {
+      return await readSiteSettings(executor);
+    } catch (err) {
+      if (process.env.NODE_ENV !== "test" && process.env.NEXT_PHASE !== "phase-production-build") {
+        console.warn("Site settings unavailable, failing safe:", (err as Error)?.message || err);
+      }
+      return FAIL_SAFE_SETTINGS;
     }
-    return FAIL_SAFE_SETTINGS;
   }
-});
+);
 
 /**
  * Helper to check whether public registration is open.
  */
-export async function isRegistrationOpen(): Promise<boolean> {
-  const settings = await getSiteSettings();
+export async function isRegistrationOpen(
+  executor: Kysely<DB> | Transaction<DB> = database
+): Promise<boolean> {
+  const settings = await getSiteSettings(executor);
   return settings.registrationOpen;
 }
 
 /**
  * Helper to check whether donation (VIP) is enabled.
  */
-export async function isDonationEnabled(): Promise<boolean> {
-  const settings = await getSiteSettings();
+export async function isDonationEnabled(
+  executor: Kysely<DB> | Transaction<DB> = database
+): Promise<boolean> {
+  const settings = await getSiteSettings(executor);
   return settings.donationEnabled;
 }
 
@@ -110,14 +123,30 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Server action to update site settings with input sanitization and partial update preservation. */
 export async function updateSiteSettings(
-  input: FormData | UpdateSiteSettingsInput
+  input: FormData | UpdateSiteSettingsInput,
+  executor: Kysely<DB> | Transaction<DB> = database
 ): Promise<{ ok: boolean; message?: string }> {
   const session = await requireAdmin();
   if (!canManageSettings(session.user.role)) {
     return { ok: false, message: FORBIDDEN_SETTINGS };
   }
 
-  const existing = (await db.siteSetting.findUnique({ where: { id: "default" } })) ?? DEFAULT_SETTINGS;
+  const existingRow = await executor
+    .selectFrom("site_setting")
+    .selectAll()
+    .where("id", "=", "default")
+    .executeTakeFirst();
+
+  const existing = existingRow
+    ? {
+        ...DEFAULT_SETTINGS,
+        ...existingRow,
+        updatedAt:
+          existingRow.updatedAt instanceof Date
+            ? existingRow.updatedAt
+            : new Date(existingRow.updatedAt),
+      }
+    : DEFAULT_SETTINGS;
 
   const isForm = typeof (input as FormData)?.get === "function";
   const rawObj: Record<string, unknown> = isForm
@@ -272,9 +301,10 @@ export async function updateSiteSettings(
     }
   }
 
-  const saved = await db.siteSetting.upsert({
-    where: { id: "default" },
-    create: {
+  const now = new Date();
+  const saved = await executor
+    .insertInto("site_setting")
+    .values({
       id: "default",
       siteTitle,
       tagline,
@@ -287,40 +317,48 @@ export async function updateSiteSettings(
       shortFilmCutoffMinutes,
       webhookUrl,
       updatedBy: session.user.email,
-    },
-    update: {
-      siteTitle,
-      tagline,
-      contactEmail,
-      registrationOpen,
-      maintenanceMode,
-      donationEnabled,
-      allowedEmbedHosts: existing.allowedEmbedHosts ?? [],
-      defaultPageSize,
-      shortFilmCutoffMinutes,
-      webhookUrl,
-      updatedBy: session.user.email,
-    },
-  });
+      updatedAt: now,
+    })
+    .onConflict((oc) =>
+      oc.column("id").doUpdateSet({
+        siteTitle,
+        tagline,
+        contactEmail,
+        registrationOpen,
+        maintenanceMode,
+        donationEnabled,
+        allowedEmbedHosts: existing.allowedEmbedHosts ?? [],
+        defaultPageSize,
+        shortFilmCutoffMinutes,
+        webhookUrl,
+        updatedBy: session.user.email,
+        updatedAt: now,
+      })
+    )
+    .returningAll()
+    .executeTakeFirstOrThrow();
 
-  await logActivity({
-    actorId: session.user.id,
-    actorEmail: session.user.email,
-    actorRole: session.user.role,
-    action: "setting.update",
-    entityType: "setting",
-    entityId: "default",
-    summary: `Updated site settings (maintenance=${saved.maintenanceMode}, registration=${saved.registrationOpen}, donation=${saved.donationEnabled})`,
-    details: {
-      siteTitle,
-      tagline,
-      registrationOpen,
-      maintenanceMode,
-      donationEnabled,
-      defaultPageSize,
-      shortFilmCutoffMinutes,
+  await logActivity(
+    {
+      actorId: session.user.id,
+      actorEmail: session.user.email,
+      actorRole: session.user.role,
+      action: "setting.update",
+      entityType: "setting",
+      entityId: "default",
+      summary: `Updated site settings (maintenance=${saved.maintenanceMode}, registration=${saved.registrationOpen}, donation=${saved.donationEnabled})`,
+      details: {
+        siteTitle,
+        tagline,
+        registrationOpen,
+        maintenanceMode,
+        donationEnabled,
+        defaultPageSize,
+        shortFilmCutoffMinutes,
+      },
     },
-  });
+    executor
+  );
 
   revalidatePath("/", "page");
   revalidatePath("/", "layout");

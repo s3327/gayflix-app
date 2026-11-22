@@ -1,9 +1,11 @@
 "use server";
 
+import type { Kysely } from "kysely";
 import { revalidatePath } from "next/cache";
 import { setAdminFlash } from "@/lib/admin-flash";
-import { db } from "@/lib/db";
 import { moderationSession, FORBIDDEN_USERS } from "@/lib/admin-guard";
+import { database } from "@/lib/database";
+import type { DB } from "./db-types";
 import { isMediaId } from "@/lib/library-types";
 
 /*
@@ -20,7 +22,8 @@ function requireReportId(id: unknown): string {
 
 export async function resolveReport(
   id: unknown,
-  notesOrFormData?: string | FormData
+  notesOrFormData?: string | FormData,
+  executor: Kysely<DB> = database
 ): Promise<void> {
   const { session, allowed } = await moderationSession();
   if (!allowed) {
@@ -34,15 +37,17 @@ export async function resolveReport(
       : notesOrFormData instanceof FormData
       ? ((notesOrFormData.get("notes") as string | null) ?? undefined)
       : undefined;
-  await db.report.updateMany({
-    where: { id: reportId, resolvedAt: null },
-    data: {
+  await executor
+    .updateTable("report")
+    .set({
       resolvedAt: new Date(),
       resolvedBy: session.user.email,
       resolvedByUserId: session.user.id,
       notes: notes?.trim() || null,
-    },
-  });
+    })
+    .where("id", "=", reportId)
+    .where("resolvedAt", "is", null)
+    .execute();
   revalidatePath("/admin/reports");
   await setAdminFlash({
     message: "Report resolved.",
@@ -58,7 +63,8 @@ const MAX_GROUP_REPORTS = 50;
  * reason), and can turn off the one video source the reports were about.
  */
 export async function resolveAllForMedia(
-  input: unknown
+  input: unknown,
+  executor: Kysely<DB> = database
 ): Promise<{ ok: boolean; resolvedCount: number }> {
   const { session, allowed } = await moderationSession();
   if (!allowed) {
@@ -86,31 +92,46 @@ export async function resolveAllForMedia(
       : null;
 
   // Only reports still open, and only ones about this title, are resolved.
-  const open = await db.report.findMany({
-    where: { id: { in: reportIds }, mediaId, resolvedAt: null },
-    select: { id: true },
-  });
+  const open = await executor
+    .selectFrom("report")
+    .select("id")
+    .where("id", "in", reportIds)
+    .where("mediaId", "=", mediaId)
+    .where("resolvedAt", "is", null)
+    .execute();
   const ids = open.map((report) => report.id);
 
   let disabled = 0;
   if (disableSourceId) {
-    ({ count: disabled } = await db.videoSource.updateMany({
-      where: { id: disableSourceId, OR: [{ mediaId }, { episodeId: mediaId }] },
-      data: { enabled: false },
-    }));
+    const updateResult = await executor
+      .updateTable("video_source")
+      .set({ enabled: false })
+      .where("id", "=", disableSourceId)
+      .where((eb) =>
+        eb.or([
+          eb("mediaId", "=", mediaId),
+          eb("episodeId", "=", mediaId),
+        ])
+      )
+      .executeTakeFirst();
+    disabled = Number(updateResult.numUpdatedRows);
   }
 
-  const { count } = ids.length
-    ? await db.report.updateMany({
-        where: { id: { in: ids }, resolvedAt: null },
-        data: {
-          resolvedAt: new Date(),
-          resolvedBy: session.user.email,
-          resolvedByUserId: session.user.id,
-          notes,
-        },
+  let count = 0;
+  if (ids.length > 0) {
+    const updateResult = await executor
+      .updateTable("report")
+      .set({
+        resolvedAt: new Date(),
+        resolvedBy: session.user.email,
+        resolvedByUserId: session.user.id,
+        notes,
       })
-    : { count: 0 };
+      .where("id", "in", ids)
+      .where("resolvedAt", "is", null)
+      .executeTakeFirst();
+    count = Number(updateResult.numUpdatedRows);
+  }
 
   revalidatePath("/admin/reports");
   if (disabled) {
@@ -129,7 +150,11 @@ export async function resolveAllForMedia(
   return { ok: true, resolvedCount: count };
 }
 
-export async function reopenReport(id: unknown, _formData?: unknown): Promise<void> {
+export async function reopenReport(
+  id: unknown,
+  _formData?: unknown,
+  executor: Kysely<DB> = database
+): Promise<void> {
   void _formData;
   const { allowed } = await moderationSession();
   if (!allowed) {
@@ -137,10 +162,11 @@ export async function reopenReport(id: unknown, _formData?: unknown): Promise<vo
     return;
   }
   const reportId = requireReportId(id);
-  await db.report.updateMany({
-    where: { id: reportId },
-    data: { resolvedAt: null, resolvedBy: null, resolvedByUserId: null },
-  });
+  await executor
+    .updateTable("report")
+    .set({ resolvedAt: null, resolvedBy: null, resolvedByUserId: null })
+    .where("id", "=", reportId)
+    .execute();
   revalidatePath("/admin/reports");
   await setAdminFlash({
     message: "Report reopened.",

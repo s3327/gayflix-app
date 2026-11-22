@@ -1,9 +1,10 @@
+import type { Kysely } from "kysely";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import { canManageCatalog } from "@/lib/admin-roles";
 import { logActivity } from "@/lib/activity-logger";
-import type { Prisma } from "@/generated/prisma/client";
+import { database } from "@/lib/database";
+import type { DB } from "./db-types";
 import { movieDurationMinutes, parseTitle, titleValues } from "@/lib/title-form";
 import { titleData } from "@/lib/title-store";
 
@@ -30,24 +31,35 @@ export type TitleSnapshot = {
   contentNotes?: string[];
 };
 
+function getExecutor(val: unknown): Kysely<DB> {
+  return typeof val === "object" && val !== null && "selectFrom" in val
+    ? (val as Kysely<DB>)
+    : database;
+}
+
 /**
  * Creates a point-in-time snapshot before title metadata is changed.
  */
-export async function createTitleRevision({
-  mediaId,
-  actorId,
-  actorEmail,
-  summary,
-}: {
-  mediaId: string;
-  actorId?: string | null;
-  actorEmail: string;
-  summary: string;
-}) {
+export async function createTitleRevision(
+  {
+    mediaId,
+    actorId,
+    actorEmail,
+    summary,
+  }: {
+    mediaId: string;
+    actorId?: string | null;
+    actorEmail: string;
+    summary: string;
+  },
+  executor: Kysely<DB> = database
+) {
   try {
-    const existing = await db.media.findUnique({
-      where: { id: mediaId },
-    });
+    const existing = await executor
+      .selectFrom("media")
+      .selectAll()
+      .where("id", "=", mediaId)
+      .executeTakeFirst();
     if (!existing) return;
 
     const snapshot: TitleSnapshot = {
@@ -55,7 +67,7 @@ export async function createTitleRevision({
       year: existing.year,
       duration: existing.duration,
       status: existing.status,
-      genres: existing.genres,
+      genres: existing.genres ?? [],
       country: existing.country,
       language: existing.language,
       synopsis: existing.synopsis,
@@ -63,8 +75,8 @@ export async function createTitleRevision({
       rating: existing.rating,
       director: existing.director,
       creator: existing.creator,
-      cast: existing.cast,
-      tags: existing.tags,
+      cast: existing.cast ?? [],
+      tags: existing.tags ?? [],
       posterUrl: existing.posterUrl,
       backdropUrl: existing.backdropUrl,
       backdropFocus: existing.backdropFocus,
@@ -73,27 +85,34 @@ export async function createTitleRevision({
       contentNotes: existing.contentNotes ?? [],
     };
 
-    await db.titleRevision.create({
-      data: {
+    await executor
+      .insertInto("title_revision")
+      .values({
         mediaId,
         actorId: actorId ?? null,
         actorEmail,
-        snapshot: snapshot as unknown as Prisma.InputJsonValue,
+        snapshot: JSON.stringify(snapshot),
         summary,
-      },
-    });
+      })
+      .execute();
 
     // Prune revisions older than latest 30 to prevent unbounded growth
-    const oldRevisions = await db.titleRevision.findMany({
-      where: { mediaId },
-      orderBy: { createdAt: "desc" },
-      skip: 30,
-      select: { id: true },
-    });
+    const oldRevisions = await executor
+      .selectFrom("title_revision")
+      .select("id")
+      .where("mediaId", "=", mediaId)
+      .orderBy("createdAt", "desc")
+      .offset(30)
+      .execute();
     if (oldRevisions.length > 0) {
-      await db.titleRevision.deleteMany({
-        where: { id: { in: oldRevisions.map((r) => r.id) } },
-      });
+      await executor
+        .deleteFrom("title_revision")
+        .where(
+          "id",
+          "in",
+          oldRevisions.map((r) => r.id)
+        )
+        .execute();
     }
   } catch (err) {
     console.error("Failed to create title revision snapshot:", err);
@@ -101,12 +120,18 @@ export async function createTitleRevision({
 }
 
 /** Fetches revision history for a media item. */
-export async function getTitleRevisions(mediaId: string) {
-  return db.titleRevision.findMany({
-    where: { mediaId },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
+export async function getTitleRevisions(mediaId: string, executor: Kysely<DB> = database) {
+  const rows = await executor
+    .selectFrom("title_revision")
+    .selectAll()
+    .where("mediaId", "=", mediaId)
+    .orderBy("createdAt", "desc")
+    .limit(20)
+    .execute();
+  return rows.map((r) => ({
+    ...r,
+    createdAt: r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt),
+  }));
 }
 
 /** Prisma's cuid() ids. */
@@ -119,7 +144,17 @@ function isRevisionId(value: unknown): value is string {
  * snapshot doesn't have, or has in the wrong shape, keeps today's value.
  */
 function snapshotOver<T extends Record<string, unknown>>(current: T, snapshot: unknown): T {
-  const snap = typeof snapshot === "object" && snapshot !== null ? (snapshot as Record<string, unknown>) : {};
+  let snap: Record<string, unknown> = {};
+  if (typeof snapshot === "string") {
+    try {
+      snap = JSON.parse(snapshot);
+    } catch {
+      snap = {};
+    }
+  } else if (typeof snapshot === "object" && snapshot !== null) {
+    snap = snapshot as Record<string, unknown>;
+  }
+
   const merged: Record<string, unknown> = { ...current };
   for (const key of Object.keys(current)) {
     if (!(key in snap)) continue;
@@ -139,22 +174,36 @@ function snapshotOver<T extends Record<string, unknown>>(current: T, snapshot: u
  * keeps its current status and Featured flag: restoring never publishes,
  * unpublishes or features anything.
  */
-export async function rollbackTitleRevision(revisionId: unknown): Promise<{ ok: boolean; message?: string }> {
+export async function rollbackTitleRevision(
+  revisionId: unknown,
+  executorOrUnknown?: Kysely<DB> | unknown
+): Promise<{ ok: boolean; message?: string }> {
+  const executor = getExecutor(executorOrUnknown);
   const session = await requireAdmin();
   if (!canManageCatalog(session.user.role)) {
     return { ok: false, message: "Forbidden: You do not have permission to edit catalog titles." };
   }
   if (!isRevisionId(revisionId)) return { ok: false, message: "Revision not found." };
 
-  const revision = await db.titleRevision.findUnique({
-    where: { id: revisionId },
-    include: { media: true },
-  });
+  const revision = await executor
+    .selectFrom("title_revision")
+    .selectAll()
+    .where("id", "=", revisionId)
+    .executeTakeFirst();
 
-  if (!revision || !revision.media) {
+  if (!revision) {
     return { ok: false, message: "Revision not found." };
   }
-  const media = revision.media;
+
+  const media = await executor
+    .selectFrom("media")
+    .selectAll()
+    .where("id", "=", revision.mediaId)
+    .executeTakeFirst();
+
+  if (!media) {
+    return { ok: false, message: "Revision not found." };
+  }
   if (media.trashedAt) {
     return { ok: false, message: "This title is in the trash. Restore it from the trash first." };
   }
@@ -164,7 +213,7 @@ export async function rollbackTitleRevision(revisionId: unknown): Promise<{ ok: 
       title: media.title,
       year: media.year,
       duration: media.duration,
-      genres: media.genres,
+      genres: media.genres ?? [],
       country: media.country,
       language: media.language,
       synopsis: media.synopsis,
@@ -172,8 +221,8 @@ export async function rollbackTitleRevision(revisionId: unknown): Promise<{ ok: 
       rating: media.rating,
       director: media.director,
       creator: media.creator,
-      cast: media.cast,
-      tags: media.tags,
+      cast: media.cast ?? [],
+      tags: media.tags ?? [],
       posterUrl: media.posterUrl,
       backdropUrl: media.backdropUrl,
       backdropFocus: media.backdropFocus,
@@ -188,6 +237,10 @@ export async function rollbackTitleRevision(revisionId: unknown): Promise<{ ok: 
     titleValues({
       ...media,
       ...restored,
+      genres: restored.genres,
+      cast: restored.cast,
+      tags: restored.tags,
+      contentNotes: restored.contentNotes ?? [],
       runtimeMinutes: media.type === "movie" ? movieDurationMinutes(restored.duration) : null,
     })
   );
@@ -197,23 +250,31 @@ export async function rollbackTitleRevision(revisionId: unknown): Promise<{ ok: 
   }
 
   // Create a revision of the current state before rolling back
-  await createTitleRevision({
-    mediaId: revision.mediaId,
-    actorId: session.user.id,
-    actorEmail: session.user.email,
-    summary: `Pre-rollback snapshot before restoring revision from ${new Date(revision.createdAt).toLocaleDateString()}`,
-  });
+  await createTitleRevision(
+    {
+      mediaId: revision.mediaId,
+      actorId: session.user.id,
+      actorEmail: session.user.email,
+      summary: `Pre-rollback snapshot before restoring revision from ${new Date(revision.createdAt).toLocaleDateString()}`,
+    },
+    executor
+  );
 
-  const { count } = await db.media.updateMany({
-    // Not if it was trashed meanwhile.
-    where: { id: revision.mediaId, trashedAt: null },
-    data: {
+  const updateResult = await executor
+    .updateTable("media")
+    .set({
       ...titleData(media.type, parsed.data),
       ...(media.type === "series" ? { duration: media.duration } : {}),
       backdropFocus: restored.backdropFocus,
-    },
-  });
-  if (count === 0) return { ok: false, message: "This title is in the trash. Restore it from the trash first." };
+      updatedAt: new Date(),
+    })
+    .where("id", "=", revision.mediaId)
+    .where("trashedAt", "is", null)
+    .executeTakeFirst();
+
+  if (Number(updateResult.numUpdatedRows) === 0) {
+    return { ok: false, message: "This title is in the trash. Restore it from the trash first." };
+  }
   const snap = parsed.data;
 
   await logActivity({

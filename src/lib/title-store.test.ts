@@ -5,27 +5,34 @@ import type { TitleInput } from "./title-form";
 const mockMediaCreate = vi.fn();
 const mockVideoSourceCreate = vi.fn();
 
-vi.mock("@/lib/db", () => ({
-  db: {
-    $transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
-      return cb({
-        media: {
-          create: mockMediaCreate,
-        },
-        videoSource: {
-          create: mockVideoSourceCreate,
-        },
-        $executeRaw: vi.fn(),
-      });
-    }),
-    media: {
-      findUnique: vi.fn().mockResolvedValue(null),
+vi.mock("@/lib/database", () => {
+  const tx = {
+    isTransaction: true,
+    selectFrom: vi.fn(() => ({
+      select: vi.fn(() => ({
+        where: vi.fn(() => ({
+          executeTakeFirst: vi.fn().mockResolvedValue(null),
+        })),
+      })),
+    })),
+    insertInto: vi.fn((table: string) => ({
+      values: vi.fn((vals: unknown) => ({
+        execute: vi.fn(async () => {
+          if (table === "media") mockMediaCreate({ data: vals });
+          if (table === "video_source") mockVideoSourceCreate({ data: vals });
+        }),
+      })),
+    })),
+  };
+  return {
+    database: {
+      ...tx,
+      transaction: () => ({
+        execute: vi.fn(async (cb: (t: typeof tx) => Promise<unknown>) => cb(tx)),
+      }),
     },
-    episode: {
-      findUnique: vi.fn().mockResolvedValue(null),
-    },
-  },
-}));
+  };
+});
 
 describe("insertTitle", () => {
   beforeEach(() => {

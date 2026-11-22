@@ -1,10 +1,13 @@
 "use server";
 
+import type { Kysely } from "kysely";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
+import { database } from "@/lib/database";
+import type { DB } from "./db-types";
 import { isImdbId, isTmdbId, parseTmdbRef } from "@/lib/import-mapping";
 import { isMediaId } from "@/lib/library-types";
-import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
 import { libraryPath, parseTitle, titleValues, uploadPath } from "@/lib/title-form";
 import { freshValues, prepareImport, type ImportState } from "@/lib/title-import";
 import { createTitleRevision } from "@/lib/title-revisions";
@@ -16,6 +19,12 @@ import { insertTitle, isUniqueViolation, titleData } from "@/lib/title-store";
  * included: the browser sends it back too.
  */
 
+function getExecutor(val: unknown): Kysely<DB> {
+  return typeof val === "object" && val !== null && "selectFrom" in val
+    ? (val as Kysely<DB>)
+    : database;
+}
+
 /**
  * A result card's Import button. A clean import is saved as a draft and
  * its edit page opens; one with a doubtful IMDb match or a field to fix
@@ -25,8 +34,10 @@ import { insertTitle, isUniqueViolation, titleData } from "@/lib/title-store";
 export async function importTitle(
   tmdbIdArg: unknown,
   _state: ImportState,
-  form: FormData
+  form: FormData,
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<ImportState> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) return { message: FORBIDDEN_CATALOG };
   const ref = parseTmdbRef(tmdbIdArg);
@@ -42,7 +53,7 @@ export async function importTitle(
     redirect(`${uploadPath(plan.type)}?${new URLSearchParams({ tmdb: plan.sources.tmdbId })}`);
   }
 
-  const id = await insertTitle(plan.type, plan.input, plan.sources);
+  const id = await insertTitle(plan.type, plan.input, plan.sources, executor);
   if (!id) return { message: "It was imported just now, maybe by someone else. Search again to find it." };
   revalidatePath("/", "layout");
   redirect(`${libraryPath(plan.type)}/${id}?imported=1`);
@@ -53,8 +64,10 @@ const MAX_BATCH_IMPORT = 40;
 
 /** Import multiple titles from TMDB search in batch. */
 export async function importMultipleTitles(
-  tmdbIdsArg: unknown
+  tmdbIdsArg: unknown,
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<{ ok: boolean; imported: number; skipped: number; errors: string[] }> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) return { ok: false, imported: 0, skipped: 0, errors: [FORBIDDEN_CATALOG] };
   if (!Array.isArray(tmdbIdsArg) || tmdbIdsArg.length > MAX_BATCH_IMPORT) {
@@ -77,7 +90,7 @@ export async function importMultipleTitles(
         skipped++;
         continue;
       }
-      const id = await insertTitle(plan.type, plan.input, plan.sources);
+      const id = await insertTitle(plan.type, plan.input, plan.sources, executor);
       if (id) imported++;
       else skipped++;
     } catch (err: unknown) {
@@ -113,8 +126,10 @@ const REFRESH_FIELDS = [
  * Status and Featured stay as they are.
  */
 export async function refreshTitleFromTmdb(
-  input: unknown
+  input: unknown,
+  executorOrUnknown?: Kysely<DB> | unknown
 ): Promise<{ ok: boolean; message?: string; updatedFields?: string[] }> {
+  const executor = getExecutor(executorOrUnknown);
   const { session, allowed } = await catalogSession();
   if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   const raw = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
@@ -122,8 +137,11 @@ export async function refreshTitleFromTmdb(
   const id = raw.id;
   const overwriteUnlocked = raw.overwriteUnlocked === true;
 
-  const { db } = await import("@/lib/db");
-  const existing = await db.media.findUnique({ where: { id } });
+  const existing = await executor
+    .selectFrom("media")
+    .selectAll()
+    .where("id", "=", id)
+    .executeTakeFirst();
   if (!existing || existing.trashedAt || !existing.tmdbId) {
     return { ok: false, message: "Title not found or has no linked TMDB ID" };
   }
@@ -133,7 +151,12 @@ export async function refreshTitleFromTmdb(
   const fresh = await freshValues(ref, existing.type);
   if (!fresh.ok) return { ok: false, message: fresh.message };
 
-  const current = titleValues(existing);
+  const current = titleValues({
+    ...existing,
+    genres: existing.genres ?? [],
+    cast: existing.cast ?? [],
+    tags: existing.tags ?? [],
+  });
   const values = { ...current };
   const locked = new Set(existing.lockedFields);
   const updatedFields: string[] = [];
@@ -153,13 +176,25 @@ export async function refreshTitleFromTmdb(
     const [problem] = Object.values(parsed.errors);
     return { ok: false, message: `TMDB's details can't be saved as they are. ${problem}` };
   }
-  await createTitleRevision({
-    mediaId: id,
-    actorId: session.user.id,
-    actorEmail: session.user.email,
-    summary: `Refreshed ${updatedFields.join(", ")} from TMDB`,
-  });
-  await db.media.updateMany({ where: { id, trashedAt: null }, data: titleData(existing.type, parsed.data) });
+  await createTitleRevision(
+    {
+      mediaId: id,
+      actorId: session.user.id,
+      actorEmail: session.user.email,
+      summary: `Refreshed ${updatedFields.join(", ")} from TMDB`,
+    },
+    executor
+  );
+  await executor
+    .updateTable("media")
+    .set({
+      ...titleData(existing.type, parsed.data),
+      updatedAt: new Date(),
+    })
+    .where("id", "=", id)
+    .where("trashedAt", "is", null)
+    .execute();
+
   revalidatePath("/", "layout");
   return { ok: true, updatedFields };
 }
@@ -168,7 +203,11 @@ export async function refreshTitleFromTmdb(
  * Re-link a title to a different TMDB or IMDb ID ("movie/603",
  * "tt0133093"). A field left out stays as it is.
  */
-export async function fixTitleMatch(input: unknown): Promise<{ ok: boolean; message?: string }> {
+export async function fixTitleMatch(
+  input: unknown,
+  executorOrUnknown?: Kysely<DB> | unknown
+): Promise<{ ok: boolean; message?: string }> {
+  const executor = getExecutor(executorOrUnknown);
   const { allowed } = await catalogSession();
   if (!allowed) return { ok: false, message: FORBIDDEN_CATALOG };
   const raw = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
@@ -182,21 +221,26 @@ export async function fixTitleMatch(input: unknown): Promise<{ ok: boolean; mess
   if (imdbId !== undefined && !isImdbId(imdbId)) {
     return { ok: false, message: "Enter the IMDb ID like tt0133093." };
   }
-  const { db } = await import("@/lib/db");
-  const existing = await db.media.findUnique({ where: { id }, select: { type: true, trashedAt: true } });
+  const existing = await executor
+    .selectFrom("media")
+    .select(["type", "trashedAt"])
+    .where("id", "=", id)
+    .executeTakeFirst();
   if (!existing || existing.trashedAt) return { ok: false, message: "Title not found or in trash" };
   if (tmdbId !== undefined && parseTmdbRef(tmdbId)?.kind !== (existing.type === "movie" ? "movie" : "tv")) {
     return { ok: false, message: `That TMDB ID isn't a ${existing.type}.` };
   }
 
   try {
-    await db.media.update({
-      where: { id },
-      data: {
+    await executor
+      .updateTable("media")
+      .set({
         ...(tmdbId !== undefined ? { tmdbId } : {}),
         ...(imdbId !== undefined ? { imdbId } : {}),
-      },
-    });
+        updatedAt: new Date(),
+      })
+      .where("id", "=", id)
+      .execute();
   } catch (error: unknown) {
     if (isUniqueViolation(error)) return { ok: false, message: "Another title already has that ID." };
     throw error;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
-import { db } from "@/lib/db";
+import { database } from "@/lib/database";
+import { countOf } from "@/lib/sql-helpers";
 import { getVerifiedSession } from "@/lib/session";
 import { adminAccess } from "@/lib/admin-access";
 import { canManageCatalog, canManageSettings, canManageUsers } from "@/lib/admin-roles";
@@ -57,30 +58,37 @@ export async function GET(request: Request) {
 
     if (type === "movies" || type === "series") {
       const mediaType = type === "movies" ? "movie" : "series";
-      const rows = await db.media.findMany({
-        where: {
-          type: mediaType,
-          trashedAt: null,
-          ...(status && (status === "draft" || status === "published") ? { status } : {}),
-          ...(q ? { title: { contains: escapeLike(q), mode: "insensitive" } } : {}),
-        },
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        select: {
-          id: true,
-          title: true,
-          year: true,
-          status: true,
-          duration: true,
-          genres: true,
-          tags: true,
-          rating: true,
-          viewCount: true,
-          director: true,
-          creator: true,
-          publishedAt: true,
-          createdAt: true,
-        },
-      });
+      let query = database
+        .selectFrom("media")
+        .select([
+          "id",
+          "title",
+          "year",
+          "status",
+          "duration",
+          "genres",
+          "tags",
+          "rating",
+          "viewCount",
+          "director",
+          "creator",
+          "publishedAt",
+          "createdAt",
+        ])
+        .where("type", "=", mediaType)
+        .where("trashedAt", "is", null);
+
+      if (status && (status === "draft" || status === "published")) {
+        query = query.where("status", "=", status);
+      }
+      if (q) {
+        query = query.where("title", "ilike", `%${escapeLike(q)}%`);
+      }
+
+      const rows = await query
+        .orderBy("createdAt", "desc")
+        .orderBy("id", "desc")
+        .execute();
 
       const headers = [
         "id",
@@ -121,15 +129,32 @@ export async function GET(request: Request) {
       csvContent = lines.join("\r\n");
     } else if (type === "episodes") {
       const seriesId = searchParams.get("seriesId");
-      const rows = await db.episode.findMany({
-        where: {
-          media: { trashedAt: null },
-          ...(seriesId ? { mediaId: seriesId } : {}),
-          ...(q ? { title: { contains: escapeLike(q), mode: "insensitive" } } : {}),
-        },
-        orderBy: [{ media: { title: "asc" } }, { seasonNumber: "asc" }, { episodeNumber: "asc" }],
-        include: { media: { select: { title: true } } },
-      });
+      let query = database
+        .selectFrom("episode")
+        .innerJoin("media", "media.id", "episode.mediaId")
+        .select([
+          "episode.id as id",
+          "media.title as seriesTitle",
+          "episode.seasonNumber as seasonNumber",
+          "episode.episodeNumber as episodeNumber",
+          "episode.title as title",
+          "episode.duration as duration",
+          "episode.airDate as airDate",
+        ])
+        .where("media.trashedAt", "is", null);
+
+      if (seriesId) {
+        query = query.where("episode.mediaId", "=", seriesId);
+      }
+      if (q) {
+        query = query.where("episode.title", "ilike", `%${escapeLike(q)}%`);
+      }
+
+      const rows = await query
+        .orderBy("media.title", "asc")
+        .orderBy("episode.seasonNumber", "asc")
+        .orderBy("episode.episodeNumber", "asc")
+        .execute();
 
       const headers = [
         "Episode ID",
@@ -145,7 +170,7 @@ export async function GET(request: Request) {
         ...rows.map((r) =>
           toCsvRow([
             r.id,
-            r.media.title,
+            r.seriesTitle,
             r.seasonNumber,
             r.episodeNumber,
             r.title,
@@ -157,12 +182,15 @@ export async function GET(request: Request) {
       csvContent = lines.join("\r\n");
     } else if (type === "reports") {
       const showResolved = searchParams.get("status") === "resolved";
-      const rows = await db.report.findMany({
-        where: {
-          resolvedAt: showResolved ? { not: null } : null,
-        },
-        orderBy: { createdAt: "desc" },
-      });
+      let query = database.selectFrom("report").selectAll();
+
+      if (showResolved) {
+        query = query.where("resolvedAt", "is not", null);
+      } else {
+        query = query.where("resolvedAt", "is", null);
+      }
+
+      const rows = await query.orderBy("createdAt", "desc").execute();
       const emails = await accountEmails(rows.map((r) => r.userId));
 
       const headers = [
@@ -196,13 +224,19 @@ export async function GET(request: Request) {
       ];
       csvContent = lines.join("\r\n");
     } else if (type === "activity") {
-      const [logs, totalCount] = await Promise.all([
-        db.activityLog.findMany({
-          orderBy: { createdAt: "desc" },
-          take: 5000,
-        }),
-        db.activityLog.count(),
+      const [logs, countRow] = await Promise.all([
+        database
+          .selectFrom("activity_log")
+          .selectAll()
+          .orderBy("createdAt", "desc")
+          .limit(5000)
+          .execute(),
+        database
+          .selectFrom("activity_log")
+          .select((eb) => eb.fn.countAll().as("count"))
+          .executeTakeFirst(),
       ]);
+      const totalCount = countRow ? countOf(countRow) : 0;
       isTruncated = totalCount > 5000;
 
       const headers = ["ID", "Timestamp", "Actor Email", "Actor Role", "Action", "Entity Type", "Entity ID", "Summary"];
@@ -225,13 +259,48 @@ export async function GET(request: Request) {
     } else if (type === "catalog-json") {
       // Note: Trashed items are intentionally included (with trashedAt timestamp preserved)
       // for complete catalog backup and disaster recovery.
-      const allMedia = await db.media.findMany({
-        include: {
-          episodes: true,
-          videoSources: true,
-        },
-        orderBy: [{ type: "asc" }, { createdAt: "desc" }],
-      });
+      const mediaList = await database
+        .selectFrom("media")
+        .selectAll()
+        .orderBy("type", "asc")
+        .orderBy("createdAt", "desc")
+        .execute();
+
+      const [episodes, videoSources] = await Promise.all([
+        database
+          .selectFrom("episode")
+          .selectAll()
+          .orderBy("seasonNumber", "asc")
+          .orderBy("episodeNumber", "asc")
+          .execute(),
+        database
+          .selectFrom("video_source")
+          .selectAll()
+          .orderBy("position", "asc")
+          .execute(),
+      ]);
+
+      const episodesByMediaId = new Map<string, typeof episodes>();
+      for (const ep of episodes) {
+        const list = episodesByMediaId.get(ep.mediaId) ?? [];
+        list.push(ep);
+        episodesByMediaId.set(ep.mediaId, list);
+      }
+
+      const videoSourcesByMediaId = new Map<string, typeof videoSources>();
+      for (const vs of videoSources) {
+        if (!vs.mediaId) continue;
+        const list = videoSourcesByMediaId.get(vs.mediaId) ?? [];
+        list.push(vs);
+        videoSourcesByMediaId.set(vs.mediaId, list);
+      }
+
+      const allMedia = mediaList.map((m) => ({
+        ...m,
+        episodes: episodesByMediaId.get(m.id) ?? [],
+        videoSources: videoSourcesByMediaId.get(m.id) ?? [],
+      }));
+
       const jsonStr = JSON.stringify(
         {
           version: "1.0",

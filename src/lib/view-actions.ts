@@ -1,8 +1,10 @@
 "use server";
 
 import { after } from "next/server";
+import { sql, type Kysely } from "kysely";
 import { findViewTarget } from "@/lib/catalog";
-import { db } from "@/lib/db";
+import { database } from "@/lib/database";
+import type { DB } from "./db-types";
 import { isMediaId } from "@/lib/library-types";
 import { getSession } from "@/lib/session";
 import { clientIp, keyedHash } from "@/lib/visitor";
@@ -18,7 +20,10 @@ import { trendingSince, utcDay, viewerKey } from "@/lib/views";
 const PRUNE_EVERY_MS = 60 * 60 * 1000;
 let lastPruned = 0;
 
-export async function recordView(id: unknown): Promise<void> {
+export async function recordView(
+  id: unknown,
+  executor: Kysely<DB> = database
+): Promise<void> {
   if (!isMediaId(id)) return;
   const mediaId = await findViewTarget(id);
   if (!mediaId) return;
@@ -31,7 +36,7 @@ export async function recordView(id: unknown): Promise<void> {
   );
   // The all-time count goes up only when today's view is new. Raw SQL,
   // so the title's updatedAt (which orders /movie and /series) stays put.
-  await db.$executeRaw`
+  await sql`
     WITH counted AS (
       INSERT INTO media_view ("mediaId", viewer, day)
       VALUES (${mediaId}, ${viewer}, ${day}::date)
@@ -39,14 +44,15 @@ export async function recordView(id: unknown): Promise<void> {
       RETURNING "mediaId"
     )
     UPDATE media SET "viewCount" = "viewCount" + 1
-    WHERE id IN (SELECT "mediaId" FROM counted)`;
+    WHERE id IN (SELECT "mediaId" FROM counted)
+  `.execute(executor);
 
   // Views from before Trending's window are never read again. At most
   // hourly per server, after the response is sent.
   if (now.getTime() - lastPruned > PRUNE_EVERY_MS) {
     lastPruned = now.getTime();
     after(() =>
-      db.mediaView.deleteMany({ where: { day: { lt: new Date(trendingSince(now)) } } })
+      executor.deleteFrom("media_view").where("day", "<", new Date(trendingSince(now))).execute()
     );
   }
 }

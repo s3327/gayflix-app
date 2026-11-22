@@ -9,7 +9,8 @@ export const metadata: Metadata = {
 };
 import { getUserOverview } from "@/lib/admin-users";
 import { getCatalogOverview, getLiveHero } from "@/lib/catalog";
-import { db } from "@/lib/db";
+import { database } from "@/lib/database";
+import { countOf } from "@/lib/sql-helpers";
 import { formatCount } from "@/lib/format-count";
 import type { MediaType } from "@/lib/media";
 import { requireAdmin } from "@/lib/session";
@@ -40,7 +41,12 @@ export default async function DashboardPage() {
   const [catalog, accounts, openReports, liveHero] = await Promise.all([
     getCatalogOverview(),
     getUserOverview(),
-    db.report.count({ where: { resolvedAt: null } }),
+    database
+      .selectFrom("report")
+      .select((eb) => eb.fn.countAll().as("count"))
+      .where("resolvedAt", "is", null)
+      .executeTakeFirst()
+      .then((row) => (row ? countOf(row) : 0)),
     getLiveHero(),
   ]);
   const week = `last ${TRENDING_DAYS} days`;

@@ -5,17 +5,26 @@ const mockMediaFindMany = vi.fn();
 const mockEpisodeFindMany = vi.fn();
 const mockVideoSourceCreate = vi.fn();
 
-vi.mock("@/lib/db", () => ({
-  db: {
-    media: {
-      findMany: (...args: unknown[]) => mockMediaFindMany(...args),
-    },
-    episode: {
-      findMany: (...args: unknown[]) => mockEpisodeFindMany(...args),
-    },
-    videoSource: {
-      create: (...args: unknown[]) => mockVideoSourceCreate(...args),
-    },
+vi.mock("@/lib/database", () => ({
+  database: {
+    selectFrom: vi.fn((table: string) => {
+      const currentTable = table;
+      const chain: Record<string, unknown> = {};
+      chain.innerJoin = vi.fn(() => chain);
+      chain.select = vi.fn(() => chain);
+      chain.where = vi.fn(() => chain);
+      chain.execute = vi.fn(async () => {
+        if (currentTable === "media") return mockMediaFindMany();
+        if (currentTable === "episode") return mockEpisodeFindMany();
+        return [];
+      });
+      return chain;
+    }),
+    insertInto: vi.fn(() => ({
+      values: vi.fn((data: unknown) => ({
+        execute: vi.fn(async () => mockVideoSourceCreate({ data })),
+      })),
+    })),
   },
 }));
 
@@ -47,20 +56,16 @@ describe("backfillDefaultVideoSources", () => {
         id: "heartstopper-s1-e1",
         seasonNumber: 1,
         episodeNumber: 1,
-        media: {
-          imdbId: "tt10638036",
-          tmdbId: "tv/124834",
-        },
+        imdbId: "tt10638036",
+        tmdbId: "tv/124834",
         videoSources: [],
       },
       {
         id: "heartstopper-s1-e2",
         seasonNumber: 1,
         episodeNumber: 2,
-        media: {
-          imdbId: null,
-          tmdbId: "tv/124834",
-        },
+        imdbId: null,
+        tmdbId: "tv/124834",
         videoSources: [],
       },
     ]);
@@ -106,7 +111,7 @@ describe("backfillDefaultVideoSources", () => {
     });
   });
 
-  it("supports dryRun without writing to database", async () => {
+  it("respects dryRun option and does not write to database", async () => {
     mockMediaFindMany.mockResolvedValue([
       {
         id: "challengers",
@@ -121,6 +126,7 @@ describe("backfillDefaultVideoSources", () => {
     const result = await backfillDefaultVideoSources({ dryRun: true });
 
     expect(result.moviesUpdated).toBe(1);
+    expect(result.dryRun).toBe(true);
     expect(mockVideoSourceCreate).not.toHaveBeenCalled();
   });
 });

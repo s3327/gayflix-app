@@ -1,7 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
+import type { Kysely } from "kysely";
+import { jsonArrayFrom } from "kysely/helpers/postgres";
+import { database } from "@/lib/database";
+import type { DB } from "@/lib/db-types";
 import { catalogSession, FORBIDDEN_CATALOG } from "@/lib/admin-guard";
 import { logActivity } from "@/lib/activity-logger";
 import {
@@ -27,29 +30,27 @@ export interface BackfillResult {
  * and inserts the default gayflix embed video source ("Server 1").
  */
 export async function backfillDefaultVideoSources(
-  options: BackfillOptions = {}
+  options: BackfillOptions = {},
+  executor: Kysely<DB> = database
 ): Promise<BackfillResult> {
   const dryRun = Boolean(options.dryRun);
 
   // 1. Process movies
-  const movies = await db.media.findMany({
-    where: {
-      type: "movie",
-      trashedAt: null,
-    },
-    select: {
-      id: true,
-      imdbId: true,
-      tmdbId: true,
-      videoSources: {
-        select: { id: true, url: true },
-      },
-    },
-  });
+  const movies = await executor
+    .selectFrom("media")
+    .select(["id", "imdbId", "tmdbId"])
+    .select((eb) => [
+      jsonArrayFrom(
+        eb.selectFrom("video_source").select(["id", "url"]).whereRef("video_source.mediaId", "=", "media.id")
+      ).as("videoSources"),
+    ])
+    .where("type", "=", "movie")
+    .where("trashedAt", "is", null)
+    .execute();
 
   let moviesUpdated = 0;
   for (const movie of movies) {
-    if (movie.videoSources.length === 0) {
+    if ((movie.videoSources ?? []).length === 0) {
       const defaultUrl = buildDefaultMovieEmbedUrl({
         imdbId: movie.imdbId,
         tmdbId: movie.tmdbId,
@@ -57,16 +58,17 @@ export async function backfillDefaultVideoSources(
 
       if (defaultUrl) {
         if (!dryRun) {
-          await db.videoSource.create({
-            data: {
+          await executor
+            .insertInto("video_source")
+            .values({
               mediaId: movie.id,
               label: "Server 1",
               kind: "embed",
               url: defaultUrl,
               position: 1,
               enabled: true,
-            },
-          });
+            })
+            .execute();
         }
         moviesUpdated++;
       }
@@ -74,50 +76,47 @@ export async function backfillDefaultVideoSources(
   }
 
   // 2. Process episodes
-  const episodes = await db.episode.findMany({
-    where: {
-      media: {
-        trashedAt: null,
-      },
-    },
-    select: {
-      id: true,
-      seasonNumber: true,
-      episodeNumber: true,
-      media: {
-        select: {
-          imdbId: true,
-          tmdbId: true,
-        },
-      },
-      videoSources: {
-        select: { id: true, url: true },
-      },
-    },
-  });
+  const episodes = await executor
+    .selectFrom("episode")
+    .innerJoin("media", "media.id", "episode.mediaId")
+    .select([
+      "episode.id",
+      "episode.seasonNumber",
+      "episode.episodeNumber",
+      "media.imdbId",
+      "media.tmdbId",
+    ])
+    .select((eb) => [
+      jsonArrayFrom(
+        eb.selectFrom("video_source").select(["id", "url"]).whereRef("video_source.episodeId", "=", "episode.id")
+      ).as("videoSources"),
+    ])
+    .where("media.trashedAt", "is", null)
+    .execute();
 
   let episodesUpdated = 0;
   for (const ep of episodes) {
-    if (ep.videoSources.length === 0) {
+    if ((ep.videoSources ?? []).length === 0) {
       const defaultUrl = buildDefaultEpisodeEmbedUrl({
-        imdbId: ep.media.imdbId,
-        tmdbId: ep.media.tmdbId,
+        imdbId: ep.imdbId,
+        tmdbId: ep.tmdbId,
         seasonNumber: ep.seasonNumber,
         episodeNumber: ep.episodeNumber,
       });
 
       if (defaultUrl) {
         if (!dryRun) {
-          await db.videoSource.create({
-            data: {
+          await executor
+            .insertInto("video_source")
+            .values({
               episodeId: ep.id,
               label: "Server 1",
               kind: "embed",
               url: defaultUrl,
               position: 1,
               enabled: true,
-            },
-          });
+            })
+            .execute();
         }
         episodesUpdated++;
       }
@@ -137,14 +136,15 @@ export async function backfillDefaultVideoSources(
  * Admin action to trigger backfill with authentication and audit logging.
  */
 export async function backfillDefaultVideoSourcesAction(
-  options: BackfillOptions = {}
+  options: BackfillOptions = {},
+  executor: Kysely<DB> = database
 ): Promise<{ ok: boolean; message: string; result?: BackfillResult }> {
   const { session, allowed } = await catalogSession();
   if (!allowed) {
     return { ok: false, message: FORBIDDEN_CATALOG };
   }
 
-  const result = await backfillDefaultVideoSources(options);
+  const result = await backfillDefaultVideoSources(options, executor);
 
   await logActivity({
     actorId: session.user.id,
