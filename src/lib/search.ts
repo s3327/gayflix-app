@@ -117,8 +117,7 @@ export function normalizeQuery(query: string): string {
 
 /**
  * Makes text safe inside a LIKE/ILIKE pattern, so `%`, `_` and `\` match
- * themselves instead of acting as wildcards. Prisma's `contains` doesn't
- * do this on its own.
+ * themselves instead of acting as wildcards.
  */
 export function escapeLike(text: string): string {
   return text.replace(/[\\%_]/g, (char) => `\\${char}`);

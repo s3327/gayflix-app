@@ -84,7 +84,7 @@ every pull request gets its own preview address.
 ## Part 3: Add the database
 
 The database is [Supabase](https://supabase.com) Postgres. The site talks
-to it through Prisma ORM over a plain Postgres connection; it doesn't use
+to it through Kysely over a plain Postgres connection; it doesn't use
 Supabase's client libraries or its Data API.
 
 1. At [supabase.com/dashboard](https://supabase.com/dashboard), click
@@ -822,9 +822,7 @@ accident. Private repositories need a paid GitHub plan for this.
 ### Rules for the database
 
 - Production only ever gets `npm run db:deploy` (the SQL files in
-  `supabase/migrations`), which the build runs for you. Never run
-  `npm run db:migrate` (`prisma migrate dev`) against it: it can reset
-  the database it runs on.
+  `supabase/migrations`), which the build runs for you.
 - Never connect the production database to Vercel's Development
   environment, and never put its address in a `.env` file.
 - Don't edit tables in Studio or a SQL editor beyond the steps in this

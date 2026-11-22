@@ -40,7 +40,7 @@ export type TitleReviews = {
 
 /**
  * Members' nicknames (member_profile) by account id. Accounts aren't in
- * the Prisma schema (they're Supabase Auth's), so this is its own read.
+ * the public schema (they're Supabase Auth's), so this is its own read.
  */
 export async function memberNicknames(
   userIds: readonly string[],

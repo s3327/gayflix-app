@@ -103,7 +103,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**', 'prisma/**', '*.mjs', '*.ts', 'tsconfig.json') }}
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**', '*.mjs', '*.ts', 'tsconfig.json') }}
           restore-keys: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
       - run: npm run build
       - if: matrix.shard == 1 && github.event_name == 'push' && steps.build-cache.outputs.cache-hit != 'true'

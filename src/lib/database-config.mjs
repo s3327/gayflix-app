@@ -1,6 +1,6 @@
 /**
- * Connection settings for node-postgres (the app's Prisma adapter in
- * src/lib/db.ts, and scripts/make-admin.mjs).
+ * Connection settings for node-postgres (the database pool in
+ * src/lib/database.ts, migrations, and scripts/make-admin.mjs).
  *
  * Production runs on Supabase. Its pooler takes TLS, but its certificate
  * is signed by Supabase's own root CA, which Node doesn't trust out of

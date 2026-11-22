@@ -16,24 +16,19 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   (`src/lib/session.ts`): it checks the "admin" role and that the session
   passed two-factor in the last 12 hours (`src/lib/admin-access.ts`).
   `src/proxy.ts` can also put an optional password gate in front.
-- **Database:** Supabase Postgres with Prisma ORM 7.x (moved from Prisma
-  Postgres 2026-11-20), through `@prisma/adapter-pg`. The site uses only
-  the Postgres connection for data, never Supabase's Data API (supabase-js
-  only calls Auth, from the server):
+- **Database:** Supabase Postgres accessed through Kysely (`src/lib/database.ts`,
+  types in `src/lib/db-types.ts`, regenerate with `npm run db:types` after a migration).
+  The site uses only the Postgres connection for data, never Supabase's Data API
+  (supabase-js only calls Auth, from the server):
   `DATABASE_URL` is the transaction pooler (runtime), `DIRECT_URL` the
-  session pooler (migrations, `prisma.config.ts`), and TLS settings come
+  session pooler (migrations), and TLS settings come
   from `src/lib/database-config.mjs`. Every table has row-level security
   on with no policies, which locks the Data API out; a migration that
-  adds a table must also `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`. Pin Prisma versions exactly (npm's `latest`
-  tag has pointed at pre-releases). Prisma 7 doesn't generate the client on
-  `migrate`; run `npx prisma generate` after schema changes.
-  New code reads and writes through `database` (Kysely,
-  `src/lib/database.ts`, types in `src/lib/db-types.ts`, regenerate with
-  `npm run db:types` after a migration); Prisma stays only until the
-  existing code is ported. Migrations are hand-written SQL files in
-  `supabase/migrations/`, applied with `npm run db:deploy`. Integration
-  tests (`*.integration.test.ts`) run when `TEST_DATABASE_URL` is set, and
-  wrap their work in `withRollback()` (`src/test/database.ts`).
+  adds a table must also `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`.
+  Migrations are hand-written SQL files in `supabase/migrations/`, applied
+  with `npm run db:deploy`. Integration tests (`*.integration.test.ts`) run
+  when `TEST_DATABASE_URL` is set, and wrap their work in `withRollback()`
+  (`src/test/database.ts`).
 - **Accounts:** Supabase Auth (`auth.users`), called only from the server
   (server actions and route handlers in `src/lib/auth-actions.ts`,
   `two-factor-actions.ts`, `account-actions.ts`, `admin-user-actions.ts`);

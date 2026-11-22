@@ -75,7 +75,7 @@ export default async function ReportsPage({
     .offset((page - 1) * PER_PAGE)
     .limit(PER_PAGE)
     .execute();
-  // Accounts are Supabase Auth's, outside the Prisma schema.
+  // Accounts are Supabase Auth's, outside the public schema.
   const emails = await accountEmails(rows.map((report) => report.userId));
   const reports = rows.map((report) => {
     const email = report.userId ? emails.get(report.userId) : undefined;

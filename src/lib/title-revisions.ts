@@ -134,7 +134,7 @@ export async function getTitleRevisions(mediaId: string, executor: Kysely<DB> = 
   }));
 }
 
-/** Prisma's cuid() ids. */
+/** Cuid identifiers. */
 function isRevisionId(value: unknown): value is string {
   return typeof value === "string" && /^[a-z0-9]{20,40}$/.test(value);
 }

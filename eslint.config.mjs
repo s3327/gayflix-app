@@ -12,7 +12,6 @@ export default defineConfig([
     "build/**",
     "coverage/**",
     "next-env.d.ts",
-    "src/generated/**",
     "gayflix-app/**",
     ".agents/**",
   ]),
