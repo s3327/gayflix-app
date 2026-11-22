@@ -8,6 +8,7 @@ import { findEpisodeIds } from "@/lib/catalog";
 import { db } from "@/lib/db";
 import { firstParam, pageParam, type SearchParams } from "@/lib/search-params";
 import { requireAdmin } from "@/lib/session";
+import { accountEmails } from "@/lib/user-admin-store";
 
 export const metadata: Metadata = {
   title: "Reports",
@@ -47,12 +48,17 @@ export default async function ReportsPage({
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
   const page = Math.min(pageParam(params.page), totalPages);
 
-  const reports = await db.report.findMany({
+  const rows = await db.report.findMany({
     where,
     orderBy: { createdAt: "desc" },
     skip: (page - 1) * PER_PAGE,
     take: PER_PAGE,
-    include: { user: { select: { id: true, email: true } } },
+  });
+  // Accounts are Supabase Auth's, outside the Prisma schema.
+  const emails = await accountEmails(rows.map((report) => report.userId));
+  const reports = rows.map((report) => {
+    const email = report.userId ? emails.get(report.userId) : undefined;
+    return { ...report, user: report.userId && email !== undefined ? { id: report.userId, email } : null };
   });
 
   const allMediaIds = reports.map((report) => report.mediaId);

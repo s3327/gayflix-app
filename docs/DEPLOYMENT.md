@@ -9,22 +9,23 @@ before you move on.
 
 - The site on Vercel, first at a `.vercel.app` address and later on your
   own domain.
-- A Supabase Postgres database for accounts, favorites, lists, watch history
-  and reports.
-- Sign-up codes and password-reset emails sent through Resend.
+- A Supabase project: its Postgres database for favorites, lists, watch
+  history and reports, and Supabase Auth for accounts and sign-in.
+- Sign-up codes and password-reset emails sent by Supabase Auth through
+  Resend.
 - Your own admin account, protected by a password and an authenticator
   app.
 
 > **Keep secrets out of chats, issues and the repository.** The database
-> connection string, `BETTER_AUTH_SECRET`, API keys and your backup codes
-> go only into Vercel's environment variables and your password manager.
+> connection string, `HASH_SECRET`, Supabase's secret key and API keys go only into
+> Vercel's environment variables and your password manager.
 
 ## Checklist
 
 - [ ] [Part 1: Get the accounts and tools ready](#part-1-get-the-accounts-and-tools-ready)
 - [ ] [Part 2: Create the Vercel project](#part-2-create-the-vercel-project)
 - [ ] [Part 3: Add the database](#part-3-add-the-database)
-- [ ] [Part 4: Add the secret and the email key](#part-4-add-the-secret-and-the-email-key)
+- [ ] [Part 4: Add the secrets and set up sign-in](#part-4-add-the-secrets-and-set-up-sign-in)
 - [ ] [Part 5: Deploy the version with accounts](#part-5-deploy-the-version-with-accounts)
 - [ ] [Part 6: Create your admin account](#part-6-create-your-admin-account)
 - [ ] [Part 7: Use your own domain and email address](#part-7-use-your-own-domain-and-email-address)
@@ -45,9 +46,9 @@ Then keep [Running the site](#running-the-site),
 | GitHub account with access to `s3327/gayflix-app` | Vercel deploys from it | You have it |
 | Vercel account ([vercel.com](https://vercel.com), sign up with GitHub) | Hosting | The Hobby plan is free but only for personal, non-commercial sites. A site with ads or paid plans needs Pro. |
 | Resend account ([resend.com](https://resend.com)) | Sign-up codes and password-reset emails | Free plan with daily and monthly sending limits |
-| Prisma account | The database | Created for you when you add the database from Vercel (Part 3). Free plan available. |
+| Supabase account ([supabase.com](https://supabase.com)) | The database, and accounts (Supabase Auth) | Free plan available |
 | An authenticator app on your phone (1Password, Google Authenticator, Authy, Microsoft Authenticator, ...) | Admin two-factor sign-in | Free |
-| A password manager | The secret, your admin password and backup codes | |
+| A password manager | The secret and your admin password | |
 | Optional: your own domain, e.g. `gayflix.com` | A real address, and email from your own domain | Yearly fee from a domain registrar |
 
 Plans and limits change, so check each provider's pricing page before you
@@ -131,15 +132,16 @@ listed for Production only.
 
 You don't create any tables yourself. The deploy in Part 5 does that.
 
-## Part 4: Add the secret and the email key
+## Part 4: Add the secrets and set up sign-in
 
-Each of these goes in **Settings → Environment Variables**. Enter the
-name, paste the value, pick the environments listed, tick **Sensitive**,
-and save.
+Each variable goes in Vercel's **Settings → Environment Variables**.
+Enter the name, paste the value, pick the environments listed, tick
+**Sensitive**, and save.
 
-### 4.1 `BETTER_AUTH_SECRET`
+### 4.1 `HASH_SECRET`
 
-This signs everyone's login cookies and encrypts admins' two-factor keys.
+This keys the one-way codes the site keeps instead of IP addresses (view
+counts, report and sign-in limits; `src/lib/visitor.ts`).
 
 1. Make a random value on your computer, with one of these:
    - Mac or Linux terminal: `openssl rand -base64 32`
@@ -147,32 +149,85 @@ This signs everyone's login cookies and encrypts admins' two-factor keys.
      `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
    - Your password manager's generator, set to at least 40 random
      characters.
-2. Add it as `BETTER_AUTH_SECRET` for **Production**, and save a copy in
-   your password manager.
-3. Make a **second, different** value and add it as `BETTER_AUTH_SECRET`
-   for **Preview**. Without it, preview addresses show error pages
-   instead of the site.
+2. Add it as `HASH_SECRET` for **Production**, and save a copy in your
+   password manager.
 
-**Treat the production value as permanent.** Changing it later signs
-everyone out and breaks every admin's two-factor sign-in (see
-[Changing the secret](#changing-the-secret)).
+Moving a site that ran Better Auth? Use the old `BETTER_AUTH_SECRET`
+value instead (see `docs/SUPABASE_CUTOVER.md`).
 
-### 4.2 `RESEND_API_KEY`
+### 4.2 Supabase's address and keys
+
+1. In the Supabase project, open **Project Settings → API Keys**.
+2. Add, for **Production**:
+   - `NEXT_PUBLIC_SUPABASE_URL`: the project URL,
+     `https://<project ref>.supabase.co` (**Project Settings → Data API**
+     shows it, even with the Data API off).
+   - `SUPABASE_PUBLISHABLE_KEY`: the publishable key (`sb_publishable_…`).
+   - `SUPABASE_SECRET_KEY`: a secret key (`sb_secret_…`). It can do
+     anything to every account, so it stays in Vercel and your password
+     manager; never give it a `NEXT_PUBLIC_` name.
+
+The browser never talks to Supabase: every sign-in step runs on the
+site's server.
+
+### 4.3 Resend, for Supabase Auth's emails
 
 1. Sign up at [resend.com](https://resend.com).
-2. Open **API Keys** → **Create API Key**. Name it `gayflix-production`
-   and give it **Sending access**.
-3. Copy the key. It starts with `re_` and is shown only once.
-4. Add it as `RESEND_API_KEY` for **Production**.
+2. Open **API Keys** → **Create API Key**. Name it `gayflix-supabase`
+   and give it **Sending access**. Copy the key (it starts with `re_`
+   and is shown only once).
+3. In Supabase, open **Authentication → Emails → SMTP Settings**, turn on
+   **Custom SMTP**, and enter:
+   - Host `smtp.resend.com`, port `465`, username `resend`, password the
+     `re_` key.
+   - Sender email: until you verify a domain (7.3), Resend only delivers
+     from `onboarding@resend.dev` to the address you signed up to Resend
+     with. Sender name `Gayflix`.
 
-### 4.3 `EMAIL_FROM`: leave it for now
+The key goes only into Supabase, not Vercel: the site sends no email of
+its own.
 
-Leave `EMAIL_FROM` unset until you verify a domain in Resend (Part 7).
-Until then, emails come from Resend's test address, which only delivers to
-**the email address you signed up to Resend with**. That's enough to create
-your admin account, as long as you use that same address in Part 6.
+### 4.4 Supabase Auth settings
 
-### 4.4 Optional: an extra password in front of `/admin`
+All in the Supabase dashboard, under **Authentication**. The repository's
+`supabase/config.toml` holds the same settings for the local stack only;
+never `supabase config push` it to the real project (its rate limits are
+for tests).
+
+1. **Sign In / Providers → Email:** on, with **Confirm email** on,
+   **Secure email change** on, and **Minimum password length** 8.
+2. **Emails → Templates:** for each template below, set the subject and
+   paste the file's whole text from `supabase/templates`:
+
+   | Template | Subject | File |
+   |---|---|---|
+   | Confirm signup | Your Gayflix verification code | `confirmation.html` |
+   | Reset password | Your Gayflix password reset code | `recovery.html` |
+   | Change email address | Confirm your Gayflix email change | `email_change.html` |
+
+   Under **Security notifications**, turn on **Email changed**, subject
+   "Your Gayflix email was changed", with `email_changed_notification.html`.
+   The site's flows use 6-digit codes (`{{ .Token }}`), never links.
+3. **Hooks** (after the first deploy in Part 5, which creates the
+   functions): add **Custom Access Token** → Postgres →
+   `public.custom_access_token_hook`, and **Before User Created** →
+   Postgres → `public.before_user_created_hook`.
+4. **URL Configuration:** **Site URL** `https://<your site>` (the
+   `SITE_URL` address, Part 7), and under **Redirect URLs**
+   `https://<your site>/auth/callback`.
+5. **Multi-Factor:** TOTP (App Authenticator) enabled.
+6. **Rate Limits:** review them. Every request reaches Supabase from the
+   site's server, so they count the site's few server addresses, not
+   visitors; the site's own limits (`src/lib/auth-rate-limit.ts`) are
+   the real per-visitor ones. Keep the email limit high enough for
+   sign-ups.
+7. **JWT Keys** (Project Settings): use asymmetric signing keys (ECC
+   P-256 or RSA). The site checks sessions against them without a call
+   to Supabase per page.
+
+**You should see** each setting saved. Part 9 checks them working.
+
+### 4.5 Optional: an extra password in front of `/admin`
 
 `ADMIN_BASIC_AUTH_USER` and `ADMIN_BASIC_AUTH_PASSWORD` add a browser
 password prompt in front of the admin panel, on top of the admin account
@@ -186,11 +241,9 @@ turned off and says so.
 | `DATABASE_URL` | ✅ added in Part 3 | | |
 | `DIRECT_URL` | ✅ added in Part 3 | | |
 | `DATABASE_CA_CERT` | ✅ added in Part 3 | | |
-| `BETTER_AUTH_SECRET` | ✅ | ✅ a different value | |
-| `RESEND_API_KEY` | ✅ | | |
-| `EMAIL_FROM` | Part 7 | | |
+| `HASH_SECRET` | ✅ | | |
+| `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` | ✅ | | |
 | `SITE_URL` | Part 7 | | |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Part 8 (optional) | | |
 | `ADMIN_BASIC_AUTH_USER`, `ADMIN_BASIC_AUTH_PASSWORD` | Optional, both or neither | | |
 | `IMAGE_HOSTS` | Optional, for posters on your own image host (see [Managing titles](#managing-titles)) and for imports (see [Importing titles](#importing-titles)) | | |
 | `TMDB_API_KEY`, `OMDB_API_KEY` | Optional, for the Import page (see [Importing titles](#importing-titles)) | | |
@@ -199,8 +252,8 @@ turned off and says so.
 | `BLOB_READ_WRITE_TOKEN` | Part 11 (optional), added by Vercel | | |
 | `CRON_SECRET` | Part 12 (optional), for automated maintenance jobs | | |
 
-`BETTER_AUTH_URL` isn't needed. It follows `SITE_URL`, or Vercel's
-production address when `SITE_URL` isn't set.
+Google sign-in and the email settings live in Supabase, not here (4.3,
+4.4, Part 8).
 
 ## Part 5: Deploy the version with accounts
 
@@ -218,13 +271,14 @@ Accounts arrive in `main` with
    **Redeploy** instead.)
 4. Open the deployment and look at its build log. **You should see**, in
    this order:
-   - `... migrations found in prisma/migrations`, an
-     `Applying migration ...` line for each one the database doesn't have
-     yet (all of them on the first deploy), then
-     `All migrations have been successfully applied.` A deploy with no
-     new migrations says `No pending migrations to apply.` instead.
+   - an `Applied <file>.sql` line for each migration in
+     `supabase/migrations` the database doesn't have yet (all of them on
+     the first deploy). A deploy with no new migrations says
+     `No pending migrations.` instead.
    - the Next.js build, ending with a list of routes.
 5. When the deployment says **Ready**, open the site.
+
+After the first deploy, register the two hooks (4.4, step 3).
 
 If the build stops with "`SOME_NAME` is not set": add that variable for
 Production (Parts 3 and 4), then open the failed deployment's **⋯** menu
@@ -255,15 +309,14 @@ change one, redeploy.
 **Option A, in the browser (no tools needed):**
 
 1. Open your project at [supabase.com/dashboard](https://supabase.com/dashboard).
-2. Open the **Table Editor**, then the `user` table, and find the row with
-   your email.
-3. Change its `role` from `user` to `admin` (lowercase, exactly) and save.
-
-Or open the **SQL Editor** and run this with your own email:
+2. Open the **SQL Editor** and run this with your own email:
 
 ```sql
-UPDATE "user" SET "role" = 'admin' WHERE "email" = 'you@example.com';
+UPDATE public.profile SET role = 'admin'
+WHERE id = (SELECT id FROM auth.users WHERE email = 'you@example.com');
 ```
+
+It should say `1 row affected`.
 
 The role must be exactly `admin`. Any other text, such as `user admin`,
 is saved as typed but doesn't open the admin panel.
@@ -285,7 +338,7 @@ Copy the transaction pooler connection string from Supabase (**Connect**
 on the project's dashboard, as in Part 3), with the database password in
 place of `[YOUR-PASSWORD]`. If you don't have the password, use Option A,
 which doesn't need it. Don't save it in a
-`.env` file in the project: `npm run dev` and `npm run db:migrate` would
+`.env` file in the project: `npm run dev` and `npm run db:deploy` would
 then work on the production database.
 
 **You should see** `you@example.com is now an admin.`
@@ -298,17 +351,19 @@ then work on the production database.
    and click **Continue**.
 3. Scan the QR code with your authenticator app, or type in the key shown
    under it.
-4. **Save the backup codes** in your password manager. They're shown only
-   once. Each one gets you in once if you lose your phone.
-5. Enter the 6-digit code from the app and click **Turn on two-factor**.
+4. Enter the 6-digit code from the app and click **Turn on two-factor**.
+
+There are no backup codes. If you lose the phone, see "Lost phone or
+authenticator app" below.
 
 **You should see** the admin dashboard.
 
 From now on:
 
-- Every admin sign-in asks for a code from the app, or a backup code.
+- Every admin sign-in asks for a code from the app.
 - An admin sign-in lasts 12 hours. After that, you sign in again.
-- 10 wrong codes in a row lock two-factor sign-in for 15 minutes.
+- 5 wrong codes for one account within 15 minutes lock its code step
+  until the 15 minutes are up.
 - The same account asks for a code on the main site's login too.
 
 ## Part 7: Use your own domain and email address
@@ -336,10 +391,13 @@ testing.
    if `www` is your main one.
 2. Redeploy.
 
-This matters because sign-up and sign-in only accept requests from this
-address. Links in emails, the sitemap and link previews use it too.
-Visitors on any other address (the `.vercel.app` one, or a `www` that
-isn't redirected) can browse but can't sign in.
+3. In Supabase, **Authentication → URL Configuration**: set **Site URL**
+   to the same address, and add `https://<that address>/auth/callback`
+   under **Redirect URLs** (4.4, step 4). For Google sign-in on preview
+   addresses too, add their pattern as well, e.g.
+   `https://gayflix-app-*-<your team>.vercel.app/auth/callback`.
+
+The sitemap, link previews and Google sign-in's return address use it.
 
 ### 7.3 Send email from your domain
 
@@ -351,38 +409,37 @@ isn't redirected) can browse but can't sign in.
    **Domains** page if you bought the domain through Vercel.
 3. Click **Verify** in Resend and wait until the domain shows
    **Verified**.
-4. Add `EMAIL_FROM` for Production with an address on that domain, e.g.
-   `Gayflix <no-reply@gayflix.com>`.
-5. Redeploy.
+4. In Supabase, **Authentication → Emails → SMTP Settings**, change the
+   sender email to an address on that domain, e.g. `no-reply@gayflix.com`,
+   and save.
 
 **You should see** sign-up codes arrive at any email address, not just your
 Resend one.
 
 ## Part 8 (optional): Turn on Google sign-in
 
-1. Open [console.cloud.google.com](https://console.cloud.google.com) and
+1. In Supabase, open **Authentication → Sign In / Providers → Google** and
+   copy its **Callback URL** (`https://<project ref>.supabase.co/auth/v1/callback`).
+2. Open [console.cloud.google.com](https://console.cloud.google.com) and
    create a project, e.g. "Gayflix".
-2. Set up the consent screen (under **Google Auth Platform**, or **APIs &
+3. Set up the consent screen (under **Google Auth Platform**, or **APIs &
    Services → OAuth consent screen**):
    - App name **Gayflix**, your support email, audience **External**.
    - Your domain under authorized domains.
    - Links to `https://<your site>/privacy` and `https://<your site>/terms`.
-3. Create an OAuth client of type **Web application**:
+4. Create an OAuth client of type **Web application**:
    - Authorized JavaScript origins: `https://<your site>`
-   - Authorized redirect URIs:
-     `https://<your site>/api/auth/callback/google`
-
-   Use exactly the address in `SITE_URL`.
-4. Copy the client ID and client secret.
-5. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` for Production
-   (Sensitive), then redeploy.
+   - Authorized redirect URIs: Supabase's callback URL from step 1.
+5. Copy the client ID and client secret into Supabase's Google provider,
+   turn it on and save. Nothing goes into Vercel.
 6. Publish the app (on the **Audience** page) so anyone can use it, not
    only test users. Sign-in that only asks for name and email doesn't need
    a review by Google.
 
-**You should see** "Continue with Google" working on `/login` and
-`/signup`. Google sign-in never opens the admin panel: admins always use
-their password and a code.
+**You should see** "Continue with Google" on `/login` and `/signup`
+within five minutes (the site checks Supabase's settings), and it signs
+you in, back at `https://<your site>/auth/callback`. Google sign-in never
+opens the admin panel: admins always use their password and a code.
 
 ## Part 9: Check that everything works
 
@@ -400,7 +457,7 @@ Use a private browser window for the guest checks.
 - [ ] Sign up: the code arrives and you're signed in.
 - [ ] Add a favorite and make a list, then sign in on your phone: both
       are there.
-- [ ] Log out, use **Forgot password**, and reset it from the email link.
+- [ ] Log out, use **Forgot password**, and reset it with the emailed code.
 - [ ] Change your display name on `/account`.
 
 **As the admin**
@@ -519,14 +576,14 @@ Admins can also trigger these background jobs manually anytime at `/admin/jobs`.
 
 - Merging into `main` deploys to production. The build
   (`scripts/vercel-build.sh`) first stops if `DATABASE_URL`,
-  `BETTER_AUTH_SECRET` or `RESEND_API_KEY` is missing, then applies any
-  new database migrations, then builds.
+  `HASH_SECRET`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`
+  or `SUPABASE_SECRET_KEY` is missing, then applies any new database
+  migrations, then builds.
 - Each pull request gets a preview address. Previews have no database
   (Part 3) and never run migrations, so only the pages that don't need
   the database work there, such as the landing page and the legal pages.
   Pages with titles (home, title pages, listings, search) show an error
-  page. Sign-in doesn't work either, because it only accepts the
-  production address. The pull request's **check** runs the end-to-end
+  page. Sign-in doesn't work either: previews have no Supabase keys. The pull request's **check** runs the end-to-end
   tests against a database of its own instead.
 - By default, preview addresses only open for people signed in to your
   Vercel account.
@@ -546,8 +603,9 @@ back past a change that altered the database, ask in the project thread.
   needs 6.2). They set up two-factor on their first admin login (6.3).
   An account has to confirm its email before it can be made an admin.
 - **Remove:** **Users** → their account → **Remove admin access**. It
-  applies right away. Setting their `role` back to `user` in Studio, or
-  `npm run make-admin -- them@example.com --revoke`, still works too.
+  applies right away. Setting their `profile.role` back to `user` in the
+  SQL Editor, or `npm run make-admin -- them@example.com --revoke`, still
+  works too.
 - Nobody can change their own account on the Users page, so the panel
   always keeps at least one admin.
 
@@ -705,16 +763,23 @@ arrive without episodes for now; add them as usual.
 
 ### Lost phone or authenticator app
 
-- **To get in once:** at `/admin/login`, after your password, choose
-  **Use a backup code instead**.
-- **To move two-factor to a new phone,** or if no backup codes are left:
-  1. In Studio, open the `user` table, find the account and copy its
-     `id`.
-  2. In the `twoFactor` table, delete the row whose `userId` is that id.
-  3. Back in the `user` table, set that account's `twoFactorEnabled` to
-     `false` and save.
-  4. Log in at `/admin/login`. You go through the two-factor setup (6.3)
-     again.
+There are no backup codes. Members who lose the device with their
+authenticator app ask staff through **Contact** (the site tells them
+so); staff who lose theirs ask another admin. Check that the request
+really comes from the account's owner (for example, a reply from the
+account's email address) before turning their two-factor off:
+
+1. In the Supabase dashboard, open **SQL Editor** and run, with the
+   account's email:
+
+   ```sql
+   DELETE FROM auth.mfa_factors
+   WHERE user_id = (SELECT id FROM auth.users WHERE email = 'them@example.com');
+   ```
+
+2. They log in with their password alone. A member can turn two-factor
+   on again in **Account → Setting**; an admin goes through the
+   two-factor setup (6.3) again at `/admin/login`.
 
 ### Backups
 
@@ -731,8 +796,10 @@ Keep backups private: they hold everyone's account data.
 
 ### Logs and email delivery
 
-- **Vercel → Logs** shows server errors, such as "Email provider rejected
-  the message". On the Hobby plan, logs are kept only for a short time.
+- **Vercel → Logs** shows server errors. On the Hobby plan, logs are kept
+  only for a short time.
+- **Supabase → Logs → Auth** shows sign-in errors, such as an email
+  Supabase couldn't send.
 - **Resend → Emails** lists every email sent and whether it was delivered
   or bounced.
 - **Sentry → Issues** (once you've done Part 10) lists the errors from the
@@ -754,10 +821,10 @@ accident. Private repositories need a paid GitHub plan for this.
 
 ### Rules for the database
 
-- Never run `npm run db:migrate` (`prisma migrate dev`) against
-  production. It's for your local database and can reset the database it
-  runs on. Production only ever gets `npm run db:deploy`, which the build
-  runs for you.
+- Production only ever gets `npm run db:deploy` (the SQL files in
+  `supabase/migrations`), which the build runs for you. Never run
+  `npm run db:migrate` (`prisma migrate dev`) against it: it can reset
+  the database it runs on.
 - Never connect the production database to Vercel's Development
   environment, and never put its address in a `.env` file.
 - Don't edit tables in Studio or a SQL editor beyond the steps in this
@@ -765,13 +832,12 @@ accident. Private repositories need a paid GitHub plan for this.
 
 ### Changing the secret
 
-Only change the production `BETTER_AUTH_SECRET` if it leaked. Afterwards:
-
-- everyone is signed out;
-- every admin's two-factor stops working, so reset it as in
-  [Lost phone or authenticator app](#lost-phone-or-authenticator-app) and
-  set it up again;
-- today's guest report limits start over.
+Only change the production `HASH_SECRET` if it leaked. Afterwards,
+today's view counts may count a viewer twice, and the guest report and
+sign-in limits start over. Nobody is signed out: sessions are Supabase
+Auth's. If Supabase's secret key leaked, make a new one in **Project
+Settings → API Keys**, put it in `SUPABASE_SECRET_KEY`, redeploy, then
+delete the old key.
 
 ## Troubleshooting
 
@@ -781,9 +847,9 @@ Only change the production `BETTER_AUTH_SECRET` if it leaked. Afterwards:
 | The build fails at the migrations with `P1001` or "Can't reach database server" | Wrong or outdated connection string | Copy both connection strings from Supabase again (Part 3), update `DATABASE_URL` and `DIRECT_URL`, redeploy |
 | The build fails at the migrations with "tenant/user postgres.… not found" | The pooler host doesn't match the project (wrong region, or `aws-0` instead of `aws-1`), or the project is paused | Copy both strings from **Connect** in Supabase exactly as shown, update `DATABASE_URL` and `DIRECT_URL`, redeploy. Restore a paused free project first |
 | The site's logs show "self-signed certificate in certificate chain" | `DATABASE_CA_CERT` is missing a line or isn't this project's certificate | Paste the whole certificate file again (Part 3, step 3), redeploy |
-| Most pages show an error page | `BETTER_AUTH_SECRET` is missing for that environment | Add it (4.1), redeploy |
-| The sign-up code never arrives | Wrong `RESEND_API_KEY`; or no verified domain and the address isn't your Resend email; or `EMAIL_FROM` isn't on the verified domain | Check Resend → Emails and Vercel → Logs; fix the key or finish 7.3 |
-| Sign-in fails on one address but works on another | Only the `SITE_URL` address can sign in (`.vercel.app` and `www` count as other addresses) | Use the main address, redirect the others in **Settings → Domains**, check `SITE_URL` |
+| Signing in or up shows an error page | The Supabase variables are missing for that environment | Add them (4.2), redeploy |
+| The sign-up code never arrives | Supabase's SMTP settings are wrong; or no verified domain and the address isn't your Resend email; or the sender isn't on the verified domain | Check Supabase → Logs → Auth and Resend → Emails; fix 4.3 or finish 7.3 |
+| Google sign-in comes back to the site without signing you in | That address isn't in Supabase's Redirect URLs | Add `https://<that address>/auth/callback` (4.4, step 4) |
 | `/admin/login` says "This account doesn't have admin access." | The account's `role` isn't exactly `admin` | Part 6.2 |
 | Pages with titles show an error page on a preview address | Previews have no database | Expected; see [How deploys work](#how-deploys-work) |
 | The title form says "Images can only come from …" | The image's host isn't allowed | Add it to `IMAGE_HOSTS` and redeploy (see [Managing titles](#managing-titles)) |
@@ -795,7 +861,7 @@ Only change the production `BETTER_AUTH_SECRET` if it leaked. Afterwards:
 | The app's codes are always wrong | The phone's clock is off | Turn on automatic date and time on the phone |
 | "Two-factor sign-in is locked for 15 minutes." | 10 wrong codes in a row | Wait 15 minutes |
 | The admin panel says it's disabled | Only one of `ADMIN_BASIC_AUTH_USER` and `ADMIN_BASIC_AUTH_PASSWORD` is set | Set both or remove both, redeploy |
-| Google says `redirect_uri_mismatch` | The redirect URI doesn't match the site's address exactly | Add `https://<your site>/api/auth/callback/google` with the `SITE_URL` address |
+| Google says `redirect_uri_mismatch` | Google's redirect URI isn't Supabase's callback | Add Supabase's callback URL (Part 8, step 1) to the OAuth client |
 | `sitemap.xml` shows `.vercel.app` addresses | `SITE_URL` wasn't set when the site was built | Set `SITE_URL`, redeploy |
 | Too many sign-in attempts | Sign-in allows 3 tries every 10 seconds from the same IP address | Wait a few seconds |
 

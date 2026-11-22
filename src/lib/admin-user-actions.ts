@@ -1,12 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { setAdminFlash } from "@/lib/admin-flash";
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { deleteAllAccountSessions } from "@/lib/auth-profile";
 import { requireAdmin } from "@/lib/session";
-import { isBanned, isUserId, parseBanForm, userActionProblem, type UserAction } from "@/lib/user-admin";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { banDuration, isUserId, parseBanForm, userActionProblem, type UserAction } from "@/lib/user-admin";
+import { changeRole, findAccountByEmail, readUserTarget, setBanReason } from "@/lib/user-admin-store";
 import { logActivity } from "@/lib/activity-logger";
 import {
   canManageUsers,
@@ -20,22 +20,20 @@ import {
 /*
  * Server functions behind /admin/users. Each one checks for an admin
  * itself (a direct POST never runs the panel layout), then checks the
- * change is allowed (src/lib/user-admin.ts) before handing it to Better
- * Auth's admin API, whose own guard (src/lib/auth.ts) checks the session
- * once more.
+ * change is allowed (src/lib/admin-roles.ts and src/lib/user-admin.ts)
+ * before making it: roles in `profile` (src/lib/user-admin-store.ts,
+ * checked again under a lock), bans, details and two-factor through
+ * Supabase Auth's admin API, sessions by deleting their rows.
  */
+
+const FORBIDDEN = "Forbidden: You do not have permission to manage users.";
 
 /** The account `userId` names, once `action` on it is allowed. */
 async function allowedTarget(action: UserAction, userId: unknown) {
   const session = await requireAdmin();
-  if (!canManageUsers(session.user.role)) {
-    throw new Error("Forbidden: You do not have permission to manage users.");
-  }
+  if (!canManageUsers(session.user.role)) throw new Error(FORBIDDEN);
   if (!isUserId(userId)) throw new Error("Invalid user");
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: { id: true, email: true, name: true, role: true, emailVerified: true, banned: true, banExpires: true },
-  });
+  const user = await readUserTarget(userId);
   if (!user) throw new Error("No such user");
   const problem =
     (action === "make-admin" || action === "remove-admin"
@@ -50,10 +48,21 @@ function refresh(userId: string) {
   revalidatePath(`/admin/users/${userId}`);
 }
 
-/** Gives the account the admin role. It sets up two-factor at its next admin login. */
-export async function makeAdmin(userId: unknown): Promise<void> {
-  const { user, session } = await allowedTarget("make-admin", userId);
-  await auth.api.setRole({ body: { userId: user.id, role: "admin" }, headers: await headers() });
+/** Throws when Supabase Auth's admin API refused the change. */
+function ensure(result: { error: { message: string } | null }, what: string) {
+  if (result.error) throw new Error(`Couldn't ${what}: ${result.error.message}`);
+}
+
+/**
+ * Admin access granted or removed. The change counts for admin access at
+ * once (requireAdmin() reads the role from the database), and elsewhere
+ * at the account's next token refresh (within the hour).
+ */
+async function setAdminRole(action: "make-admin" | "remove-admin", userId: unknown) {
+  const { user, session } = await allowedTarget(action, userId);
+  const newRole = action === "make-admin" ? "admin" : "user";
+  const change = await changeRole({ actorId: session.user.id, targetId: user.id, newRole, action });
+  if (!change.ok) throw new Error(change.problem);
   await logActivity({
     actorId: session.user.id,
     actorEmail: session.user.email,
@@ -61,28 +70,21 @@ export async function makeAdmin(userId: unknown): Promise<void> {
     action: "user.role_change",
     entityType: "user",
     entityId: user.id,
-    summary: `Promoted ${user.email} to Admin`,
-    details: { previousRole: user.role, newRole: "admin" },
+    summary: action === "make-admin" ? `Promoted ${user.email} to Admin` : `Demoted ${user.email} from Admin to Member`,
+    details: { previousRole: change.previousRole, newRole },
   });
   refresh(user.id);
+}
+
+/** Gives the account the admin role. It sets up two-factor at its next admin login. */
+export async function makeAdmin(userId: unknown): Promise<void> {
+  await setAdminRole("make-admin", userId);
   await setAdminFlash({ message: "Admin access granted." });
 }
 
 /** Back to a regular account; its sessions keep working on the site. */
 export async function removeAdmin(userId: unknown): Promise<void> {
-  const { user, session } = await allowedTarget("remove-admin", userId);
-  await auth.api.setRole({ body: { userId: user.id, role: "user" }, headers: await headers() });
-  await logActivity({
-    actorId: session.user.id,
-    actorEmail: session.user.email,
-    actorRole: session.user.role,
-    action: "user.role_change",
-    entityType: "user",
-    entityId: user.id,
-    summary: `Demoted ${user.email} from Admin to Member`,
-    details: { previousRole: user.role, newRole: "user" },
-  });
-  refresh(user.id);
+  await setAdminRole("remove-admin", userId);
   await setAdminFlash({ message: "Admin access removed." });
 }
 
@@ -90,34 +92,22 @@ export async function removeAdmin(userId: unknown): Promise<void> {
 export async function setUserRole(userId: unknown, newRoleArg: unknown): Promise<{ ok: boolean; message?: string }> {
   const session = await requireAdmin();
   if (!isUserId(userId)) return { ok: false, message: "Invalid user ID" };
-  const target = await db.user.findUnique({
-    where: { id: userId },
-    select: { id: true, email: true, role: true, emailVerified: true, banned: true, banExpires: true },
-  });
-  if (!target) return { ok: false, message: "User not found" };
-
-  if (target.id === session.user.id) {
-    return { ok: false, message: "You cannot change your own role here." };
-  }
-
   const role = typeof newRoleArg === "string" ? (newRoleArg.toLowerCase() as UserRole) : undefined;
   if (!role || !["owner", "admin", "editor", "moderator", "user"].includes(role)) {
     return { ok: false, message: "Invalid role specified." };
   }
-
-  // Who may change whom (src/lib/admin-roles.ts), then the panel's rules
-  // for giving staff access: a confirmed email, and not banned.
+  const target = await readUserTarget(userId);
+  if (!target) return { ok: false, message: "User not found" };
+  if (target.id === session.user.id) {
+    return { ok: false, message: "You cannot change your own role here." };
+  }
+  // A quick check against the session's role; changeRole checks it all
+  // again with the database's roles, under a lock.
   const problem = roleChangeProblem(session.user.role, target.role, role);
   if (problem) return { ok: false, message: problem };
-  if (isStaffRole(role) && !target.emailVerified) {
-    return { ok: false, message: "This account hasn't confirmed its email yet, so it can't sign in." };
-  }
-  if (isStaffRole(role) && isBanned(target)) return { ok: false, message: "Unban this account first." };
 
-  await db.user.update({
-    where: { id: target.id },
-    data: { role },
-  });
+  const change = await changeRole({ actorId: session.user.id, targetId: target.id, newRole: role });
+  if (!change.ok) return { ok: false, message: change.problem };
 
   await logActivity({
     actorId: session.user.id,
@@ -127,7 +117,7 @@ export async function setUserRole(userId: unknown, newRoleArg: unknown): Promise
     entityType: "user",
     entityId: target.id,
     summary: `Changed role for ${target.email} to ${role}`,
-    details: { previousRole: target.role, newRole: role },
+    details: { previousRole: change.previousRole, newRole: role },
   });
 
   refresh(target.id);
@@ -135,15 +125,23 @@ export async function setUserRole(userId: unknown, newRoleArg: unknown): Promise
   return { ok: true };
 }
 
-/** Signs the account out everywhere and stops it signing in, for good or for a while. */
+/**
+ * Stops the account signing in, for good (a 100-year ban) or for a
+ * while, and deletes its sessions, so it's out at once wherever access
+ * is checked against the database, and everywhere at its next token
+ * refresh. The reason stays in `profile` for admins, never in the
+ * account's own metadata.
+ */
 export async function banUser(userId: unknown, form: FormData): Promise<void> {
   const { user, session } = await allowedTarget("ban", userId);
   const ban = parseBanForm(form);
   if (!ban) throw new Error("Invalid ban");
-  await auth.api.banUser({
-    body: { userId: user.id, banReason: ban.reason || undefined, banExpiresIn: ban.seconds },
-    headers: await headers(),
-  });
+  ensure(
+    await supabaseAdmin().auth.admin.updateUserById(user.id, { ban_duration: banDuration(ban.seconds) }),
+    "ban this account"
+  );
+  await deleteAllAccountSessions(user.id);
+  await setBanReason(user.id, ban.reason || null);
   await logActivity({
     actorId: session.user.id,
     actorEmail: session.user.email,
@@ -160,7 +158,8 @@ export async function banUser(userId: unknown, form: FormData): Promise<void> {
 
 export async function unbanUser(userId: unknown): Promise<void> {
   const { user, session } = await allowedTarget("unban", userId);
-  await auth.api.unbanUser({ body: { userId: user.id }, headers: await headers() });
+  ensure(await supabaseAdmin().auth.admin.updateUserById(user.id, { ban_duration: "none" }), "unban this account");
+  await setBanReason(user.id, null);
   await logActivity({
     actorId: session.user.id,
     actorEmail: session.user.email,
@@ -174,10 +173,10 @@ export async function unbanUser(userId: unknown): Promise<void> {
   await setAdminFlash({ message: "Account unbanned." });
 }
 
-/** Ends every session the account has; it can sign in again. */
+/** Ends every session the account has (deletes them); it can sign in again. */
 export async function signOutEverywhere(userId: unknown): Promise<void> {
   const { user, session } = await allowedTarget("sign-out", userId);
-  await auth.api.revokeUserSessions({ body: { userId: user.id }, headers: await headers() });
+  await deleteAllAccountSessions(user.id);
   await logActivity({
     actorId: session.user.id,
     actorEmail: session.user.email,
@@ -191,15 +190,13 @@ export async function signOutEverywhere(userId: unknown): Promise<void> {
   await setAdminFlash({ message: "Signed out of all devices." });
 }
 
-/** Updates user's name, email, and emailVerified status. */
+/** Updates the account's display name and email, and can confirm its email. */
 export async function updateUserDetails(
   userId: unknown,
   form: FormData
 ): Promise<{ ok: boolean; message?: string }> {
   const session = await requireAdmin();
-  if (!canManageUsers(session.user.role)) {
-    return { ok: false, message: "Forbidden: You do not have permission to manage users." };
-  }
+  if (!canManageUsers(session.user.role)) return { ok: false, message: FORBIDDEN };
   if (!isUserId(userId)) return { ok: false, message: "Invalid user ID" };
 
   const name = (form.get("name") as string)?.trim();
@@ -213,10 +210,7 @@ export async function updateUserDetails(
     return { ok: false, message: "A valid email address is required." };
   }
 
-  const existing = await db.user.findUnique({
-    where: { id: userId },
-    select: { id: true, name: true, email: true, emailVerified: true, role: true },
-  });
+  const existing = await readUserTarget(userId);
   if (!existing) return { ok: false, message: "User not found" };
   if (existing.id === session.user.id) {
     return { ok: false, message: "Change your own details from your account page." };
@@ -228,19 +222,32 @@ export async function updateUserDetails(
   if (email !== existing.email && isStaffRole(existing.role) && !isOwner(session.user.role)) {
     return { ok: false, message: "Only the Owner can change a staff account's email." };
   }
-
-  // Check email uniqueness if changing email
+  // Supabase Auth can confirm an email but not take a confirmation back.
+  if (existing.emailVerified && !emailVerified) {
+    return { ok: false, message: "A confirmed email can't be marked unconfirmed." };
+  }
   if (email !== existing.email) {
-    const conflict = await db.user.findUnique({ where: { email } });
-    if (conflict && conflict.id !== userId) {
+    const owner = await findAccountByEmail(email);
+    if (owner && owner !== existing.id) {
       return { ok: false, message: "That email is already registered to another account." };
     }
   }
 
-  await db.user.update({
-    where: { id: userId },
-    data: { name, email, emailVerified },
+  // An admin's change of email takes effect at once, without codes.
+  const { error } = await supabaseAdmin().auth.admin.updateUserById(existing.id, {
+    ...(email !== existing.email ? { email } : {}),
+    user_metadata: { name },
+    ...(emailVerified && !existing.emailVerified ? { email_confirm: true } : {}),
   });
+  if (error) {
+    return {
+      ok: false,
+      message:
+        error.code === "email_exists"
+          ? "That email is already registered to another account."
+          : "Couldn't update this account. Try again.",
+    };
+  }
 
   await logActivity({
     actorId: session.user.id,
@@ -248,17 +255,21 @@ export async function updateUserDetails(
     actorRole: session.user.role,
     action: "user.update",
     entityType: "user",
-    entityId: userId,
+    entityId: existing.id,
     summary: `Updated profile details for ${email}`,
     details: { nameChanged: name !== existing.name, emailChanged: email !== existing.email, emailVerified },
   });
 
-  refresh(userId);
+  refresh(existing.id);
   await setAdminFlash({ message: "User details updated." });
   return { ok: true, message: "User updated successfully." };
 }
 
-/** Resets 2FA for a user account if locked out (Owner/Admin only). */
+/**
+ * Removes every two-factor factor the account has, if it's locked out,
+ * and deletes its sessions, so no token still claims two-factor it no
+ * longer has; it signs in again with its password.
+ */
 export async function resetUserTwoFactor(userId: unknown): Promise<{ ok: boolean; message?: string }> {
   const session = await requireAdmin();
   if (!canManageUsers(session.user.role)) {
@@ -266,22 +277,22 @@ export async function resetUserTwoFactor(userId: unknown): Promise<{ ok: boolean
   }
   if (!isUserId(userId)) return { ok: false, message: "Invalid user ID" };
 
-  const target = await db.user.findUnique({
-    where: { id: userId },
-    select: { id: true, email: true, role: true },
-  });
+  const target = await readUserTarget(userId);
   if (!target) return { ok: false, message: "User not found" };
-
   if (target.id === session.user.id) {
     return { ok: false, message: "You can't reset your own two-factor here." };
   }
   const targetProblem = staffTargetProblem(session.user.role, target.role);
   if (targetProblem) return { ok: false, message: targetProblem };
 
-  await db.$transaction([
-    db.twoFactor.deleteMany({ where: { userId: target.id } }),
-    db.user.update({ where: { id: target.id }, data: { twoFactorEnabled: false } }),
-  ]);
+  const admin = supabaseAdmin().auth.admin;
+  const { data, error } = await admin.mfa.listFactors({ userId: target.id });
+  if (error) return { ok: false, message: "Couldn't reset two-factor. Try again." };
+  for (const factor of data.factors) {
+    const { error: deleteError } = await admin.mfa.deleteFactor({ id: factor.id, userId: target.id });
+    if (deleteError) return { ok: false, message: "Couldn't reset two-factor. Try again." };
+  }
+  await deleteAllAccountSessions(target.id);
 
   await logActivity({
     actorId: session.user.id,

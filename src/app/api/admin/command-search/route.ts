@@ -3,6 +3,7 @@ import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import { canManageUsers } from "@/lib/admin-roles";
+import { searchUsers } from "@/lib/user-admin-store";
 import { normalizeQuery, escapeLike } from "@/lib/catalog";
 
 export async function GET(request: Request) {
@@ -39,13 +40,9 @@ export async function GET(request: Request) {
         },
       }),
       allowUsers
-        ? db.user.findMany({
-            where: {
-              OR: [{ name: like }, { email: like }],
-            },
-            take: 4,
-            select: { id: true, name: true, email: true, role: true },
-          })
+        ? searchUsers({ search: q, filter: "all", limit: 4 }).then(({ items }) =>
+            items.map(({ id, name, email, role }) => ({ id, name: name ?? email, email, role }))
+          )
         : Promise.resolve([]),
     ]);
 

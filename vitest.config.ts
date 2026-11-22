@@ -1,7 +1,12 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
-const alias = { "@": fileURLToPath(new URL("./src", import.meta.url)) };
+// Tests run as server code, so `import "server-only"` resolves the way it
+// does in Next.js server bundles (the package's "react-server" export).
+const alias = {
+  "@": fileURLToPath(new URL("./src", import.meta.url)),
+  "server-only": fileURLToPath(new URL("./node_modules/server-only/empty.js", import.meta.url)),
+};
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 
 // Two projects: fast unit tests, and integration tests that need a real

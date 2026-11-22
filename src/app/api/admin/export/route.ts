@@ -6,6 +6,7 @@ import { adminAccess } from "@/lib/admin-access";
 import { canManageCatalog, canManageSettings, canManageUsers } from "@/lib/admin-roles";
 import { escapeLike, normalizeQuery } from "@/lib/catalog";
 import { toCsvRow } from "@/lib/csv";
+import { accountEmails } from "@/lib/user-admin-store";
 
 export async function GET(request: Request) {
   try {
@@ -161,8 +162,8 @@ export async function GET(request: Request) {
           resolvedAt: showResolved ? { not: null } : null,
         },
         orderBy: { createdAt: "desc" },
-        include: { user: { select: { email: true } } },
       });
+      const emails = await accountEmails(rows.map((r) => r.userId));
 
       const headers = [
         "Report ID",
@@ -185,7 +186,7 @@ export async function GET(request: Request) {
             r.mediaTitle,
             r.reason,
             r.details,
-            r.user?.email ?? (r.userId ? "Deleted account" : "Guest"),
+            (r.userId && emails.get(r.userId)) || (r.userId ? "Deleted account" : "Guest"),
             r.createdAt,
             r.resolvedAt,
             r.resolvedBy,

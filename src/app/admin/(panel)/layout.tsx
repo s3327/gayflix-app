@@ -3,7 +3,7 @@ import Sidebar from "@/components/admin/Sidebar";
 import AdminFlashBanner from "@/components/admin/AdminFlashBanner";
 import CommandMenu from "@/components/admin/CommandMenu";
 import SessionWarningBanner from "@/components/admin/SessionWarningBanner";
-import { ADMIN_SESSION_MAX_AGE_MS } from "@/lib/admin-access";
+import { ADMIN_SESSION_MAX_AGE_MS, adminSignInAt } from "@/lib/admin-access";
 import { getAdminFlash } from "@/lib/admin-flash";
 import { requireAdmin } from "@/lib/session";
 
@@ -31,8 +31,9 @@ export default async function AdminPanelLayout({
   children: React.ReactNode;
 }) {
   const session = await requireAdmin();
+  // requireAdmin() let the session in, so it has a sign-in time.
   const sessionExpiresAt = new Date(
-    new Date(session.session.createdAt).getTime() + ADMIN_SESSION_MAX_AGE_MS
+    (adminSignInAt(session) ?? 0) + ADMIN_SESSION_MAX_AGE_MS
   ).toISOString();
   const flash = await getAdminFlash();
 

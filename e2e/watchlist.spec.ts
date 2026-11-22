@@ -23,7 +23,7 @@ test("a member keeps a watchlist apart from favorites", async ({ browser, reques
   const saved = async () =>
     (
       await sql<{ mediaId: string }>(
-        `SELECT w."mediaId" FROM watchlist_item w JOIN "user" u ON u.id = w."userId" WHERE u.email = $1`,
+        `SELECT w."mediaId" FROM watchlist_item w JOIN auth.users u ON u.id = w."userId" WHERE u.email = $1`,
         [account.email]
       )
     ).map((row) => row.mediaId);

@@ -8,10 +8,12 @@ import {
   restoreReview,
   unblockList,
 } from "@/lib/admin-community-actions";
+import { memberNicknames } from "@/lib/community";
 import { REPORT_REASONS, isReportReason } from "@/lib/community-rules";
 import { db } from "@/lib/db";
 import { firstParam, type SearchParams } from "@/lib/search-params";
 import { requireAdmin } from "@/lib/session";
+import { accountEmails } from "@/lib/user-admin-store";
 
 export const metadata: Metadata = {
   title: "Community",
@@ -51,18 +53,29 @@ function reasonSummary(reports: { reason: string }[]) {
 
 const REVIEW_INCLUDE = {
   media: { select: { id: true, title: true, type: true } },
-  user: { select: { id: true, email: true, profile: { select: { nickname: true } } } },
   reports: { where: { resolvedAt: null }, select: { reason: true } },
 } as const;
 
-type ReviewRow = Awaited<ReturnType<typeof loadReviews>>[number];
+/** Who posted it: their nickname, and for staff, their account's email. */
+type Author = { id: string; email: string; nickname: string | null };
+
+/**
+ * Authors of reviews and lists, by account id. Accounts are Supabase
+ * Auth's, outside the Prisma schema, so they're read on their own.
+ */
+async function loadAuthors(userIds: string[]): Promise<(userId: string) => Author> {
+  const [emails, nicknames] = await Promise.all([accountEmails(userIds), memberNicknames(userIds)]);
+  return (userId) => ({ id: userId, email: emails.get(userId) ?? "", nickname: nicknames.get(userId) ?? null });
+}
+
+type ReviewRow = Awaited<ReturnType<typeof loadReviews>>[number] & { author: Author };
 
 function loadReviews(where: object, orderBy: object) {
   return db.review.findMany({ where, orderBy, take: SHOWN, include: REVIEW_INCLUDE });
 }
 
 function ReviewItem({ review }: { review: ReviewRow }) {
-  const author = review.user.profile?.nickname ?? "A member";
+  const author = review.author.nickname ?? "A member";
   return (
     <li className="flex flex-wrap items-start gap-4 px-5 py-4">
       <div className="min-w-0 flex-1">
@@ -75,8 +88,8 @@ function ReviewItem({ review }: { review: ReviewRow }) {
           </Link>
           <span className="text-ink-muted">
             {" · "}by {author} (
-            <Link href={`/admin/users/${review.user.id}`} className="hover:text-ink-brand hover:underline">
-              {review.user.email}
+            <Link href={`/admin/users/${review.author.id}`} className="hover:text-ink-brand hover:underline">
+              {review.author.email}
             </Link>
             ) · {when(review.createdAt)}
           </span>
@@ -142,7 +155,7 @@ export default async function CommunityPage({
   const tab: Tab = TABS.some((t) => t.key === requested) ? (requested as Tab) : "reported";
   const openReports = { reports: { some: { resolvedAt: null } } };
 
-  const [reviews, lists, openCount] = await Promise.all([
+  const [reviewRows, listRows, openCount] = await Promise.all([
     tab === "reported"
       ? loadReviews(openReports, { createdAt: "desc" })
       : tab === "recent"
@@ -161,13 +174,16 @@ export default async function CommunityPage({
         id: true,
         name: true,
         communityBlocked: true,
+        userId: true,
         _count: { select: { items: true } },
-        user: { select: { id: true, email: true, profile: { select: { nickname: true } } } },
         reports: { where: { resolvedAt: null }, select: { reason: true } },
       },
     }),
     db.contentReport.count({ where: { resolvedAt: null } }),
   ]);
+  const authorOf = await loadAuthors([...reviewRows, ...listRows].map((row) => row.userId));
+  const reviews = reviewRows.map((row) => ({ ...row, author: authorOf(row.userId) }));
+  const lists = listRows.map((row) => ({ ...row, author: authorOf(row.userId) }));
 
   return (
     <div className="px-6 py-10 sm:px-10">
@@ -218,7 +234,7 @@ export default async function CommunityPage({
         ) : (
           <ul className="mt-3 divide-y divide-border-subtle overflow-hidden rounded-card border border-border-subtle bg-bg-surface shadow-2xs">
             {lists.map((list) => {
-              const author = list.user.profile?.nickname ?? "A member";
+              const author = list.author.nickname ?? "A member";
               return (
                 <li key={list.id} className="flex flex-wrap items-start gap-4 px-5 py-4">
                   <div className="min-w-0 flex-1">
@@ -232,10 +248,10 @@ export default async function CommunityPage({
                       <span className="text-ink-muted">
                         {" · "}by {author} (
                         <Link
-                          href={`/admin/users/${list.user.id}`}
+                          href={`/admin/users/${list.author.id}`}
                           className="hover:text-ink-brand hover:underline"
                         >
-                          {list.user.email}
+                          {list.author.email}
                         </Link>
                         ) · {list._count.items} {list._count.items === 1 ? "title" : "titles"}
                       </span>

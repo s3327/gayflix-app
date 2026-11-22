@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import { canManageJobs } from "@/lib/admin-roles";
 import { logActivity } from "@/lib/activity-logger";
+import { countAccounts } from "@/lib/user-admin-store";
 
 import { backfillDefaultVideoSources } from "@/lib/video-backfill";
 
@@ -56,7 +57,7 @@ export async function getSystemHealth() {
 
   const [totalMedia, totalUsers, totalReports, activeSettings] = await Promise.all([
     db.media.count({ where: { trashedAt: null } }).catch(() => 0),
-    db.user.count().catch(() => 0),
+    countAccounts().catch(() => 0),
     db.report.count({ where: { resolvedAt: null } }).catch(() => 0),
     db.siteSetting.findUnique({ where: { id: "default" } }).catch(() => null),
   ]);

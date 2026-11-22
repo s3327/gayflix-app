@@ -117,7 +117,7 @@ export default async function UsersPage({
                   className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4 transition-colors hover:bg-bg-elevated"
                 >
                   <span className="min-w-0 flex-1 basis-48">
-                    <span className="block truncate font-medium text-ink-primary">{user.name}</span>
+                    <span className="block truncate font-medium text-ink-primary">{user.name ?? "No name"}</span>
                     <span className="block truncate text-sm text-ink-secondary">{user.email}</span>
                   </span>
                   <UserBadges user={user} />

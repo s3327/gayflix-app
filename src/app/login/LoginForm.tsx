@@ -8,7 +8,8 @@ import FormError from "@/components/FormError";
 import GoogleAuthButton from "@/components/GoogleAuthButton";
 import PasswordInput from "@/components/PasswordInput";
 import TwoFactorForm from "@/components/TwoFactorForm";
-import { authClient, authErrorMessage, signInWithGoogle } from "@/lib/auth-client";
+import { signIn } from "@/lib/auth-actions";
+import { isActionRedirect, startGoogleSignIn } from "@/lib/auth-redirects";
 import { authHref } from "@/lib/safe-redirect";
 
 /**
@@ -20,21 +21,35 @@ import { authHref } from "@/lib/safe-redirect";
  * but this is a separate page: admin auth and user auth are different
  * systems.
  *
- * Signs in with Better Auth and goes to `next` (the validated ?next=
- * page that sent the visitor here), or /account. An account whose email
- * was never confirmed gets a fresh code and is sent to /verify-email
- * instead (Better Auth sends the code on that sign-in attempt). Accounts
- * with two-factor turned on (admins) enter a code from their
- * authenticator app before the session starts. Google shows only where
- * it's set up (`google`, from src/lib/auth.ts).
+ * Signs in on the server (signIn in src/lib/auth-actions.ts), which
+ * sends the browser on to `next` (the validated ?next= page that sent
+ * the visitor here), or /account. An account whose email was never confirmed gets a fresh code
+ * and is sent to /verify-email instead. Accounts with two-factor turned
+ * on get the code step next (TwoFactorForm); `twoFactor` opens on it
+ * (page.tsx checks a sign-in is waiting), and the step puts
+ * `twoFactor=1` in the address so a reload comes back to it. Google shows
+ * only where Supabase Auth has it turned on (`google`); `googleFailed`
+ * is a Google sign-in that came back without a session.
  */
-export default function LoginForm({ next, google }: { next: string | null; google: boolean }) {
+export default function LoginForm({
+  next,
+  google,
+  googleFailed = false,
+  twoFactor = false,
+}: {
+  next: string | null;
+  google: boolean;
+  googleFailed?: boolean;
+  twoFactor?: boolean;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(
+    googleFailed ? "Google sign-in didn't finish. Please try again." : ""
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
+  const [needsTwoFactor, setNeedsTwoFactor] = useState(twoFactor);
 
   const destination = next ?? "/account";
 
@@ -42,28 +57,37 @@ export default function LoginForm({ next, google }: { next: string | null; googl
     event.preventDefault();
     setError("");
     setIsSubmitting(true);
-    const { data, error } = await authClient.signIn.email({ email, password });
+    let result: Awaited<ReturnType<typeof signIn>>;
+    try {
+      result = await signIn(email, password, destination);
+    } catch (thrown) {
+      // Signed in: the server is sending the browser to `destination`.
+      if (isActionRedirect(thrown)) return;
+      setIsSubmitting(false);
+      throw thrown;
+    }
     setIsSubmitting(false);
 
-    if (error?.code === "EMAIL_NOT_VERIFIED") {
-      const params = new URLSearchParams({ email, next: destination });
+    if ("needsEmailCode" in result) {
+      const params = new URLSearchParams({ email: email.trim(), next: destination });
       router.push(`/verify-email?${params}`);
       return;
     }
-    if (error) {
-      setError(authErrorMessage(error));
-      return;
-    }
-    if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
+    if ("needsTwoFactor" in result) {
+      setPassword("");
       setNeedsTwoFactor(true);
+      // A reload comes back to the code step (page.tsx).
+      const codeStep = new URLSearchParams({ twoFactor: "1" });
+      if (next) codeStep.set("next", next);
+      window.history.replaceState(null, "", `/login?${codeStep}`);
       return;
     }
-    router.push(destination);
+    setError(result.error);
   }
 
   async function handleGoogleAuth() {
     // Google verifies the email itself, so this skips /verify-email.
-    setError(await signInWithGoogle(destination));
+    setError(await startGoogleSignIn(destination));
   }
 
   return (
@@ -86,11 +110,9 @@ export default function LoginForm({ next, google }: { next: string | null; googl
 
         {needsTwoFactor ? (
           <TwoFactorForm
-            onVerified={() => router.push(destination)}
-            onStartOver={() => {
-              setNeedsTwoFactor(false);
-              setPassword("");
-            }}
+            next={destination}
+            startOverPath={authHref("/login", next)}
+            onStartOver={() => setNeedsTwoFactor(false)}
           />
         ) : (
           <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
@@ -151,7 +173,7 @@ export default function LoginForm({ next, google }: { next: string | null; googl
           </form>
         )}
 
-        {google && (
+        {google && !needsTwoFactor && (
           <>
             <div className="mt-6 flex items-center gap-3">
               <div className="h-px flex-1 bg-border-subtle" />

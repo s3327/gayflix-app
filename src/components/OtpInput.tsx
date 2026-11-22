@@ -8,16 +8,19 @@ import { useEffect, useRef, useState } from "react";
  * built inline for /verify-email; pulled out so the account-page email
  * and password change flows can reuse the exact same behavior instead
  * of re-implementing it. `autoFocus` puts the cursor in the first box,
- * for pages where the code is the only thing to do.
+ * for pages where the code is the only thing to do. `label` names the
+ * boxes as a group, for forms that ask for more than one code.
  */
 export default function OtpInput({
   length = 6,
   autoFocus = false,
   onChange,
   onComplete,
+  label,
 }: {
   length?: number;
   autoFocus?: boolean;
+  label?: string;
   onChange?: (code: string) => void;
   onComplete?: (code: string) => void;
 }) {
@@ -82,7 +85,7 @@ export default function OtpInput({
   }
 
   return (
-    <div className="flex justify-center gap-2">
+    <div className="flex justify-center gap-2" role={label ? "group" : undefined} aria-label={label}>
       {digits.map((digit, index) => (
         <input
           key={index}

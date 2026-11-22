@@ -8,25 +8,34 @@ import {
   createVerifiedAccount,
   grantAdmin,
   newAccount,
-  saveAccounts,
+  saveAccount,
   setUpTwoFactor,
 } from "./accounts";
 
-setup("create a verified user and an admin", async ({ browser, request }) => {
+// The user first: the admin step needs the folder, and a failed user
+// step skips it.
+setup.describe.configure({ mode: "serial" });
+
+setup("create a verified user", async ({ browser, request }) => {
   mkdirSync(".playwright", { recursive: true });
   const user = newAccount("user");
-  const admin = newAccount("admin");
   await createVerifiedAccount(request, user);
-  await createVerifiedAccount(request, admin);
-  await grantAdmin(admin.email);
 
-  // Log each one in through the real form and keep the session cookie.
+  // Log in through the real form and keep the session cookie.
   const userContext = await browser.newContext();
   const userPage = await userContext.newPage();
   await logIn(userPage, user);
   await expect(userPage).toHaveURL(/\/account$/);
   await userContext.storageState({ path: USER_STATE });
   await userContext.close();
+
+  saveAccount("user", user);
+});
+
+setup("create an admin", async ({ browser, request }) => {
+  const admin = newAccount("admin");
+  await createVerifiedAccount(request, admin);
+  await grantAdmin(admin.email);
 
   // The admin goes through two-factor setup on first login.
   const adminContext = await browser.newContext({ httpCredentials: ADMIN_CREDENTIALS });
@@ -36,5 +45,5 @@ setup("create a verified user and an admin", async ({ browser, request }) => {
   await adminContext.storageState({ path: ADMIN_STATE });
   await adminContext.close();
 
-  saveAccounts({ user, admin });
+  saveAccount("admin", admin);
 });

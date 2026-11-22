@@ -16,13 +16,23 @@ export async function clientIp(): Promise<string> {
 }
 
 /**
- * An HMAC-SHA256 of `value` keyed with BETTER_AUTH_SECRET, so the value
- * can be matched later but not recovered from the hash.
+ * The key for keyedHash: HASH_SECRET (server-only, never NEXT_PUBLIC_).
+ * BETTER_AUTH_SECRET was the key before Better Auth went; it's still read
+ * while HASH_SECRET isn't set, so hashes stored before the move keep
+ * matching. Set HASH_SECRET to that same value (docs/SUPABASE_CUTOVER.md).
  */
-export function keyedHash(value: string): string {
-  const secret = process.env.BETTER_AUTH_SECRET;
-  if (!secret && process.env.NODE_ENV === "production") {
-    throw new Error("BETTER_AUTH_SECRET is not set");
+function hashSecret(env: Record<string, string | undefined>): string | undefined {
+  return [env.HASH_SECRET, env.BETTER_AUTH_SECRET].find((value) => value?.trim());
+}
+
+/**
+ * An HMAC-SHA256 of `value` keyed with HASH_SECRET, so the value can be
+ * matched later but not recovered from the hash.
+ */
+export function keyedHash(value: string, env: Record<string, string | undefined> = process.env): string {
+  const secret = hashSecret(env);
+  if (!secret && env.NODE_ENV === "production") {
+    throw new Error("HASH_SECRET is not set");
   }
   return createHmac("sha256", secret ?? "dev-only-secret").update(value).digest("hex");
 }

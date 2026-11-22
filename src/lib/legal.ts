@@ -13,7 +13,7 @@ export const LEGAL = {
   /** Where members, rights holders and privacy requests write to. */
   contactEmail: "[contact email]",
   /** When the Terms and Privacy Policy last changed. */
-  lastUpdated: "October 17, 2026",
+  lastUpdated: "November 21, 2026",
 } as const;
 
 /** A value that is still a [placeholder]. */

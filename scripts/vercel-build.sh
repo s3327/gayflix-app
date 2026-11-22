@@ -10,10 +10,12 @@
 set -e
 
 if [ "$VERCEL_ENV" = "production" ]; then
-  # On Supabase, production also needs the direct (session) connection for
+  # Accounts are Supabase Auth's (its URL and two server-only keys);
+  # HASH_SECRET keys the hashed IPs and limits (src/lib/visitor.ts). On
+  # Supabase, production also needs the direct (session) connection for
   # migrations and Supabase's CA certificate, so the database's identity
   # is verified (src/lib/database-config.mjs).
-  required="DATABASE_URL BETTER_AUTH_SECRET RESEND_API_KEY"
+  required="DATABASE_URL HASH_SECRET NEXT_PUBLIC_SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_SECRET_KEY"
   case "$DATABASE_URL" in
     *.supabase.com* | *.supabase.co*) required="$required DIRECT_URL DATABASE_CA_CERT" ;;
   esac

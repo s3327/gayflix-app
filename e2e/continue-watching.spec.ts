@@ -97,7 +97,7 @@ test("a video picks up where it stopped, and Continue Watching follows along", a
     const [row] = await sql<{ position: number; duration: number; hidden: boolean }>(
       `SELECT h."progressSeconds" AS position, h."durationSeconds" AS duration,
               h."hiddenFromContinue" AS hidden
-       FROM watch_history h JOIN "user" u ON u.id = h."userId"
+       FROM watch_history h JOIN auth.users u ON u.id = h."userId"
        WHERE u.email = $1 AND h."mediaId" = $2`,
       [account.email, mediaId]
     );

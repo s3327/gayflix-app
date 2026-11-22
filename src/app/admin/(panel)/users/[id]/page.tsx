@@ -50,7 +50,7 @@ const dateTime = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
 });
 
-const SIGN_IN_METHODS: Record<string, string> = { credential: "Password", google: "Google" };
+const SIGN_IN_METHODS: Record<string, string> = { email: "Password", google: "Google" };
 
 function devices(count: number) {
   return count === 1 ? "1 device" : `${count} devices`;
@@ -90,7 +90,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
       <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <h1 className="min-w-0 break-words font-display text-2xl font-bold">{user.name}</h1>
+            <h1 className="min-w-0 break-words font-display text-2xl font-bold">{user.name ?? user.email}</h1>
             <UserBadges user={user} />
           </div>
           <p className="mt-1 break-all text-sm text-ink-secondary">{user.email}</p>
@@ -99,7 +99,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
           <EditUserModal
             user={{
               id: user.id,
-              name: user.name,
+              name: user.name ?? "",
               email: user.email,
               emailVerified: user.emailVerified,
             }}
@@ -123,7 +123,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
           {user.openSessions > 0 ? devices(user.openSessions) : "No devices"}
         </Fact>
         <Fact label="Last active">{user.lastActive ? date.format(user.lastActive) : "Not yet"}</Fact>
-        <Fact label="Reports sent">{user._count.reports}</Fact>
+        <Fact label="Reports sent">{user.reportCount}</Fact>
       </dl>
 
       <div className="mt-10 flex max-w-2xl flex-col gap-6">
@@ -179,8 +179,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
                 {user.banExpires ? `until ${dateTime.format(user.banExpires)} UTC` : "until unbanned"}.
                 It can&apos;t sign in.
               </p>
-              {/* Better Auth saves "No reason" when none was given. */}
-              {user.banReason && user.banReason !== "No reason" && (
+              {user.banReason && (
                 <p className="mt-2 break-words">Reason: {user.banReason}</p>
               )}
               {!isSelf && (

@@ -1,7 +1,16 @@
 import type { APIRequestContext, Browser, Page } from "@playwright/test";
-import { accounts, ADMIN_STATE, createVerifiedAccount, newAccount, sql, USER_STATE, type Account } from "./accounts";
+import { randomUUID } from "node:crypto";
+import {
+  accounts,
+  ADMIN_STATE,
+  createVerifiedAccount,
+  newAccount,
+  signUpUnverified,
+  sql,
+  USER_STATE,
+  type Account,
+} from "./accounts";
 import { ADMIN_CREDENTIALS, expect, logIn, seriousViolations, signedInPage, test } from "./fixtures";
-import { BASE_URL } from "../playwright.config";
 
 /*
  * /admin/users: finding accounts, admin access, bans and signing out.
@@ -9,12 +18,15 @@ import { BASE_URL } from "../playwright.config";
  */
 
 async function userId(email: string) {
-  const [row] = await sql<{ id: string }>(`SELECT id FROM "user" WHERE email = $1`, [email]);
+  const [row] = await sql<{ id: string }>(`SELECT id FROM auth.users WHERE email = $1`, [email]);
   return row.id;
 }
 
 async function role(email: string) {
-  const [row] = await sql<{ role: string }>(`SELECT role FROM "user" WHERE email = $1`, [email]);
+  const [row] = await sql<{ role: string }>(
+    `SELECT p.role FROM profile p JOIN auth.users u ON u.id = p.id WHERE u.email = $1`,
+    [email]
+  );
   return row.role;
 }
 
@@ -67,8 +79,7 @@ test.describe("signed in as an admin", () => {
 
   test("lists admins and unconfirmed accounts on their own", async ({ page, request }) => {
     const unconfirmed = newAccount("unconfirmed");
-    const signUp = await request.post("/api/auth/sign-up/email", { data: unconfirmed, headers: { Origin: BASE_URL } });
-    expect(signUp.ok()).toBe(true);
+    await signUpUnverified(request, unconfirmed);
 
     await page.goto(`/admin/users?show=unconfirmed&q=${encodeURIComponent(unconfirmed.email)}`);
     await expect(page.getByLabel("Show")).toHaveValue("unconfirmed");
@@ -165,6 +176,8 @@ test.describe("signed in as an admin", () => {
 
   test("an account that doesn't exist says so", async ({ page }) => {
     await page.goto("/admin/users/NoSuchAccountNoSuchAccount00");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("No such account");
+    await page.goto(`/admin/users/${randomUUID()}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("No such account");
   });
 });

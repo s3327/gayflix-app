@@ -1,117 +1,56 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import FormError from "@/components/FormError";
 import OtpInput from "@/components/OtpInput";
-import { authClient, authErrorMessage } from "@/lib/auth-client";
+import { confirmTwoFactorEnrollment, startTwoFactorEnrollment } from "@/lib/two-factor-actions";
 
-type Enrollment = { totpURI: string; backupCodes: string[] };
+type Enrollment = { factorId: string; qrSvg: string; secret: string };
 
-/** The secret from an otpauth:// URI, in groups of 4 for typing by hand. */
-function manualKey(totpURI: string): string {
-  const secret = new URL(totpURI).searchParams.get("secret") ?? "";
+/** The key in groups of 4, for typing by hand. */
+function manualKey(secret: string): string {
   return secret.match(/.{1,4}/g)?.join(" ") ?? secret;
-}
-
-const SMALL_BUTTON =
-  "rounded-md border border-border-strong bg-bg-surface px-3 py-1.5 text-xs font-semibold text-ink-primary transition-colors hover:bg-bg-elevated";
-
-/** Backup codes, with Copy and Download, shown once when they're made. */
-export function BackupCodes({ codes }: { codes: string[] }) {
-  const [copied, setCopied] = useState(false);
-
-  function handleCopy() {
-    navigator.clipboard.writeText(codes.join("\n"));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  function handleDownload() {
-    const blob = new Blob([codes.join("\n")], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "gayflix-backup-codes.txt";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  return (
-    <>
-      <ul
-        aria-label="Backup codes"
-        className="mt-3 grid grid-cols-2 gap-2 rounded-md bg-bg-elevated p-3 font-mono text-sm text-ink-primary"
-      >
-        {codes.map((code) => (
-          <li key={code}>{code}</li>
-        ))}
-      </ul>
-      <div className="mt-2.5 flex gap-2">
-        <button type="button" onClick={handleCopy} className={SMALL_BUTTON}>
-          {copied ? "Copied to clipboard" : "Copy codes"}
-        </button>
-        <button type="button" onClick={handleDownload} className={SMALL_BUTTON}>
-          Download (.txt)
-        </button>
-      </div>
-    </>
-  );
 }
 
 /**
  * Turning on two-factor sign-in, for admins (/admin/setup-2fa) and members
- * who choose to (Account → Setting). Two steps: confirm the password
- * (Better Auth requires it), then scan the QR code, save the backup codes
- * and enter the first code. Two-factor only counts as on once that code
- * checks out, so a half-finished setup can simply be started again.
+ * who choose to (Account → Setting). Confirm the password, and the
+ * server makes a new authenticator key (startTwoFactorEnrollment); then
+ * scan the QR code and enter the first code. Two-factor only counts as on once that code
+ * checks out (confirmTwoFactorEnrollment), so a half-finished setup can
+ * simply be started again. There are no backup codes: whoever loses
+ * their device asks staff.
  */
 export default function TwoFactorEnrollment({ onEnabled }: { onEnabled: () => void }) {
   const [password, setPassword] = useState("");
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
-  const [qrCode, setQrCode] = useState("");
   const [code, setCode] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (!enrollment) return;
-    let cancelled = false;
-    import("qrcode")
-      .then((QRCode) => QRCode.toDataURL(enrollment.totpURI, { margin: 1, width: 192 }))
-      .then((url) => {
-        if (!cancelled) setQrCode(url);
-      })
-      .catch(() => {
-        // The key below can still be typed in by hand.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [enrollment]);
-
-  async function handleEnable(event: React.FormEvent) {
+  async function handleStart(event: React.FormEvent) {
     event.preventDefault();
     setError("");
     setIsSubmitting(true);
-    const { data, error } = await authClient.twoFactor.enable({ password });
+    const result = await startTwoFactorEnrollment(password);
     setIsSubmitting(false);
-    if (error || !data || !("totpURI" in data) || !data.totpURI) {
-      setError(authErrorMessage(error));
+    if ("error" in result) {
+      setError(result.error);
       return;
     }
     setPassword("");
-    setEnrollment({ totpURI: data.totpURI, backupCodes: data.backupCodes ?? [] });
+    setEnrollment(result);
   }
 
   async function verify(value: string) {
-    if (isSubmitting || value.length < 6) return;
+    if (!enrollment || isSubmitting || value.length < 6) return;
     setError("");
     setIsSubmitting(true);
-    const { error } = await authClient.twoFactor.verifyTotp({ code: value });
-    if (error) {
+    const result = await confirmTwoFactorEnrollment(enrollment.factorId, value);
+    if ("error" in result) {
       setIsSubmitting(false);
-      setError(authErrorMessage(error));
+      setError(result.error);
       setCode("");
       setAttempt((n) => n + 1);
       return;
@@ -120,7 +59,11 @@ export default function TwoFactorEnrollment({ onEnabled }: { onEnabled: () => vo
   }
 
   return !enrollment ? (
-    <form method="post" onSubmit={handleEnable} className="mt-6 flex flex-col gap-5">
+    <form method="post" onSubmit={handleStart} className="mt-6 flex flex-col gap-5">
+      <p className="text-sm text-ink-secondary">
+        You&apos;ll need an authenticator app on your phone. If you ever lose it, ask us through
+        Contact to get back in.
+      </p>
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor="two-factor-password"
@@ -161,38 +104,25 @@ export default function TwoFactorEnrollment({ onEnabled }: { onEnabled: () => vo
           1. Scan this code with your authenticator app
         </h2>
         <div className="mt-3 flex justify-center">
-          {qrCode ? (
-            // A data: URL made in the browser; next/image can't optimize it.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={qrCode}
-              alt="QR code for your authenticator app"
-              width={192}
-              height={192}
-              className="rounded-md bg-white"
-            />
-          ) : (
-            <div className="h-48 w-48 rounded-md bg-bg-elevated" aria-hidden />
-          )}
+          {/* SVG from the server, shown as an image so none of it runs; next/image can't optimize a data: URL. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(enrollment.qrSvg)}`}
+            alt="QR code for your authenticator app"
+            width={192}
+            height={192}
+            className="rounded-md bg-white p-2"
+          />
         </div>
         <p className="mt-3 text-xs text-ink-secondary">Or enter this key by hand:</p>
         <code className="mt-1 block break-all rounded-md bg-bg-elevated px-3 py-2 font-mono text-sm text-ink-primary">
-          {manualKey(enrollment.totpURI)}
+          {manualKey(enrollment.secret)}
         </code>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-semibold text-ink-primary">2. Save your backup codes</h2>
-        <p className="mt-1 text-xs text-ink-secondary">
-          If you lose your phone, each of these lets you sign in once. They won&apos;t be shown
-          again.
-        </p>
-        <BackupCodes codes={enrollment.backupCodes} />
       </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-ink-primary">
-          3. Enter the 6-digit code the app shows
+          2. Enter the 6-digit code the app shows
         </h2>
         <OtpInput key={attempt} onChange={setCode} onComplete={verify} />
       </section>

@@ -1,8 +1,10 @@
-import { createHmac } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
-import { BASE_URL, OUTBOX_FILE } from "../playwright.config";
+import { totp } from "../src/test/totp";
+
+export { totp };
 
 export type Account = {
   name: string;
@@ -10,7 +12,6 @@ export type Account = {
   password: string;
   /** Base32 authenticator key, once two-factor is set up. */
   totpSecret?: string;
-  backupCodes?: string[];
 };
 
 const ACCOUNTS_FILE = ".playwright/accounts.json";
@@ -23,8 +24,11 @@ export function newAccount(label: string): Account {
   return { name: `E2E ${label}`, email: `e2e-${label}-${id}@example.com`, password: `pw-${id}` };
 }
 
-export function saveAccounts(accounts: { user: Account; admin: Account }) {
-  writeFileSync(ACCOUNTS_FILE, JSON.stringify(accounts));
+/** Records the setup's user or admin, keeping the other one (accounts.setup.ts makes them one at a time). */
+export function saveAccount(role: "user" | "admin", account: Account) {
+  // The user is made first, so it starts the file afresh.
+  const saved = role === "user" || !existsSync(ACCOUNTS_FILE) ? {} : JSON.parse(readFileSync(ACCOUNTS_FILE, "utf8"));
+  writeFileSync(ACCOUNTS_FILE, JSON.stringify({ ...saved, [role]: account }));
 }
 
 /** The verified user and admin made by accounts.setup.ts. */
@@ -33,40 +37,80 @@ export function accounts(): { user: Account; admin: Account } {
 }
 
 /**
- * The newest code or link emailed to `to` after `since` (ms), read from
- * the server's outbox file. Polls, since the server sends after
- * responding.
+ * The newest email to `to` sent after `since` (ms), as text, read from
+ * the Supabase local stack's Mailpit, which catches Supabase Auth's
+ * emails (sign-up and password-reset codes). Polls, since Auth sends
+ * after responding.
  */
 export async function waitForEmail(to: string, since: number): Promise<string> {
   for (let attempt = 0; attempt < 50; attempt++) {
-    if (existsSync(OUTBOX_FILE)) {
-      const emails = readFileSync(OUTBOX_FILE, "utf8")
-        .trim()
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => JSON.parse(line) as { to: string; text: string; sentAt: number })
-        .filter((email) => email.to === to && email.sentAt >= since);
-      if (emails.length > 0) return emails[emails.length - 1].text;
+    const [newest] = await mailpitMessages(to, since);
+    if (newest) {
+      const message = await fetch(`${MAILPIT}/api/v1/message/${newest.ID}`);
+      if (message.ok) return ((await message.json()) as { Text: string }).Text;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`No email to ${to} arrived`);
+  throw new Error(`No email to ${to} arrived in Mailpit`);
+}
+
+/**
+ * Fails if any email to `to` sent after `since` has arrived after
+ * `withinMs` (Auth sends inside its own request, so a short wait is
+ * enough; polling waitForEmail to its end would take far longer).
+ */
+export async function expectNoEmail(to: string, since: number, withinMs = 2000) {
+  await new Promise((resolve) => setTimeout(resolve, withinMs));
+  expect(await mailpitMessages(to, since)).toEqual([]);
+}
+
+const MAILPIT = process.env.MAILPIT_URL ?? "http://127.0.0.1:54424";
+
+/** Mailpit's messages to `to` created at or after `since`, newest first. */
+async function mailpitMessages(to: string, since: number) {
+  const search = await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${to}`)}`);
+  if (!search.ok) return [];
+  const { messages } = (await search.json()) as { messages?: { ID: string; Created: string }[] };
+  return (messages ?? [])
+    .filter((message) => new Date(message.Created).getTime() >= since)
+    .sort((a, b) => new Date(b.Created).getTime() - new Date(a.Created).getTime());
 }
 
 export const codeFrom = (text: string) => /\b(\d{6})\b/.exec(text)?.[1] ?? "";
-export const linkFrom = (text: string) => /(https?:\/\/\S+)/.exec(text)?.[1] ?? "";
 
-/** Signs up through the API and confirms the email with the emailed code. */
-export async function createVerifiedAccount(request: APIRequestContext, account: Account) {
-  const headers = { Origin: BASE_URL };
-  const since = Date.now();
-  const signUp = await request.post("/api/auth/sign-up/email", { data: account, headers });
-  if (!signUp.ok()) throw new Error(`sign-up failed: ${signUp.status()} ${await signUp.text()}`);
-  const otp = codeFrom(await waitForEmail(account.email, since));
-  const verify = await request.post("/api/auth/email-otp/verify-email", {
-    data: { email: account.email, otp },
+/**
+ * Supabase Auth's own API, as the site's server actions call it (the
+ * tests can't call server actions directly). Same publishable key as
+ * the server, from the environment.
+ */
+function authApi(path: string) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const apikey = process.env.SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !apikey) throw new Error("Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY for e2e.");
+  return { url: `${url}/auth/v1/${path}`, headers: { apikey } };
+}
+
+/** Signs up without confirming the email (Supabase emails a code). */
+export async function signUpUnverified(request: APIRequestContext, account: Account) {
+  const { url, headers } = authApi("signup");
+  const response = await request.post(url, {
     headers,
+    data: { email: account.email, password: account.password, data: { name: account.name } },
   });
+  if (!response.ok()) throw new Error(`sign-up failed: ${response.status()} ${await response.text()}`);
+}
+
+/** Confirms a sign-up with the emailed code. */
+export async function confirmSignUp(request: APIRequestContext, email: string, code: string) {
+  const { url, headers } = authApi("verify");
+  return request.post(url, { headers, data: { type: "signup", email, token: code } });
+}
+
+/** Signs up and confirms the email with the emailed code. */
+export async function createVerifiedAccount(request: APIRequestContext, account: Account) {
+  const since = Date.now();
+  await signUpUnverified(request, account);
+  const verify = await confirmSignUp(request, account.email, codeFrom(await waitForEmail(account.email, since)));
   if (!verify.ok()) throw new Error(`verify failed: ${verify.status()} ${await verify.text()}`);
 }
 
@@ -81,41 +125,71 @@ export async function sql<Row = Record<string, unknown>>(query: string, params: 
   }
 }
 
-/** Same as `npm run make-admin -- <email>`. */
-export async function grantAdmin(email: string) {
-  await sql(`UPDATE "user" SET role = 'admin' WHERE email = $1`, [email]);
+/** Supabase Auth's admin API, with the stack's secret key from the environment. */
+function authAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const secretKey = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !secretKey) throw new Error("Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY for e2e.");
+  return createClient(url, secretKey, { auth: { persistSession: false, autoRefreshToken: false } }).auth.admin;
 }
 
-/** Makes every session of this account look `hours` old. */
+/** Makes a confirmed account with no password (it never signs in); returns its id. */
+export async function createAuthUser(email: string, name: string): Promise<string> {
+  const { data, error } = await authAdmin().createUser({ email, email_confirm: true, user_metadata: { name } });
+  if (error) throw error;
+  return data.user.id;
+}
+
+/** Deletes accounts made with createAuthUser; their member data goes with them. */
+export async function deleteAuthUsers(ids: string[]) {
+  for (const id of ids) await authAdmin().deleteUser(id);
+}
+
+/** Makes the account an admin (its role lives in `profile`). */
+export async function grantAdmin(email: string) {
+  await sql(`UPDATE profile SET role = 'admin' WHERE id = (SELECT id FROM auth.users WHERE email = $1)`, [email]);
+}
+
+/**
+ * Makes every sign-in of this account look `hours` old: Supabase Auth
+ * keeps each session's sign-in times (password, TOTP) in
+ * auth.mfa_amr_claims, and puts them in every token it issues (the
+ * `amr` claim, which src/lib/session.ts reads). The browser's token only
+ * changes when it's refreshed: see expireAccessToken().
+ */
 export async function ageSessions(email: string, hours: number) {
   await sql(
-    `UPDATE "session" SET "createdAt" = now() - make_interval(hours => $2)
-     WHERE "userId" = (SELECT id FROM "user" WHERE email = $1)`,
+    `UPDATE auth.mfa_amr_claims SET created_at = created_at - make_interval(hours => $2),
+       updated_at = updated_at - make_interval(hours => $2)
+     WHERE session_id IN (SELECT s.id FROM auth.sessions s JOIN auth.users u ON u.id = s.user_id WHERE u.email = $1)`,
     [email, hours]
   );
 }
 
-/** Marks every session of this account as not having passed two-factor. */
-export async function unverifySessions(email: string) {
-  await sql(
-    `UPDATE "session" SET "twoFactorVerified" = false
-     WHERE "userId" = (SELECT id FROM "user" WHERE email = $1)`,
-    [email]
+/**
+ * Marks the page's session token as expired, so the next request
+ * refreshes it (src/proxy.ts) and gets a token with what the database
+ * says now. The cookie holds the session as base64url JSON, maybe split
+ * into numbered chunks.
+ */
+export async function expireAccessToken(page: Page) {
+  const context = page.context();
+  const all = await context.cookies();
+  const chunks = all
+    .filter((cookie) => /^sb-.*-auth-token(\.\d+)?$/.test(cookie.name))
+    .sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true }));
+  if (chunks.length === 0) throw new Error("No session cookie to expire");
+  const raw = chunks.map((cookie) => cookie.value).join("");
+  const session = JSON.parse(Buffer.from(raw.replace(/^base64-/, ""), "base64url").toString("utf8"));
+  session.expires_at = Math.floor(Date.now() / 1000) - 60;
+  const value = `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`;
+  const base = chunks[0].name.replace(/\.\d+$/, "");
+  for (const chunk of chunks) await context.clearCookies({ name: chunk.name });
+  // Split as @supabase/ssr splits it (3180 characters a cookie).
+  const parts = value.match(/.{1,3180}/g) ?? [value];
+  await context.addCookies(
+    parts.map((part, i) => ({ ...chunks[0], name: parts.length === 1 ? base : `${base}.${i}`, value: part }))
   );
-}
-
-/** The current 6-digit code for a base32 key, as an authenticator app shows it (RFC 6238). */
-export function totp(base32Secret: string, now = Date.now()): string {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  const bits = [...base32Secret.toUpperCase()]
-    .map((char) => alphabet.indexOf(char).toString(2).padStart(5, "0"))
-    .join("");
-  const key = Buffer.from((bits.match(/.{8}/g) ?? []).map((byte) => parseInt(byte, 2)));
-  const counter = Buffer.alloc(8);
-  counter.writeBigUInt64BE(BigInt(Math.floor(now / 30_000)));
-  const hmac = createHmac("sha1", key).update(counter).digest();
-  const offset = hmac[hmac.length - 1] & 0xf;
-  return String((hmac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, "0");
 }
 
 /**
@@ -130,16 +204,12 @@ export async function adminPasswordStep(page: Page, account: Account) {
   await page.getByRole("button", { name: "Log In" }).click();
 }
 
-/** Completes /admin/setup-2fa and records the authenticator key and backup codes on `account`. */
+/** Completes /admin/setup-2fa and records the authenticator key on `account`. */
 export async function setUpTwoFactor(page: Page, account: Account) {
   await expect(page).toHaveURL(/\/admin\/setup-2fa$/);
   await page.getByLabel("Confirm your password").fill(account.password);
   await page.getByRole("button", { name: "Continue" }).click();
   account.totpSecret = (await page.locator("main code").innerText()).replace(/\s/g, "");
-  account.backupCodes = await page
-    .getByRole("list", { name: "Backup codes" })
-    .getByRole("listitem")
-    .allInnerTexts();
   await page.getByLabel("Digit 1 of 6").fill(totp(account.totpSecret));
   await expect(page).toHaveURL(/\/admin\/dashboard$/);
 }

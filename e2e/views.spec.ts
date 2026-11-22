@@ -152,7 +152,7 @@ test("Continue Watching shows a signed-in user's latest titles", async ({ browse
   const historyIds = async () =>
     (
       await sql<{ mediaId: string }>(
-        `SELECT h."mediaId" FROM watch_history h JOIN "user" u ON u.id = h."userId"
+        `SELECT h."mediaId" FROM watch_history h JOIN auth.users u ON u.id = h."userId"
          WHERE u.email = $1`,
         [account.email]
       )
@@ -183,7 +183,7 @@ test("Continue Watching shows a signed-in user's latest titles", async ({ browse
   // A title that's no longer published drops off, even when it was the latest.
   await sql(
     `INSERT INTO watch_history ("userId", "mediaId", entry, "watchedAt")
-     SELECT id, 'cabin-fever', $2::jsonb, now() + interval '1 minute' FROM "user" WHERE email = $1`,
+     SELECT id, 'cabin-fever', $2::jsonb, now() + interval '1 minute' FROM auth.users WHERE email = $1`,
     [
       account.email,
       JSON.stringify({

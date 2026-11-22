@@ -13,7 +13,14 @@ describe("postgresConfig", () => {
   });
 
   it("passes no connection string through", () => {
-    expect(postgresConfig(undefined, undefined, {})).toEqual({ connectionString: undefined });
+    // The default reads DATABASE_URL, which CI and local .env files set.
+    const saved = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
+    try {
+      expect(postgresConfig(undefined, undefined, {})).toEqual({ connectionString: undefined });
+    } finally {
+      if (saved !== undefined) process.env.DATABASE_URL = saved;
+    }
   });
 
   it("verifies a Supabase connection against DATABASE_CA_CERT", () => {
